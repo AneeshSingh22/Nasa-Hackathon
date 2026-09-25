@@ -1202,44 +1202,85 @@ kbd {
   color: var(--green);
 }
 
-/* ---------------- carrying indicator ---------------- */
+/* ---------------- backpack ---------------- */
 
+/* Shows what the player is carrying, with a drawing of the part. The previous
+   version was a one-line strip with no picture, and before that the part was a
+   mesh welded to the camera that clipped through the world. */
 #carrying {
   position: absolute;
-  left: 50%;
-  bottom: 186px;
-  transform: translateX(-50%);
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  padding: 8px 15px;
-  border: 1px solid rgba(255, 188, 77, 0.45);
-  border-radius: 4px;
-  background: rgba(24, 32, 47, 0.92);
-  backdrop-filter: blur(8px);
-  white-space: nowrap;
+  right: 20px;
+  bottom: 20px;
+  width: 300px;
+  border: 1px solid var(--amber);
+  border-radius: 5px;
+  background: rgba(20, 27, 42, 0.95);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
 }
 
-.carry-label {
-  font-family: var(--mono);
-  font-size: 9.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
+#carrying header {
+  padding: 8px 13px;
+  background: rgba(255, 188, 77, 0.14);
+  border-bottom: 1px solid var(--line);
+}
+
+#carrying header .panel-title {
   color: var(--amber);
 }
 
-#carry-name {
+.carry-body {
+  display: grid;
+  grid-template-columns: 150px 1fr;
+  gap: 10px;
+  padding: 12px;
+  align-items: start;
+}
+
+#carry-art {
+  width: 150px;
+  height: 190px;
+  background: #0b1220;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+}
+
+.carry-facts b {
+  display: block;
   font-family: var(--display);
   font-size: 14px;
   font-weight: 600;
+  line-height: 1.25;
   color: var(--ink);
+  margin-bottom: 9px;
 }
 
-.carry-mass {
+.carry-facts dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 2px 8px;
+  margin: 0 0 9px;
   font-family: var(--mono);
-  font-size: 12px;
-  color: var(--dim);
+  font-size: 10.5px;
+}
+
+.carry-facts dt {
+  color: var(--faint);
+}
+
+.carry-facts dd {
+  margin: 0;
+  text-align: right;
+  color: var(--ink);
   font-variant-numeric: tabular-nums;
+}
+
+.carry-hint {
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.5;
+  color: var(--amber);
 }
 
 /* ---------------- bay options ---------------- */

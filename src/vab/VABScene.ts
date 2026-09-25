@@ -323,13 +323,25 @@ export function createVABScene(): VABEnvironment {
       ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.82, metalness: 0.0 })
       : placardMat;
 
-    const placard = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.1, 0.08), [
+    // Mounted on a short post at the back of the bench and tilted back, so it
+    // reads as a sign standing on the bench rather than a billboard hovering
+    // in front of the room.
+    const placard = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.7, 0.07), [
       placardMat, placardMat, placardMat, placardMat, faceMat, placardMat,
     ]);
-    placard.position.set(0, 2.05, -0.95);
-    placard.rotation.x = -0.26;
+    placard.position.set(0, 1.92, -0.72);
+    placard.rotation.x = -0.34;
     placard.castShadow = true;
     bench.add(placard);
+
+    for (const px of [-1.3, 1.3]) {
+      const post = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 0.95, 8),
+        benchMat,
+      );
+      post.position.set(px, 1.42, -0.86);
+      bench.add(post);
+    }
 
     // A small stand light over the sign, so it is legible from a distance.
     const signLight = new THREE.PointLight(0xfff6e6, 3.4, 9, 2);
@@ -401,6 +413,72 @@ export function createVABScene(): VABEnvironment {
   // without turning or looking around.
   blueprint.group.position.set(-3.5, 0, -22.7);
   scene.add(blueprint.group);
+
+  // ---- wayfinding sign ----
+  // A hanging sign by the entrance pointing at the elevator. The player spawns
+  // at +Z and the elevator is off to the right, so without a sign there is
+  // nothing telling them the route to the high work platform exists.
+  const signCanvas = document.createElement('canvas');
+  signCanvas.width = 1024;
+  signCanvas.height = 256;
+  const signCtx = signCanvas.getContext('2d');
+  if (signCtx) {
+    signCtx.fillStyle = '#122033';
+    signCtx.fillRect(0, 0, 1024, 256);
+    signCtx.strokeStyle = '#ffc23d';
+    signCtx.lineWidth = 8;
+    signCtx.strokeRect(10, 10, 1004, 236);
+
+    signCtx.fillStyle = '#ffc23d';
+    signCtx.font = '700 84px Arial, Helvetica, sans-serif';
+    signCtx.fillText('SERVICE ELEVATOR', 52, 112);
+
+    signCtx.fillStyle = '#e9f2fb';
+    signCtx.font = '500 44px "Courier New", monospace';
+    signCtx.fillText('Work platform · payload & fairing', 52, 184);
+
+    // Arrow pointing right, toward the shaft.
+    signCtx.fillStyle = '#ffc23d';
+    signCtx.beginPath();
+    signCtx.moveTo(840, 128);
+    signCtx.lineTo(940, 128);
+    signCtx.lineTo(940, 96);
+    signCtx.lineTo(990, 140);
+    signCtx.lineTo(940, 184);
+    signCtx.lineTo(940, 152);
+    signCtx.lineTo(840, 152);
+    signCtx.closePath();
+    signCtx.fill();
+  }
+
+  const signTexture = new THREE.CanvasTexture(signCanvas);
+  signTexture.colorSpace = THREE.SRGBColorSpace;
+  const wayfind = new THREE.Mesh(
+    new THREE.PlaneGeometry(9, 2.25),
+    new THREE.MeshBasicMaterial({ map: signTexture }),
+  );
+  wayfind.position.set(6, 7.2, 14.5);
+  wayfind.rotation.y = Math.PI;
+  scene.add(wayfind);
+
+  // Hanging rods up to the roof trusses.
+  for (const rx of [-3.6, 3.6]) {
+    const rod = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.05, 0.05, 6, 6),
+      steel,
+    );
+    rod.position.set(6 + rx, 11.3, 14.5);
+    scene.add(rod);
+  }
+
+  // A second sign at the shaft itself, so the door is unmistakable.
+  const doorSign = new THREE.Mesh(
+    new THREE.PlaneGeometry(4.2, 1.1),
+    new THREE.MeshBasicMaterial({ map: signTexture }),
+  );
+  doorSign.position.set(12.5, 4.2, 3.0);
+  doorSign.rotation.y = Math.PI;
+  scene.add(doorSign);
 
   // ---- laboratory fittings ----
   // None of this is interactive. It exists because an assembly building with

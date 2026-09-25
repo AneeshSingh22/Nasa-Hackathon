@@ -112,6 +112,17 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
   position changed — `PlayerController.test.ts` has them.
+- **Two systems that must agree need a test that drives both.** The elevator
+  stop and the work zone's height window disagreed twice. The first time the
+  elevator was fixed at 45.6 m while the payload attached at 57.1, so the
+  preview rendered off-screen. The second time the elevator became derived from
+  the stack top and the work zone kept the constant, so the player could ride
+  to exactly the right place and be refused. The fix is `game/worksite.ts`,
+  extracted from `main.ts` precisely so the wiring is testable: a test that
+  calls `setWorkHeight` directly passes even when nothing calls it, which I
+  confirmed by breaking the wiring and watching the suite stay green.
+  `tests/workheight.test.ts` drives the real path across every booster, upper
+  stage and payload, and breaking the sync fails four of them.
 - **A bezel drawn in front of a screen hides the screen.** The blueprint
   display rendered as a plain black rectangle for two rounds. The drawing code
   was correct; a 0.35 m deep frame box centred at z = 0 put its front face at

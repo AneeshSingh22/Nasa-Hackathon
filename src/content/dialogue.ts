@@ -22,7 +22,7 @@
  */
 export const INTRO = [
   'Morning, engineer. The big screen ahead of you shows the build sequence and what is still open.',
-  'Four steps, numbered on the floor. Step one is the left wall. Press T any time you want my advice.',
+  'Four numbered stations along the back wall. The service elevator is on your right — signposted — and that is how you get up to fit the payload. Press T any time you want my advice.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */
@@ -86,7 +86,7 @@ export const FAILURE_LESSON: Record<string, string> = {
 
 /** Said the first time the player reaches the payload slot. */
 export const PAYLOAD_CHOICE =
-  'Step three, and the one that matters. Four payloads along the back wall. Take your pick up in the elevator.';
+  'Step three, and the one that matters. Four payloads at that station — Tab to compare. Then take your pick up in the elevator on the right and walk out along the deck to fit it.';
 
 /** Said when the player tries to roll out a vehicle that cannot make orbit. */
 export const ROLLOUT_REFUSED =

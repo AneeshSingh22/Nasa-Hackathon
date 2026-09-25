@@ -18,8 +18,15 @@ export const ELEVATOR_X = 12.5;
 export const ELEVATOR_Z = 0;
 /** Floor half-extent of the car. Metres. */
 export const CAR_HALF = 2.1;
-/** Height of the car floor when parked at the bottom. */
-export const BOTTOM = 0.0;
+/**
+ * Height of the car floor when parked at the bottom.
+ *
+ * Deliberately above the bay floor. At 0.0 the deck's top face and the floor
+ * plane were both at y = 0.00 exactly, and the two coplanar surfaces z-fought —
+ * the floor appeared to lag and shimmer around the car. A small sill is also
+ * what a real lift looks like.
+ */
+export const BOTTOM = 0.08;
 /**
  * Highest the car can travel, which is the shaft limit rather than the working
  * stop.
@@ -119,7 +126,7 @@ export function createElevator(): ElevatorRig {
         new THREE.BoxGeometry(0.2, SHAFT_TOP + 6, 0.2),
         frameMat,
       );
-      rail.position.set(ELEVATOR_X + side, (SHAFT_TOP + 6) / 2, ELEVATOR_Z + z);
+      rail.position.set(ELEVATOR_X + side, (SHAFT_TOP + 6) / 2 + 0.1, ELEVATOR_Z + z);
       rail.castShadow = true;
       group.add(rail);
     }

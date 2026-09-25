@@ -64,7 +64,7 @@ export function adviseOn(ctx: AdviceContext): string {
   // Standing in the wrong place for the next part.
   if (ctx.nextKind && !ctx.inPosition) {
     if (ctx.nextKind === 'payload' || ctx.nextKind === 'fairing') {
-      return 'That part goes on top of the stack. The ladder is on the outboard side of the gantry — hold the up arrow on it to climb, and fit the part from the top platform.';
+      return 'That part goes on top of the stack. Take the service elevator on the right of the bay — step into the car, press E to ride up, then walk out along the work deck toward the rocket and press E to place it.';
     }
     return 'You need to be inside the painted circle to work on the lower stages.';
   }

@@ -125,12 +125,25 @@
           <div id="options-grid"></div>
         </section>
 
-        <!-- What you are carrying -->
-        <div id="carrying" class="hidden">
-          <span class="carry-label">Carrying</span>
-          <b id="carry-name">&mdash;</b>
-          <span id="carry-mass" class="carry-mass">&mdash;</span>
-        </div>
+        <!-- Backpack: what you are carrying, with a drawing of it -->
+        <section id="carrying" class="hidden" aria-label="Carried part">
+          <header>
+            <span class="panel-title">In the backpack</span>
+          </header>
+          <div class="carry-body">
+            <canvas id="carry-art" width="150" height="190" aria-hidden="true"></canvas>
+            <div class="carry-facts">
+              <b id="carry-name">&mdash;</b>
+              <dl>
+                <dt>Mass</dt>
+                <dd id="carry-mass">&mdash;</dd>
+                <dt>Destination</dt>
+                <dd id="carry-dest">&mdash;</dd>
+              </dl>
+              <p id="carry-hint" class="carry-hint">&mdash;</p>
+            </div>
+          </div>
+        </section>
 
         <!-- Next-action prompt -->
         <div id="prompt" class="prompt" data-key="E">

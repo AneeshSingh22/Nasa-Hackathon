@@ -47,7 +47,7 @@ export interface PlacardOptions {
  * would carry an outline drawing, and an outline reads at a glance where a
  * shaded render does not.
  */
-function drawPictogram(
+export function drawPictogram(
   ctx: CanvasRenderingContext2D,
   part: PartDefinition,
   x: number,

@@ -108,13 +108,34 @@ export function stationFor(kind: string): WorkStation {
 }
 
 /** True when the player is standing on the high gantry platform. */
+/**
+ * The height the high work station currently sits at.
+ *
+ * This was a fixed 45.6 m constant while the elevator stop became derived from
+ * the stack top, which varies with the booster. The two disagreed by up to
+ * thirteen metres, so the player could ride to the work platform, be standing
+ * in exactly the right place, and still be refused — the bug where the only
+ * option at the top was to go back down.
+ *
+ * Whoever moves the platform sets this.
+ */
+let currentWorkHeight = GANTRY_WORK_HEIGHT;
+
+export function setWorkHeight(height: number): void {
+  currentWorkHeight = height;
+}
+
+export function getWorkHeight(): number {
+  return currentWorkHeight;
+}
+
 export function isOnGantry(position: Point3D): boolean {
-  // The high work station is the elevator car parked at the top, plus the
-  // gantry platform beside it. Both are at GANTRY_WORK_HEIGHT.
-  const nearX = position.x >= GANTRY_X - 4.2 && position.x <= 15.0;
+  // The high work station is the elevator car and its work deck, which reach
+  // from the shaft in toward the stack.
+  const nearX = position.x >= GANTRY_X - 4.6 && position.x <= 15.0;
   const nearZ = Math.abs(position.z) <= GANTRY_HALF_DEPTH + 0.6;
   const atHeight =
-    Math.abs(position.y - GANTRY_WORK_HEIGHT) <= GANTRY_HEIGHT_TOLERANCE;
+    Math.abs(position.y - currentWorkHeight) <= GANTRY_HEIGHT_TOLERANCE;
   return nearX && nearZ && atHeight;
 }
 

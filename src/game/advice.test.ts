@@ -60,7 +60,10 @@ describe('on-demand advice', () => {
 
   it('tells a lost player where to stand, not what to fit', () => {
     const text = adviseOn(ctx({ nextKind: 'payload', inPosition: false }));
-    expect(text.toLowerCase()).toContain('ladder');
+    // Must name the route to the high work station. The ladder was replaced by
+    // an elevator; this assertion is what caught the stale wording.
+    expect(text.toLowerCase()).toContain('elevator');
+    expect(text.toLowerCase()).not.toContain('ladder');
   });
 
   it('explains the trade at the payload decision', () => {

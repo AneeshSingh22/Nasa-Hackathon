@@ -7,6 +7,7 @@ import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
 import { Narrator } from './ui/Narrator';
 import { Mission, type FailureReason, type MissionStatus } from './game/Mission';
 import * as script from './content/dialogue';
+import { syncWorkHeight as syncWorkSite } from './game/worksite';
 import {
   isInWorkZone,
   distanceToStand,
@@ -14,17 +15,13 @@ import {
   canWorkOn,
   stationFor,
   isOnGantry,
-  GANTRY_WORK_HEIGHT,
 } from './game/workzone';
 import { CONTRACT_FIRST_ORBIT, evaluate } from './game/contract';
 import { adviseOn } from './game/advice';
 import { ELEVATOR_X, ELEVATOR_Z } from './vab/Elevator';
 import { stationNear, type StationDefinition } from './vab/stations';
-import {
-  carrySpeedFactor,
-  needsCrane,
-  type CarriedPart,
-} from './game/carry';
+import { drawPictogram } from './vab/placards';
+import { needsCrane, type CarriedPart } from './game/carry';
 import { deltaV } from './physics/rocket';
 
 const contract = CONTRACT_FIRST_ORBIT;
@@ -203,6 +200,9 @@ const el = {
   carrying: document.querySelector<HTMLElement>('#carrying'),
   carryName: document.querySelector<HTMLElement>('#carry-name'),
   carryMass: document.querySelector<HTMLElement>('#carry-mass'),
+  carryDest: document.querySelector<HTMLElement>('#carry-dest'),
+  carryHint: document.querySelector<HTMLElement>('#carry-hint'),
+  carryArt: document.querySelector<HTMLCanvasElement>('#carry-art'),
   altitude: document.querySelector<HTMLElement>('#altitude'),
 };
 
@@ -498,20 +498,61 @@ function cycleSelection(direction: 1 | -1): void {
   refreshReadout();
 }
 
-/** Show what the player is carrying, and what it weighs. */
+/**
+ * The backpack panel: what the player is carrying, with a drawing of it.
+ *
+ * The part used to be a mesh parented to the camera, which clipped through
+ * geometry and blocked the view. Then it was a one-line strip with no picture,
+ * so the player could not see what they had. This shows the same schematic the
+ * station placard uses, which is also the only way to see a part once it is
+ * out of sight in the backpack.
+ */
 function refreshPicker(): void {
   if (!el.carrying) return;
   if (!carried) {
     el.carrying.classList.add('hidden');
+    lastDrawnCarry = null;
     return;
   }
+
   const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
   el.carrying.classList.remove('hidden');
   if (el.carryName) el.carryName.textContent = partDef?.name ?? 'Part';
   if (el.carryMass) {
     el.carryMass.textContent = `${(carried.mass / 1000).toFixed(1)} t`;
   }
+
+  if (partDef && el.carryDest) {
+    el.carryDest.textContent =
+      stationFor(partDef.kind) === 'gantry' ? 'Work platform' : 'Assembly stand';
+  }
+  if (partDef && el.carryHint) {
+    el.carryHint.textContent =
+      stationFor(partDef.kind) === 'gantry'
+        ? 'Ride the elevator up, then walk out along the deck to place it.'
+        : 'Carry it into the painted circle and press E.';
+  }
+
+  // Redraw only when the part changes.
+  if (partDef && el.carryArt && lastDrawnCarry !== partDef.id) {
+    lastDrawnCarry = partDef.id;
+    const ctx = el.carryArt.getContext('2d');
+    if (ctx) {
+      const w = el.carryArt.width;
+      const h = el.carryArt.height;
+      ctx.clearRect(0, 0, w, h);
+      ctx.fillStyle = '#0b1220';
+      ctx.fillRect(0, 0, w, h);
+      // The pictogram is drawn for a light placard, so give it a light plate.
+      ctx.fillStyle = '#e8edf5';
+      ctx.fillRect(8, 8, w - 16, h - 16);
+      drawPictogram(ctx, partDef, 8, 8, w - 16, h - 16, '#ff6b3d');
+    }
+  }
 }
+
+/** The part currently drawn in the backpack, so it is not redrawn per frame. */
+let lastDrawnCarry: string | null = null;
 
 /**
  * The action prompt, driven by where the player is standing.
@@ -810,7 +851,7 @@ function blockedByDistance(kind?: string): boolean {
   if (kind && stationFor(kind) === 'gantry') {
     log('OUT OF REACH  fit from the top gantry platform');
     say(
-      `That goes on top of the stack, ${GANTRY_WORK_HEIGHT.toFixed(0)} metres up. Take the ladder on the far side of the gantry and fit it from the top platform.`,
+      'That goes on top of the stack. Take the elevator up, then walk out along the work deck toward the rocket.',
     );
     return true;
   }
@@ -1119,12 +1160,18 @@ function pickUp(station: StationDefinition): void {
  *
  * Shared by hand placement and the crane so the two paths cannot drift.
  */
+/** Keep the elevator and the work zone pointing at the same height. */
+function syncWorkHeight(): void {
+  syncWorkSite(
+    env.elevator,
+    env.assemblyRoot.position.y + assembly.stackHeight(),
+  );
+}
+
 function afterFit(): void {
   // The elevator has to stop level with the *current* work, and booster
   // heights vary by nine metres. A fixed stop cannot serve all three.
-  env.elevator.setWorkingHeight(
-    env.assemblyRoot.position.y + assembly.stackHeight(),
-  );
+  syncWorkHeight();
 
   env.refreshBlueprint({
     fitted: new Map(assembly.parts.map((p) => [p.kind, p])),
@@ -1585,9 +1632,10 @@ function frame(): void {
   }
   player.obstacles = solid;
 
-  // Heavy parts slow you down, which is the cost of mass felt in the legs
-  // rather than read off a panel.
-  player.speedFactor = carried ? carrySpeedFactor(carried.mass) : 1;
+  // Carrying no longer slows the player down. The intent was to make the cost
+  // of mass physical, but the payloads are heavy enough that it just made
+  // crossing the bay tedious, and the delta-v figures already teach it.
+  player.speedFactor = 1;
 
   player.update(dt);
   env.update(elapsed);
@@ -1611,7 +1659,7 @@ function frame(): void {
 
 refreshReadout();
 refreshResources(mission.status);
-env.elevator.setWorkingHeight(env.assemblyRoot.position.y + assembly.stackHeight());
+syncWorkHeight();
 frame();
 
 // Vite HMR: drop the input listeners so reloads do not stack handlers.
