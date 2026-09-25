@@ -1,6 +1,6 @@
 import * as THREE from 'three';
 import './style.css';
-import { createVABScene, VAB_WIDTH, VAB_DEPTH } from './vab/VABScene';
+import { createVABScene, VAB_WIDTH, VAB_DEPTH, VAB_HEIGHT } from './vab/VABScene';
 import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
 import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
@@ -1117,6 +1117,12 @@ function pickUp(station: StationDefinition): void {
  * Shared by hand placement and the crane so the two paths cannot drift.
  */
 function afterFit(): void {
+  // The elevator has to stop level with the *current* work, and booster
+  // heights vary by nine metres. A fixed stop cannot serve all three.
+  env.elevator.setWorkingHeight(
+    env.assemblyRoot.position.y + assembly.stackHeight(),
+  );
+
   env.refreshBlueprint({
     fitted: new Map(assembly.parts.map((p) => [p.kind, p])),
     nextKind: assembly.nextSlot(),
@@ -1181,7 +1187,12 @@ function updateCrane(dt: number): void {
   const t = craneLift.progress;
 
   // Three phases: hoist straight up, traverse across, lower onto the stack.
-  const HOIST_TOP = Math.max(craneLift.targetY + 14, 26);
+  // Stay under the roof: the crane used to hoist to 71 m in a 58 m building
+  // and fly the load out through the ceiling.
+  const HOIST_TOP = Math.min(
+    VAB_HEIGHT - 9,
+    Math.max(craneLift.targetY + 12, 26),
+  );
   let x: number;
   let z: number;
   let y: number;
@@ -1597,6 +1608,7 @@ function frame(): void {
 
 refreshReadout();
 refreshResources(mission.status);
+env.elevator.setWorkingHeight(env.assemblyRoot.position.y + assembly.stackHeight());
 frame();
 
 // Vite HMR: drop the input listeners so reloads do not stack handlers.

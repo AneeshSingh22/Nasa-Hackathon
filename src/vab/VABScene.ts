@@ -15,7 +15,16 @@ import { createBlueprintBoard, type BlueprintState } from './blueprint';
 
 export const VAB_WIDTH = 60;
 export const VAB_DEPTH = 46;
-export const VAB_HEIGHT = 58;
+/**
+ * Ceiling height.
+ *
+ * Must clear the tallest buildable stack plus crane headroom. The tallest
+ * combination is the extended booster, the science lab and the fairing at
+ * 74.3 m, sitting on a 1.6 m stand, and the crane has to hoist above that.
+ * At the old 58 m the rocket poked ten metres through the roof, the crane flew
+ * through it, and the player's head came out above it at the top of the lift.
+ */
+export const VAB_HEIGHT = 96;
 
 export interface VABEnvironment {
   scene: THREE.Scene;
@@ -133,14 +142,41 @@ export function createVABScene(): VABEnvironment {
     scene.add(wall);
   }
 
-  // Ceiling.
-  const ceiling = new THREE.Mesh(
-    new THREE.PlaneGeometry(VAB_WIDTH, VAB_DEPTH),
-    wallMat,
+  // Ceiling, built as two halves with an open slot down the middle. The
+  // vehicle has to leave the building vertically, so a real high bay has doors
+  // here rather than a solid roof.
+  const roofSlot = 14;
+  for (const side of [-1, 1]) {
+    const panelWidth = (VAB_WIDTH - roofSlot) / 2;
+    const panel = new THREE.Mesh(
+      new THREE.PlaneGeometry(panelWidth, VAB_DEPTH),
+      wallMat,
+    );
+    panel.rotation.x = Math.PI / 2;
+    panel.position.set(side * (roofSlot / 2 + panelWidth / 2), VAB_HEIGHT, 0);
+    scene.add(panel);
+  }
+
+  // Door rails along the edges of the opening, so the slot reads as doors
+  // rather than a hole someone forgot to fill.
+  for (const side of [-1, 1]) {
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(0.8, 1.2, VAB_DEPTH),
+      steel,
+    );
+    rail.position.set(side * (roofSlot / 2), VAB_HEIGHT - 0.6, 0);
+    scene.add(rail);
+  }
+
+  // Sky visible through the opening, which sells the building as somewhere a
+  // rocket actually leaves from.
+  const sky = new THREE.Mesh(
+    new THREE.PlaneGeometry(roofSlot - 1.6, VAB_DEPTH - 2),
+    new THREE.MeshBasicMaterial({ color: 0x9fc4e8 }),
   );
-  ceiling.rotation.x = Math.PI / 2;
-  ceiling.position.y = VAB_HEIGHT;
-  scene.add(ceiling);
+  sky.rotation.x = Math.PI / 2;
+  sky.position.y = VAB_HEIGHT + 0.4;
+  scene.add(sky);
 
   // ---- roof trusses ----
   const trussGroup = new THREE.Group();
@@ -274,7 +310,12 @@ export function createVABScene(): VABEnvironment {
     // Angled placard carrying the part's name, a schematic and its numbers.
     // Blank white boards left the bay unreadable: identical grey benches with
     // no way to tell which held what without walking up to every one.
-    const texture = placardFor(station.partId, station.label, station.bay);
+    const texture = placardFor(
+      station.partId,
+      station.label,
+      station.bay,
+      station.step,
+    );
     const faceMat = texture
       ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.82, metalness: 0.0 })
       : placardMat;
@@ -310,6 +351,34 @@ export function createVABScene(): VABEnvironment {
 
     scene.add(bench);
 
+    // Painted step number on the floor in front of the bench, which is how a
+    // real facility marks out work areas.
+    const floorMark = new THREE.Mesh(
+      new THREE.PlaneGeometry(3.4, 3.4),
+      new THREE.MeshStandardMaterial({
+        color:
+          station.bay === 'stages'
+            ? 0xff6b3d
+            : station.bay === 'payloads'
+              ? 0x2e9fc4
+              : 0xd89a1f,
+        roughness: 0.8,
+        transparent: true,
+        opacity: 0.3,
+      }),
+    );
+    floorMark.rotation.x = -Math.PI / 2;
+    floorMark.position.set(station.x, 0.014, station.z + Math.cos(station.rotation) * 3.2);
+    // Rotate the patch to sit in front of the bench whichever way it faces.
+    if (Math.abs(station.rotation) > 0.1) {
+      floorMark.position.set(
+        station.x + Math.sin(station.rotation) * 3.2,
+        0.014,
+        station.z,
+      );
+    }
+    scene.add(floorMark);
+
     // Benches are solid, so the player walks round them.
     stationObstacles.push({ x: station.x, z: station.z, radius: 2.6, top: 1.1 });
   }
@@ -326,7 +395,14 @@ export function createVABScene(): VABEnvironment {
   // Reading ten near-identical placards to work out what was missing was the
   // most confusing thing in the bay; a diagram answers it at a glance.
   const blueprint = createBlueprintBoard({ fitted: new Map(), nextKind: 'booster' });
-  blueprint.group.position.set(-4, 0, 21.4);
+  // High on the BACK wall, dead ahead of where the player spawns.
+  //
+  // The board was previously on the front wall at z = +21.4. The player spawns
+  // at z = +14 facing -Z, so it sat behind them for the entire game, with the
+  // console bank two metres in front of it occluding what little showed. From
+  // spawn it is now 37 m away and 18 degrees up — inside the field of view
+  // without turning or looking around.
+  blueprint.group.position.set(-3.5, 0, -22.7);
   scene.add(blueprint.group);
 
   // ---- laboratory fittings ----

@@ -21,17 +21,21 @@ export const CAR_HALF = 2.1;
 /** Height of the car floor when parked at the bottom. */
 export const BOTTOM = 0.0;
 /**
- * Height of the car floor at the top working level.
+ * Highest the car can travel, which is the shaft limit rather than the working
+ * stop.
  *
- * Chosen so that both high slots sit within the player's field of view. The
- * payload attaches at 57.1 m and the fairing at 61.3 m; stopping at 57.5 puts
- * them 28 degrees below and above the camera, inside the 36-degree half-FOV.
- * An earlier stop at 45.6 m put the payload 38 degrees overhead, so the
- * placement preview was off-screen unless the player happened to look up.
+ * The actual stop is set per trip by `setWorkingHeight`, because booster
+ * heights vary from 38 to 47 m: a fixed stop cannot put the attach point in
+ * view for all three. An earlier fixed 45.6 m stop left the payload 38 degrees
+ * overhead, outside the field of view, so the placement preview was invisible.
  */
-export const TOP = 57.5;
+export const SHAFT_TOP = 82;
+/** Default working stop, used before any stack exists. */
+export const TOP = 52;
 /** Travel speed. Slow enough to feel like machinery, quick enough not to bore. */
 export const SPEED = 5.4;
+/** How far the work deck reaches from the car toward the stack. Metres. */
+export const DECK_REACH = 7.0;
 
 export type ElevatorState =
   | 'atBottom'
@@ -43,6 +47,15 @@ export type ElevatorState =
 
 export interface ElevatorRig {
   group: THREE.Group;
+  /**
+   * Set where the car should stop at the top.
+   *
+   * Called with the current stack top so the player arrives level with the
+   * work, whichever booster they chose.
+   */
+  setWorkingHeight: (attachY: number) => void;
+  /** The stop the car is currently using. */
+  workingHeight: number;
   /** Current height of the car floor. */
   height: number;
   state: ElevatorState;
@@ -101,16 +114,16 @@ export function createElevator(): ElevatorRig {
   for (const side of [-CAR_HALF - 0.35, CAR_HALF + 0.35]) {
     for (const z of [-CAR_HALF, CAR_HALF]) {
       const rail = new THREE.Mesh(
-        new THREE.BoxGeometry(0.2, TOP + 6, 0.2),
+        new THREE.BoxGeometry(0.2, SHAFT_TOP + 6, 0.2),
         frameMat,
       );
-      rail.position.set(ELEVATOR_X + side, (TOP + 6) / 2, ELEVATOR_Z + z);
+      rail.position.set(ELEVATOR_X + side, (SHAFT_TOP + 6) / 2, ELEVATOR_Z + z);
       rail.castShadow = true;
       group.add(rail);
     }
   }
   // Cross bracing every few metres.
-  for (let y = 3; y < TOP + 4; y += 4.5) {
+  for (let y = 3; y < SHAFT_TOP + 4; y += 4.5) {
     for (const side of [-CAR_HALF - 0.35, CAR_HALF + 0.35]) {
       const brace = new THREE.Mesh(
         new THREE.BoxGeometry(0.12, 0.12, CAR_HALF * 2),
@@ -132,6 +145,51 @@ export function createElevator(): ElevatorRig {
   deck.receiveShadow = true;
   deck.castShadow = true;
   car.add(deck);
+
+  // Cantilevered work deck reaching toward the stack.
+  //
+  // Without this the car stopped level with the work and there was nothing
+  // between it and the rocket, so the player fell through the gap. The deck
+  // bridges that, and it is what a real service platform looks like.
+  const REACH = DECK_REACH;
+  const bridge = new THREE.Mesh(
+    new THREE.BoxGeometry(REACH, 0.16, CAR_HALF * 2),
+    deckMat,
+  );
+  bridge.position.set(-CAR_HALF - REACH / 2, -0.08, 0);
+  bridge.receiveShadow = true;
+  bridge.castShadow = true;
+  car.add(bridge);
+
+  // Handrails along both sides of the bridge, open at the far end where the
+  // work happens.
+  for (const rz of [-CAR_HALF, CAR_HALF]) {
+    const rail = new THREE.Mesh(
+      new THREE.BoxGeometry(REACH, 0.08, 0.08),
+      cageMat,
+    );
+    rail.position.set(-CAR_HALF - REACH / 2, 1.05, rz);
+    car.add(rail);
+
+    for (let i = 0; i <= 3; i++) {
+      const post = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 1.05, 8),
+        cageMat,
+      );
+      post.position.set(-CAR_HALF - (REACH / 3) * i, 0.52, rz);
+      car.add(post);
+    }
+  }
+
+  // Toe board along the deck edges, which is what stops tools going over.
+  for (const rz of [-CAR_HALF, CAR_HALF]) {
+    const toe = new THREE.Mesh(
+      new THREE.BoxGeometry(REACH, 0.16, 0.05),
+      cageMat,
+    );
+    toe.position.set(-CAR_HALF - REACH / 2, 0.08, rz);
+    car.add(toe);
+  }
 
   // Tread plate pattern on the deck, so the floor is not a blank square.
   for (let i = -1; i <= 1; i++) {
@@ -277,12 +335,23 @@ export function createElevator(): ElevatorRig {
     group,
     height: BOTTOM,
     state: 'atBottom',
+    workingHeight: TOP,
+
+    setWorkingHeight(attachY: number) {
+      // Stand on a deck a little below the attach point, so the work is at
+      // chest height and stays inside the field of view.
+      const stop = attachY - 1.3;
+      rig.workingHeight = Math.max(6, Math.min(SHAFT_TOP, stop));
+    },
 
     contains(x: number, z: number) {
-      return (
-        Math.abs(x - ELEVATOR_X) <= CAR_HALF - 0.2 &&
-        Math.abs(z - ELEVATOR_Z) <= CAR_HALF - 0.2
-      );
+      // Includes the cantilevered work deck, so standing on the bridge still
+      // counts as being on the car and is supported by it.
+      const withinZ = Math.abs(z - ELEVATOR_Z) <= CAR_HALF - 0.2;
+      const withinX =
+        x <= ELEVATOR_X + CAR_HALF - 0.2 &&
+        x >= ELEVATOR_X - CAR_HALF - DECK_REACH + 0.2;
+      return withinZ && withinX;
     },
 
     isLevelWith(feetY: number) {
@@ -320,7 +389,7 @@ export function createElevator(): ElevatorRig {
 
       // Outside: bring the car to the player rather than teleporting them.
       // This is the fix for stepping off at the top and stranding it there.
-      const playerAtTop = playerFeetY > (TOP + BOTTOM) / 2;
+      const playerAtTop = playerFeetY > (rig.workingHeight + BOTTOM) / 2;
       if (playerAtTop && rig.state === 'atBottom') {
         rig.state = 'calledUp';
         return 'calling';
@@ -338,9 +407,10 @@ export function createElevator(): ElevatorRig {
       const goingDown = rig.state === 'descending' || rig.state === 'calledDown';
 
       if (goingUp) {
-        rig.height = Math.min(TOP, rig.height + SPEED * dt);
-        if (rig.height >= TOP - 1e-6) {
-          rig.height = TOP;
+        const target = rig.workingHeight;
+        rig.height = Math.min(target, rig.height + SPEED * dt);
+        if (rig.height >= target - 1e-6) {
+          rig.height = target;
           rig.state = 'atTop';
         }
       } else if (goingDown) {

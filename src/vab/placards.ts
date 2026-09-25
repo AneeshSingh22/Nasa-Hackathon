@@ -31,9 +31,11 @@ const BAY_COLOUR: Record<string, string> = {
 
 export interface PlacardOptions {
   part: PartDefinition;
-  /** Heading above the part name, e.g. "Payload B". */
+  /** Heading above the part name, e.g. "Step 3 - Option B". */
   label: string;
   bay: 'stages' | 'payloads' | 'structure';
+  /** Build step, drawn very large so stations are distinguishable at range. */
+  step: number;
   /** Δv margin this part would leave, for payloads. Omitted for structure. */
   marginHint?: number;
 }
@@ -196,14 +198,24 @@ export function createPlacardTexture(options: PlacardOptions): THREE.CanvasTextu
   ctx.strokeStyle = RULE;
   ctx.lineWidth = 3;
   ctx.beginPath();
-  ctx.moveTo(60, 118);
+  ctx.moveTo(230, 118);
   ctx.lineTo(TEX_WIDTH - 40, 118);
   ctx.stroke();
 
-  // Bay label.
+  // Enormous step number on the left. Every placard previously looked the
+  // same from a distance, which is what made the bay so hard to read.
+  ctx.fillStyle = accent;
+  ctx.font = '700 150px Arial, Helvetica, sans-serif';
+  ctx.fillText(String(options.step), 52, 250);
+
+  ctx.fillStyle = DIM;
+  ctx.font = '600 24px "Courier New", monospace';
+  ctx.fillText('STEP', 60, 288);
+
+  // Bay label, moved right to clear the step number.
   ctx.fillStyle = accent;
   ctx.font = '600 34px "Courier New", monospace';
-  ctx.fillText(options.label.toUpperCase(), 60, 78);
+  ctx.fillText(options.label.toUpperCase(), 230, 78);
 
   // Part name, wrapped to two lines if needed.
   ctx.fillStyle = INK;
@@ -211,18 +223,18 @@ export function createPlacardTexture(options: PlacardOptions): THREE.CanvasTextu
   const words = options.part.name.split(' ');
   let line = '';
   let y = 190;
-  const maxWidth = TEX_WIDTH - 400;
+  const maxWidth = TEX_WIDTH - 580;
   for (const word of words) {
     const test = line ? `${line} ${word}` : word;
     if (ctx.measureText(test).width > maxWidth && line) {
-      ctx.fillText(line, 60, y);
+      ctx.fillText(line, 230, y);
       line = word;
       y += 68;
     } else {
       line = test;
     }
   }
-  ctx.fillText(line, 60, y);
+  ctx.fillText(line, 230, y);
 
   // Specification block. These are the numbers the decision turns on, so they
   // belong on the sign rather than only in a HUD panel.
@@ -246,11 +258,11 @@ export function createPlacardTexture(options: PlacardOptions): THREE.CanvasTextu
   for (const [term, value] of rows) {
     ctx.fillStyle = DIM;
     ctx.font = '500 28px "Courier New", monospace';
-    ctx.fillText(term, 60, rowY);
+    ctx.fillText(term, 230, rowY);
 
     ctx.fillStyle = INK;
     ctx.font = '700 32px "Courier New", monospace';
-    ctx.fillText(value, 300, rowY);
+    ctx.fillText(value, 470, rowY);
 
     rowY += 44;
   }
@@ -278,9 +290,10 @@ export function placardFor(
   partId: string,
   label: string,
   bay: 'stages' | 'payloads' | 'structure',
+  step: number,
   marginHint?: number,
 ): THREE.CanvasTexture | null {
   const part = PART_LIBRARY.find((p) => p.id === partId);
   if (!part) return null;
-  return createPlacardTexture({ part, label, bay, marginHint });
+  return createPlacardTexture({ part, label, bay, step, marginHint });
 }

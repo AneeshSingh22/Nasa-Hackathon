@@ -1,10 +1,13 @@
 /**
  * Part stations: the benches around the floor where components are stored.
  *
- * Assembly used to be four presses of E in one spot, which taught the player
- * nothing about the parts and gave them nothing to do. Now each component sits
- * on its own station with a printed placard, and choosing between alternatives
- * means walking to a different bench rather than cycling a menu.
+ * The layout follows the build sequence. Step 1 and step 2 run down the left
+ * wall, step 3's four payloads sit side by side across the back, and step 4 is
+ * on the right — so the player walks one continuous route from the first part
+ * to the last instead of crossing the bay between sequential steps.
+ *
+ * Each step's options stay adjacent, which is what makes them read as
+ * alternatives rather than as unrelated benches.
  */
 
 export interface StationDefinition {
@@ -20,113 +23,117 @@ export interface StationDefinition {
   label: string;
   /** Which group of stations this belongs to, for signage and colour. */
   bay: 'stages' | 'payloads' | 'structure';
+  /** Build step, 1-4, shown large on the placard and painted on the floor. */
+  step: number;
 }
 
-/**
- * The floor plan.
- *
- * First stages down the left wall, upper stages on the near left, the four
- * payloads across the back, the fairing on the right. Grouping them means the
- * player learns the room, and each bay reads as a set of alternatives because
- * its options sit side by side.
- */
 export const STATIONS: StationDefinition[] = [
-  // ---- first stages, left wall ----
+  // ---- step 1: first stage, three options down the left wall ----
   {
     id: 'st-core',
     partId: 'core-booster',
-    x: -23,
-    z: 10,
+    x: -24,
+    z: 12,
     rotation: Math.PI / 2,
     label: 'Step 1 · Option A',
     bay: 'stages',
+    step: 1,
   },
   {
     id: 'st-solid',
     partId: 'solid-booster',
-    x: -23,
-    z: 2,
+    x: -24,
+    z: 5,
     rotation: Math.PI / 2,
     label: 'Step 1 · Option B',
     bay: 'stages',
+    step: 1,
   },
   {
     id: 'st-extended',
     partId: 'extended-booster',
-    x: -23,
-    z: -6,
+    x: -24,
+    z: -2,
     rotation: Math.PI / 2,
     label: 'Step 1 · Option C',
     bay: 'stages',
+    step: 1,
   },
 
-  // ---- upper stages, left wall further back ----
+  // ---- step 2: second stage, continuing down the same wall ----
   {
     id: 'st-hydrolox',
     partId: 'upper-stage',
-    x: -23,
-    z: -13,
+    x: -24,
+    z: -10,
     rotation: Math.PI / 2,
     label: 'Step 2 · Option A',
     bay: 'stages',
+    step: 2,
   },
   {
     id: 'st-kerolox',
     partId: 'kerolox-upper',
-    x: -23,
-    z: -19.5,
+    x: -24,
+    z: -17,
     rotation: Math.PI / 2,
     label: 'Step 2 · Option B',
     bay: 'stages',
+    step: 2,
   },
 
-  // ---- payloads, back wall ----
+  // ---- step 3: payloads, four side by side across the back wall ----
   {
     id: 'st-comms',
     partId: 'comms-probe',
-    x: -6,
-    z: -19,
+    x: -13,
+    z: -19.5,
     rotation: 0,
     label: 'Step 3 · Option A',
     bay: 'payloads',
+    step: 3,
   },
   {
     id: 'st-telescope',
     partId: 'telescope',
-    x: 1,
-    z: -19,
+    x: -7,
+    z: -19.5,
     rotation: 0,
     label: 'Step 3 · Option B',
     bay: 'payloads',
+    step: 3,
   },
   {
     id: 'st-crew',
     partId: 'crew-capsule',
-    x: 8,
-    z: -19,
+    x: -1,
+    z: -19.5,
     rotation: 0,
     label: 'Step 3 · Option C',
     bay: 'payloads',
+    step: 3,
   },
   {
     id: 'st-lab',
     partId: 'science-lab',
-    x: 15,
-    z: -19,
+    x: 5,
+    z: -19.5,
     rotation: 0,
     label: 'Step 3 · Option D',
     bay: 'payloads',
+    step: 3,
   },
 
-  // ---- structure, right wall ----
+  // ---- step 4: fairing, right wall ----
   {
     id: 'st-fairing',
     partId: 'fairing',
-    x: 23,
-    z: -10,
+    x: 24,
+    z: -12,
     rotation: -Math.PI / 2,
     label: 'Step 4 · Fairing',
     bay: 'structure',
+    step: 4,
   },
 ];
 
@@ -153,4 +160,9 @@ export function stationFor(partId: string): StationDefinition | null {
 /** All stations in one bay, for signage above the group. */
 export function stationsInBay(bay: StationDefinition['bay']): StationDefinition[] {
   return STATIONS.filter((s) => s.bay === bay);
+}
+
+/** All stations for one build step, in the order they are laid out. */
+export function stationsForStep(step: number): StationDefinition[] {
+  return STATIONS.filter((s) => s.step === step);
 }

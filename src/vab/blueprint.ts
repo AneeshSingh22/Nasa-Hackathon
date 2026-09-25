@@ -308,44 +308,44 @@ export function createBlueprintBoard(state: BlueprintState): BlueprintBoard {
 
   // The board itself: 11 m wide, angled slightly off the wall so it catches
   // the light and reads from across the floor.
-  const boardW = 11;
-  const boardH = 7.6;
+  // Large enough to read from the middle of the bay: this is a mission-control
+  // display, not a poster.
+  const boardW = 20;
+  const boardH = 12;
 
   const face = new THREE.Mesh(new THREE.PlaneGeometry(boardW, boardH), faceMat);
-  face.position.set(0, boardH / 2 + 1.4, 0.07);
+  face.position.set(0, 14, 0.09);
   group.add(face);
 
   const backing = new THREE.Mesh(
-    new THREE.BoxGeometry(boardW + 0.4, boardH + 0.4, 0.14),
+    new THREE.BoxGeometry(boardW + 0.7, boardH + 0.7, 0.3),
     frameMat,
   );
-  backing.position.set(0, boardH / 2 + 1.4, 0);
+  backing.position.set(0, 14, 0);
   backing.castShadow = true;
   group.add(backing);
 
-  // Legs, so it reads as a freestanding board rather than a poster.
-  for (const lx of [-boardW / 2 + 0.6, boardW / 2 - 0.6]) {
-    const leg = new THREE.Mesh(new THREE.BoxGeometry(0.22, 1.5, 0.22), frameMat);
-    leg.position.set(lx, 0.75, 0);
-    leg.castShadow = true;
-    group.add(leg);
-  }
-
   // Two lights aimed at it, because an unlit board at the back of a dim bay is
   // unreadable.
-  for (const lx of [-3.2, 3.2]) {
-    const lamp = new THREE.PointLight(0xffffff, 12, 16, 2);
-    lamp.position.set(lx, boardH + 1.6, 2.4);
+  for (const lx of [-7, 0, 7]) {
+    const lamp = new THREE.PointLight(0xffffff, 22, 26, 2);
+    lamp.position.set(lx, 14 + boardH / 2 + 1.4, 3.0);
     group.add(lamp);
 
     const housing = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.16, 0.22, 0.34, 12),
+      new THREE.CylinderGeometry(0.2, 0.28, 0.42, 12),
       frameMat,
     );
-    housing.position.set(lx, boardH + 1.9, 2.4);
-    housing.rotation.x = 0.6;
+    housing.position.set(lx, 14 + boardH / 2 + 1.8, 3.0);
+    housing.rotation.x = 0.65;
     group.add(housing);
   }
+
+  // Make the screen self-lit, so it reads as a display rather than a printed
+  // board and stays legible from across the bay.
+  faceMat.emissive = new THREE.Color(0xffffff);
+  faceMat.emissiveMap = texture;
+  faceMat.emissiveIntensity = 0.55;
 
   return {
     group,

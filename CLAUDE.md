@@ -112,6 +112,22 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
   position changed — `PlayerController.test.ts` has them.
+- **The building must be taller than the rocket.** For several commits the
+  ceiling was 58 m and the tallest stack 75.9 m, so the vehicle poked ten metres
+  through the roof, the crane hoisted to 71 m and flew the load out through it,
+  and the player's head came out above the roof at the top of the lift. The
+  ceiling is now 96 m with an open roof slot, which the vehicle needs anyway to
+  leave the building. Any change to part heights needs re-checking against
+  `VAB_HEIGHT`.
+- **A fixed elevator stop cannot serve variable stack heights.** Booster heights
+  range from 38 to 47 m, so the attach point moves nine metres depending on
+  which the player chose. The car now takes its stop from the current stack top
+  via `setWorkingHeight`, called from `afterFit`.
+- **Do not build a scene with regex backreferences.** A `re.sub` over
+  `stations.ts` injected literal control characters into the source and esbuild
+  failed with `Expected identifier but found ""`. Vitest reported the file
+  as "no tests" rather than as an error, so it looked like the tests had been
+  skipped. Rewrite whole files instead.
 - **A feature can be correct and still invisible.** The placement preview
   rendered exactly where it should — 9.8 m above the camera at 38 degrees,
   outside the 36-degree half-FOV. The player reported it as missing for two

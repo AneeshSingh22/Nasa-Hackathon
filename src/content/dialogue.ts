@@ -21,8 +21,8 @@
  * through the advice button.
  */
 export const INTRO = [
-  'Morning, engineer. Start at the blueprint board behind you — it shows every step and what is still open.',
-  'Parts are on the numbered stations. Step one is the left wall. Press T any time you want my advice.',
+  'Morning, engineer. The big screen ahead of you shows the build sequence and what is still open.',
+  'Four steps, numbered on the floor. Step one is the left wall. Press T any time you want my advice.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */
