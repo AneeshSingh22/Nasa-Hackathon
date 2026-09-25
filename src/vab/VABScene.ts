@@ -20,6 +20,15 @@ export interface VABEnvironment {
   assemblyRoot: THREE.Object3D;
   /** Updated each frame for the flickering work lights. */
   update: (elapsed: number) => void;
+  /**
+   * Height of whatever surface is under a given floor position.
+   *
+   * The controller needs this to stand on gantry platforms rather than
+   * floating, and to fall when the player walks off one.
+   */
+  supportHeightAt: (x: number, z: number, feetY: number) => number;
+  /** True when the player can climb at this position. */
+  isLadderAt: (x: number, z: number) => boolean;
 }
 
 export function createVABScene(): VABEnvironment {
@@ -163,6 +172,29 @@ export function createVABScene(): VABEnvironment {
       }
     }
   }
+  // Ladder up the outboard side of the gantry. The payload is fitted from the
+  // top platform, so this is the route the player has to take.
+  // Inside the platform footprint (7.2 +/- 3.5) so a climber lands on one.
+  const ladderX = 10.4;
+  const ladderTop = 47.5;
+  for (const side of [-0.42, 0.42]) {
+    const rail = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.07, 0.07, ladderTop, 8),
+      paint,
+    );
+    rail.position.set(ladderX, ladderTop / 2, side);
+    gantry.add(rail);
+  }
+  for (let y = 0.4; y < ladderTop; y += 0.42) {
+    const rung = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6),
+      paint,
+    );
+    rung.rotation.x = Math.PI / 2;
+    rung.position.set(ladderX, y, 0);
+    gantry.add(rung);
+  }
+
   // Gantry legs.
   for (const dz of [-2, 2]) {
     const leg = new THREE.Mesh(
@@ -263,10 +295,37 @@ export function createVABScene(): VABEnvironment {
 
   const baseIntensities = flickerLights.map((l) => l.intensity);
 
+  /** Y of each gantry platform, matching the loop that built them. */
+  const platformHeights: number[] = [];
+  for (let i = 0; i < levels; i++) platformHeights.push(4 + i * 5.2);
+
+  const LADDER_X = 10.4;
+
   return {
     scene,
     materials: mats,
     assemblyRoot,
+
+    isLadderAt(x: number, z: number) {
+      return Math.abs(x - LADDER_X) < 0.9 && Math.abs(z) < 0.9;
+    },
+
+    supportHeightAt(x: number, z: number, feetY: number) {
+      // Off the gantry footprint there is only the bay floor.
+      const onPlatformX = Math.abs(x - 7.2) <= 3.5;
+      const onPlatformZ = Math.abs(z) <= 2.2;
+      const onLadderColumn = Math.abs(x - LADDER_X) < 1.1 && Math.abs(z) < 1.1;
+      if (!((onPlatformX && onPlatformZ) || onLadderColumn)) return 0;
+
+      // Standing on the highest platform at or just below the feet, so
+      // climbing past one lands the player on it rather than on the floor.
+      let best = 0;
+      for (const h of platformHeights) {
+        if (h <= feetY + 0.35 && h > best) best = h;
+      }
+      return best;
+    },
+
     update(elapsed: number) {
       // Very subtle variation in the work lights. Industrial rooms are never
       // perfectly still, and a tiny flicker reads as life rather than as a bug.

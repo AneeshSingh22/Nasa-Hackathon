@@ -175,6 +175,21 @@ export class Mission {
     return true;
   }
 
+  /**
+   * Apply a penalty that is not a build action — a fall from the gantry, a
+   * safety stand-down, anything that costs schedule and goodwill without
+   * touching the vehicle.
+   */
+  penalise(penalty: { days: number; confidence: number; reason: string }): boolean {
+    if (this.hasFailed) return false;
+    this.state.daysRemaining -= penalty.days;
+    this.state.confidence = Math.max(0, this.state.confidence - penalty.confidence);
+    this.onChange?.(this.status);
+    this.checkWarnings();
+    this.checkFailure();
+    return true;
+  }
+
   /** Charge for clearing the entire stand. */
   clearStand(refundMillions: number): boolean {
     if (this.hasFailed) return false;

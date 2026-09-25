@@ -41,27 +41,80 @@ export class Assembly {
     return this.stack;
   }
 
-  /** The order parts must be stacked in, bottom to top. */
-  private static readonly ORDER: PartDefinition['kind'][] = [
+  /**
+   * What kind of part each slot takes, bottom to top.
+   *
+   * This used to be a fixed list of part ids, which meant exactly one vehicle
+   * was buildable and pressing E four times always found it. Now it names
+   * *kinds*, and the payload kind has four candidates the player chooses
+   * between — so the build is a decision with wrong answers in it.
+   */
+  private static readonly SLOTS: PartDefinition['kind'][] = [
     'booster',
     'upper',
     'payload',
     'fairing',
   ];
 
-  /** The part the player is allowed to attach next, or null when complete. */
+  /** The kind of part the next slot expects, or null when complete. */
+  nextSlot(): PartDefinition['kind'] | null {
+    return Assembly.SLOTS[this.stack.length] ?? null;
+  }
+
+  /** Every part that could legally go in the next slot. */
+  candidates(): PartDefinition[] {
+    const kind = this.nextSlot();
+    if (!kind) return [];
+    return PART_LIBRARY.filter((p) => p.kind === kind);
+  }
+
+  /**
+   * The part that would be fitted by a plain confirm.
+   *
+   * For slots with one candidate this is that part. For the payload slot it is
+   * whichever the player has selected.
+   */
   nextExpected(): PartDefinition | null {
-    const index = this.stack.length;
-    const kind = Assembly.ORDER[index];
-    if (!kind) return null;
-    return PART_LIBRARY.find((p) => p.kind === kind) ?? null;
+    const options = this.candidates();
+    if (options.length === 0) return null;
+    if (options.length === 1) return options[0] ?? null;
+    const chosen = options.find((p) => p.id === this.selectedPayloadId);
+    return chosen ?? options[0] ?? null;
+  }
+
+  /** Which payload the player has picked. */
+  private selectedPayloadId: string | null = null;
+
+  get selectedPayload(): string | null {
+    return this.selectedPayloadId;
+  }
+
+  /** True when the next slot offers a real choice. */
+  hasChoice(): boolean {
+    return this.candidates().length > 1;
+  }
+
+  selectPayload(id: string): void {
+    this.selectedPayloadId = id;
+  }
+
+  /** Step the payload selection, for cycling with a key. */
+  cyclePayload(direction: 1 | -1): PartDefinition | null {
+    const options = this.candidates();
+    if (options.length < 2) return null;
+    const current = options.findIndex((p) => p.id === this.selectedPayloadId);
+    const from = current === -1 ? 0 : current;
+    const next = (from + direction + options.length) % options.length;
+    const part = options[next];
+    if (part) this.selectedPayloadId = part.id;
+    return part ?? null;
   }
 
   isComplete(): boolean {
-    return this.stack.length === Assembly.ORDER.length;
+    return this.stack.length === Assembly.SLOTS.length;
   }
 
-  /** Attach the next part. Returns false if the stack is already complete. */
+  /** Attach the part the next slot expects. */
   attachNext(): PartDefinition | null {
     const part = this.nextExpected();
     if (!part) return null;
@@ -89,6 +142,11 @@ export class Assembly {
 
   clear(): void {
     while (this.stack.length > 0) this.detachTop();
+  }
+
+  /** Science the fitted payload will return. */
+  scienceValue(): number {
+    return this.stack.reduce((sum, p) => sum + (p.science ?? 0), 0);
   }
 
   /** Total height of the stack so far, metres. */

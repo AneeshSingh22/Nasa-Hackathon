@@ -971,3 +971,214 @@ kbd {
 .fail-stat.good b {
   color: var(--green);
 }
+
+/* ---------------- contract panel ---------------- */
+
+#contract {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 300px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+#contract header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+
+#contract-pay {
+  margin-left: auto;
+  color: var(--green);
+  border-color: rgba(95, 217, 154, 0.35);
+}
+
+.contract-body {
+  padding: 12px 13px 13px;
+}
+
+#contract-brief {
+  margin: 0 0 12px;
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--dim);
+}
+
+#contract-checks {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border-top: 1px solid var(--line);
+  padding-top: 11px;
+}
+
+#contract-checks li {
+  display: grid;
+  grid-template-columns: 14px 1fr auto;
+  gap: 8px;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+#contract-checks .mark {
+  font-weight: 700;
+}
+
+#contract-checks li.met .mark {
+  color: var(--green);
+}
+
+#contract-checks li.unmet .mark {
+  color: var(--burn);
+}
+
+#contract-checks .label {
+  color: var(--dim);
+}
+
+#contract-checks .detail {
+  color: var(--faint);
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+#contract-checks li.met .label {
+  color: var(--ink);
+}
+
+/* When the inspector is open it shares the right column, so push it down. */
+#inspector {
+  top: auto;
+  bottom: 96px;
+}
+
+/* ---------------- payload picker ---------------- */
+
+#picker {
+  position: absolute;
+  left: 50%;
+  bottom: 150px;
+  transform: translateX(-50%);
+  width: min(620px, calc(100vw - 40px));
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  backdrop-filter: blur(12px);
+  overflow: hidden;
+}
+
+#picker header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 13px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+
+#picker header .pill {
+  margin-left: auto;
+}
+
+#picker-options {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--line);
+}
+
+@media (max-width: 680px) {
+  #picker-options {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.pick {
+  background: var(--panel-solid);
+  padding: 10px 11px;
+  border: 0;
+  border-top: 2px solid transparent;
+  text-align: left;
+}
+
+.pick.active {
+  border-top-color: var(--cyan);
+  background: rgba(82, 217, 236, 0.08);
+}
+
+.pick h4 {
+  font-family: var(--display);
+  font-size: 12.5px;
+  font-weight: 600;
+  margin: 0 0 5px;
+  color: var(--dim);
+  line-height: 1.25;
+}
+
+.pick.active h4 {
+  color: var(--ink);
+}
+
+.pick dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 6px;
+  margin: 0;
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.pick dt {
+  color: var(--faint);
+}
+
+.pick dd {
+  margin: 0;
+  text-align: right;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}
+
+.pick.active dd {
+  color: var(--ink);
+}
+
+.pick dd.fail {
+  color: var(--burn);
+}
+
+.pick dd.tight {
+  color: var(--amber);
+}
+
+/* ---------------- altitude readout while climbing ---------------- */
+
+#altitude {
+  position: absolute;
+  left: 50%;
+  top: 74px;
+  transform: translateX(-50%);
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  color: var(--amber);
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 188, 77, 0.3);
+  border-radius: 3px;
+  padding: 5px 11px;
+  font-variant-numeric: tabular-nums;
+  transition: opacity 0.2s ease;
+}

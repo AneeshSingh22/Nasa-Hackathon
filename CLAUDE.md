@@ -150,6 +150,29 @@ with margin on all three, two telescope swaps bankrupt the programme, and cheap
 swaps run the schedule out instead. Retune those numbers only with the tests in
 front of you.
 
+**The contract is what makes assembly a game.** `game/contract.ts` states a
+requirement and leaves the vehicle to the player. Before it existed, the build
+order was hardcoded and pressing `E` four times always produced the one correct
+vehicle. `contract.test.ts` pins the property that matters: at least three
+payloads satisfy the contract, they differ in science, margin and cost, the
+cheapest one fails the science floor, and the highest-paying one leaves under
+200 m/s of margin. If a change makes one payload strictly best, that test
+should start failing — fix the balance, not the test.
+
+**Working at height.** The payload and fairing are fitted from the top gantry
+platform, not the floor, so the player climbs. `workzone.test.ts` pins the
+gantry geometry against the platform heights `VABScene` actually builds: these
+constants live in two files and once disagreed badly enough that the payload
+was unreachable — the work height was 56 m when the top platform was 45.6, and
+the ladder ran up a column outside the platform footprint entirely. Change one
+and run the tests.
+
+**One source of truth for reach rules.** `canWorkOn` in `game/workzone.ts` is
+the only place that decides whether the player can fit a part. `main.ts` used
+to duplicate the check, which is how a bug shipped that let the core booster be
+fitted from 56 metres up: the gantry is 7 m from the stand horizontally, so it
+satisfied the floor work zone when height was ignored.
+
 **Proximity-gated interaction.** `game/workzone.ts` restricts assembly to the
 painted circle around the stand, and the action prompt fades in as the player
 approaches. The hint radius is deliberately wider than the spawn distance: if

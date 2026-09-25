@@ -32,6 +32,8 @@ export interface PartDefinition {
   keyFact: string;
   /** Cost to fit, in millions of dollars. Drives the mission budget. */
   cost: number;
+  /** Science returned, for payloads. Zero for structure. */
+  science?: number;
 }
 
 export const PART_LIBRARY: PartDefinition[] = [
@@ -68,6 +70,22 @@ export const PART_LIBRARY: PartDefinition[] = [
     cost: 96,
   },
   {
+    id: 'comms-probe',
+    kind: 'payload',
+    name: 'Comsat Relay',
+    height: 3.0,
+    radius: 1.4,
+    dryMass: 3_000,
+    propellantMass: 0,
+    thrust: 0,
+    isp: 0,
+    briefing:
+      'A basic communications relay. Three tonnes barely dents your delta-v budget, so the ascent is forgiving and the vehicle is cheap. Check the contract before you fit it, though: light payloads do not carry much instrumentation.',
+    keyFact: '3 t · 40 science · cheapest option',
+    cost: 52,
+    science: 40,
+  },
+  {
     id: 'telescope',
     kind: 'payload',
     name: 'Orbital Telescope',
@@ -78,9 +96,42 @@ export const PART_LIBRARY: PartDefinition[] = [
     thrust: 0,
     isp: 0,
     briefing:
-      'A one-metre survey telescope, eight tonnes. Every kilogram here costs delta-v for the whole rest of the flight: swapping this for the 14-tonne laboratory would take roughly 600 m/s out of your budget.',
-    keyFact: '8 t · 100 science · 900 W peak',
+      'A one-metre survey telescope, eight tonnes. This is the payload the vehicle was designed around: it meets the science requirement with comfortable delta-v margin, which is worth more than it looks when the ascent does not go to plan.',
+    keyFact: '8 t · 100 science · best margin',
     cost: 112,
+    science: 100,
+  },
+  {
+    id: 'crew-capsule',
+    kind: 'payload',
+    name: 'Crew Capsule',
+    height: 5.4,
+    radius: 2.2,
+    dryMass: 11_000,
+    propellantMass: 0,
+    thrust: 0,
+    isp: 0,
+    briefing:
+      'Eleven tonnes, and three people aboard. More science than the telescope and it pays better, but the margin is thin enough that a sloppy gravity turn will not make orbit. A loss here is not a line in a budget report.',
+    keyFact: '11 t · 150 science · crew aboard',
+    cost: 154,
+    science: 150,
+  },
+  {
+    id: 'science-lab',
+    kind: 'payload',
+    name: 'Pressurised Science Lab',
+    height: 6.8,
+    radius: 2.4,
+    dryMass: 14_000,
+    propellantMass: 0,
+    thrust: 0,
+    isp: 0,
+    briefing:
+      'Fourteen tonnes of laboratory, and the most science available. The rocket equation makes you pay for all of it: this payload leaves under a hundred metres per second of margin above the orbital requirement, and costs almost the whole budget. It is the right answer only if you fly perfectly.',
+    keyFact: '14 t · 180 science · almost no margin',
+    cost: 186,
+    science: 180,
   },
   {
     id: 'fairing',

@@ -18,6 +18,12 @@ const RUN_SPEED = 13.5;
 const ACCELERATION = 34;
 const DAMPING = 14;
 const EYE_HEIGHT = 1.72;
+/** Climb rate on a ladder. Slower than walking, as climbing is. */
+const CLIMB_SPEED = 4.6;
+/** Gravity applied when the player walks off an edge. m/s^2 */
+const FALL_GRAVITY = 22;
+/** Terminal speed for the fall, so a long drop stays readable. m/s */
+const MAX_FALL_SPEED = 32;
 const LOOK_SENSITIVITY = 0.0022;
 const MAX_PITCH = Math.PI / 2 - 0.02;
 
@@ -40,6 +46,24 @@ export class PlayerController {
   private dragging = false;
   private bounds: PlayerBounds;
 
+  /**
+   * Vertical state. The controller was floor-only; the payload has to be
+   * fitted from a platform 56 metres up, so the player needs to climb.
+   */
+  private verticalSpeed = 0;
+  /** The floor height the player is currently standing on. */
+  private groundHeight = 0;
+  /** Set by the scene each frame: can the player climb where they stand? */
+  onLadder = false;
+  /** Set by the scene each frame: the surface height under the player. */
+  supportHeight = 0;
+  /** True while falling, so the HUD and narrator can react. */
+  private falling = false;
+
+  /** Fired when the player lands after a fall of consequence. */
+  onFall: ((distance: number) => void) | null = null;
+  private fallStartY = 0;
+
   /** Head bob accumulator, so walking feels physical rather than gliding. */
   private bobPhase = 0;
 
@@ -60,6 +84,15 @@ export class PlayerController {
 
   get isLocked(): boolean {
     return this.locked;
+  }
+
+  get isFalling(): boolean {
+    return this.falling;
+  }
+
+  /** Height of the player's feet above the bay floor. */
+  get feetHeight(): number {
+    return this.yawObject.position.y - EYE_HEIGHT;
   }
 
   attach(domElement: HTMLElement): () => void {
@@ -188,6 +221,47 @@ export class PlayerController {
     const p = this.yawObject.position;
     p.x += this.velocity.x * dt;
     p.z += this.velocity.z * dt;
+
+    // ---- vertical: climbing, standing, falling ----
+    this.groundHeight = this.supportHeight;
+    const feet = p.y - EYE_HEIGHT;
+
+    if (this.onLadder) {
+      // On a ladder the up and down keys climb instead of walking.
+      let climb = 0;
+      if (this.held(PlayerController.FORWARD)) climb += 1;
+      if (this.held(PlayerController.BACK)) climb -= 1;
+      this.verticalSpeed = 0;
+      this.falling = false;
+      p.y += climb * CLIMB_SPEED * dt;
+      // A ladder never lets you go below the floor it starts from.
+      if (p.y - EYE_HEIGHT < this.groundHeight) {
+        p.y = this.groundHeight + EYE_HEIGHT;
+      }
+    } else if (feet > this.groundHeight + 0.05) {
+      // Unsupported: fall.
+      if (!this.falling) {
+        this.falling = true;
+        this.fallStartY = feet;
+      }
+      this.verticalSpeed = Math.max(
+        -MAX_FALL_SPEED,
+        this.verticalSpeed - FALL_GRAVITY * dt,
+      );
+      p.y += this.verticalSpeed * dt;
+      if (p.y - EYE_HEIGHT <= this.groundHeight) {
+        p.y = this.groundHeight + EYE_HEIGHT;
+        const dropped = this.fallStartY - this.groundHeight;
+        this.verticalSpeed = 0;
+        this.falling = false;
+        if (dropped > 3) this.onFall?.(dropped);
+      }
+    } else {
+      // Standing on something.
+      p.y = this.groundHeight + EYE_HEIGHT;
+      this.verticalSpeed = 0;
+      this.falling = false;
+    }
 
     // Keep the player inside the building.
     p.x = Math.max(this.bounds.minX, Math.min(this.bounds.maxX, p.x));

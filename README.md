@@ -26,6 +26,7 @@ the assembly bay floor.
 | `E` | Fit the next stage |
 | `Q` | Remove the top stage |
 | `R` | Clear the stand |
+| `Tab` | Cycle the payload choice |
 | `F` | Roll out to the pad |
 | `H` | Show or hide the controls panel |
 | `V` | Mute or unmute the flight director |
@@ -57,6 +58,31 @@ and the readout shows 13 873 m/s of Δv. Add the eight-tonne telescope and it
 drops to 10 924. Add the fairing and it falls again to 10 501. That is
 Tsiolkovsky's rocket equation doing its work, and no tooltip is needed to
 explain it.
+
+## The decision the phase is built on
+
+A contract states the requirement — an instrument package above 200 km
+returning at least 100 units of science — and leaves the vehicle to you. Four
+payloads are available and they are not interchangeable:
+
+| Payload | Mass | Science | Cost | Δv margin | Verdict |
+| --- | --- | --- | --- | --- | --- |
+| Comsat Relay | 3 t | 40 | $52M | +2 371 m/s | **Fails the contract** |
+| Orbital Telescope | 8 t | 100 | $112M | +1 101 m/s | Valid, earns the bonus |
+| Crew Capsule | 11 t | 150 | $154M | +535 m/s | Valid, no bonus |
+| Science Lab | 14 t | 180 | $186M | **+59 m/s** | Valid, and brutal |
+
+The cheapest payload flies beautifully and does not do the job. The best-paying
+one leaves almost no margin and costs $454M of a $480M budget, so a single
+teardown bankrupts the programme. There is no move that is right in every
+column, which is the whole point.
+
+## Working at height
+
+The lower stages go on from the floor. The payload and fairing sit on top of a
+55-metre stack, so they are fitted from the top gantry platform — you climb the
+ladder with the arrow keys to get there. Walking off the platform is a real
+fall, and a serious one costs days and the director's confidence.
 
 ## How a run ends
 

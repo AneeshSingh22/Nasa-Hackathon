@@ -60,3 +60,81 @@ export function promptOpacity(position: Point2D): number {
   const t = (WORK_ZONE_HINT_RADIUS - d) / (WORK_ZONE_HINT_RADIUS - WORK_ZONE_RADIUS);
   return t;
 }
+
+
+/**
+ * Where each part has to be fitted from.
+ *
+ * Standing anywhere in the circle is enough for the lower stages, which a
+ * crane lifts into place. The payload and fairing go on top of a 55-metre
+ * stack, and in a real assembly building that work happens from a platform at
+ * that height — so the player has to climb the gantry to finish the vehicle.
+ *
+ * This is what stops the build being four presses of the same key in the same
+ * spot.
+ */
+export type WorkStation = 'floor' | 'gantry';
+
+/**
+ * The gantry platform sits beside the stack, to the +X side.
+ *
+ * These values must match the geometry VABScene builds: the platforms are
+ * centred on x = 7.2 and the ladder runs up x = 10.4, inside the platform
+ * footprint so a climber actually arrives on one.
+ */
+export const GANTRY_X = 7.2;
+/** X of the climbable ladder. Must sit within the platform footprint. */
+export const LADDER_X = 10.4;
+/** Half-depth of the walkable platform. */
+export const GANTRY_HALF_DEPTH = 2.2;
+/**
+ * Height of the platform the payload is fitted from.
+ *
+ * Matches the topmost platform VABScene builds: 4 + 8 * 5.2 = 45.6 m. The
+ * finished stack is 66.7 m tall, so the payload slot sits above this — which
+ * is realistic, since a real crane does the lifting and the crew guides it.
+ */
+export const GANTRY_WORK_HEIGHT = 45.6;
+/** How close to the platform's working height counts as being on it. */
+export const GANTRY_HEIGHT_TOLERANCE = 3.0;
+
+export interface Point3D extends Point2D {
+  y: number;
+}
+
+/** Which station a given part kind must be fitted from. */
+export function stationFor(kind: string): WorkStation {
+  return kind === 'payload' || kind === 'fairing' ? 'gantry' : 'floor';
+}
+
+/** True when the player is standing on the high gantry platform. */
+export function isOnGantry(position: Point3D): boolean {
+  // Wide enough to include the ladder column at x = 10.4.
+  const nearX = Math.abs(position.x - GANTRY_X) <= 4.2;
+  const nearZ = Math.abs(position.z) <= GANTRY_HALF_DEPTH + 0.6;
+  const atHeight =
+    Math.abs(position.y - GANTRY_WORK_HEIGHT) <= GANTRY_HEIGHT_TOLERANCE;
+  return nearX && nearZ && atHeight;
+}
+
+/** How far off the floor still counts as standing on it. Metres. */
+export const FLOOR_TOLERANCE = 1.5;
+
+/** True when the player is standing on the bay floor rather than up a gantry. */
+export function isOnFloor(position: Point3D): boolean {
+  return position.y <= FLOOR_TOLERANCE;
+}
+
+/**
+ * True when the player can fit a part of this kind from where they stand.
+ *
+ * Floor work checks height as well as distance. The gantry is only seven
+ * metres from the stand horizontally, so without the height test a player on
+ * the top platform would satisfy the floor work zone and could fit the core
+ * booster from fifty-six metres up.
+ */
+export function canWorkOn(kind: string, position: Point3D): boolean {
+  return stationFor(kind) === 'gantry'
+    ? isOnGantry(position)
+    : isInWorkZone(position) && isOnFloor(position);
+}

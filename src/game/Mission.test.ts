@@ -14,11 +14,19 @@ const cost = (id: string): number => {
   return part.cost;
 };
 
-const TOTAL_BUILD_COST = PART_LIBRARY.reduce((sum, p) => sum + p.cost, 0);
+/**
+ * One valid vehicle, not the whole catalog.
+ *
+ * The library now offers four payloads and a build uses exactly one of them,
+ * so summing every part would price a rocket nobody would build.
+ */
+const BUILD_PARTS = ['core-booster', 'upper-stage', 'telescope', 'fairing'];
 
-/** Fit all four parts once, the way a player who knows what they want would. */
+const TOTAL_BUILD_COST = BUILD_PARTS.reduce((sum, id) => sum + cost(id), 0);
+
+/** Fit one complete vehicle, the way a player who knows what they want would. */
 function cleanBuild(mission: Mission): void {
-  for (const part of PART_LIBRARY) mission.fitPart(part.cost);
+  for (const id of BUILD_PARTS) mission.fitPart(cost(id));
 }
 
 describe('Mission constraints', () => {

@@ -71,6 +71,18 @@
           </p>
         </section>
 
+        <!-- The contract: what the customer requires -->
+        <section id="contract" aria-label="Mission contract">
+          <header>
+            <span class="panel-title">Contract</span>
+            <span id="contract-pay" class="pill">$340M</span>
+          </header>
+          <div class="contract-body">
+            <p id="contract-brief">&mdash;</p>
+            <ul id="contract-checks"></ul>
+          </div>
+        </section>
+
         <!-- Mission resources: the three ways to lose -->
         <section id="resources" aria-label="Mission resources">
           <header>
@@ -97,6 +109,18 @@
           <h2 id="insp-name">Part</h2>
           <p id="insp-fact" class="insp-fact">—</p>
           <p id="insp-brief">—</p>
+        </section>
+
+        <!-- Height readout, shown while off the floor -->
+        <div id="altitude" class="hidden">FEET 0.0 m</div>
+
+        <!-- Payload choice, shown only at the payload slot -->
+        <section id="picker" class="hidden" aria-label="Payload selection">
+          <header>
+            <span class="panel-title">Select payload</span>
+            <span class="pill"><kbd>Tab</kbd> cycle</span>
+          </header>
+          <div id="picker-options"></div>
         </section>
 
         <!-- Next-action prompt -->
@@ -141,6 +165,8 @@
               <dd>Run</dd>
               <dt>Mouse</dt>
               <dd>Look around</dd>
+              <dt><kbd>&uarr;</kbd><kbd>&darr;</kbd> on a ladder</dt>
+              <dd>Climb. The payload and fairing are fitted from the top gantry platform.</dd>
               <dt><kbd>Esc</kbd></dt>
               <dd>Release the cursor — click the view to take it back</dd>
             </dl>
@@ -153,8 +179,10 @@
               <dd>Remove the top part</dd>
               <dt><kbd>R</kbd></dt>
               <dd>Clear the stand and start over</dd>
+              <dt><kbd>Tab</kbd></dt>
+              <dd>Cycle the payload choice at the payload slot</dd>
               <dt><kbd>F</kbd></dt>
-              <dd>Roll out to the pad, once the vehicle can reach orbit</dd>
+              <dd>Roll out to the pad, once the contract is satisfied</dd>
               <dt><kbd>H</kbd></dt>
               <dd>Show or hide this panel</dd>
               <dt><kbd>V</kbd></dt>

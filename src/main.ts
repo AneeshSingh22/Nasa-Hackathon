@@ -12,7 +12,26 @@ import {
   promptOpacity,
   distanceToStand,
   WORK_ZONE_RADIUS,
+  canWorkOn,
+  stationFor,
+  isOnGantry,
+  GANTRY_WORK_HEIGHT,
 } from './game/workzone';
+import { CONTRACT_FIRST_ORBIT, evaluate } from './game/contract';
+
+const contract = CONTRACT_FIRST_ORBIT;
+
+/** Evaluate the current stack against the mission contract. */
+function contractStatus() {
+  const analysis = assembly.analyze();
+  return evaluate(contract, {
+    scienceValue: assembly.scienceValue(),
+    totalDeltaV: analysis.totalDeltaV,
+    liftoffTWR: analysis.liftoffTWR,
+    hasPayload: assembly.parts.some((p) => p.kind === 'payload'),
+    isComplete: assembly.isComplete(),
+  });
+}
 
 /**
  * Ad Astra Program — Vertical slice: the Vehicle Assembly Building.
@@ -74,6 +93,38 @@ env.scene.add(player.yawObject);
 
 const detachInput = player.attach(canvas);
 
+/**
+ * Falling off the gantry costs the programme.
+ *
+ * Working at height is the real hazard in an assembly building, and a fall
+ * that cost nothing would make the climb a formality. The penalty scales with
+ * the drop, and a serious fall takes days as well as confidence.
+ */
+player.onFall = (distance) => {
+  if (mission.hasFailed || rolledOut) return;
+
+  if (distance < 6) {
+    log(`STUMBLE  ${distance.toFixed(0)} m drop`);
+    say('Watch your footing up there.');
+    return;
+  }
+
+  const days = distance > 25 ? 3 : 1;
+  const confidence = distance > 25 ? 12 : 5;
+  mission.penalise({
+    days,
+    confidence,
+    reason: `fall from ${distance.toFixed(0)} m`,
+  });
+  log(`FALL  ${distance.toFixed(0)} m  −${days}d`);
+  say(
+    distance > 25
+      ? 'Engineer down! Get the safety team in. That is days of paperwork and the director will hear about it.'
+      : 'That was a fall. Safety will want a report, and we have lost a day.',
+    true,
+  );
+};
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -125,6 +176,12 @@ const el = {
   winStats: document.querySelector<HTMLElement>('#win-stats'),
   winNote: document.querySelector<HTMLElement>('#win-note'),
   winAgain: document.querySelector<HTMLButtonElement>('#win-again'),
+  contractBrief: document.querySelector<HTMLElement>('#contract-brief'),
+  contractChecks: document.querySelector<HTMLElement>('#contract-checks'),
+  contractPay: document.querySelector<HTMLElement>('#contract-pay'),
+  picker: document.querySelector<HTMLElement>('#picker'),
+  pickerOptions: document.querySelector<HTMLElement>('#picker-options'),
+  altitude: document.querySelector<HTMLElement>('#altitude'),
 };
 
 // ------------------------------------------------------- narrator & mission
@@ -163,6 +220,8 @@ let started = false;
 let saidInspectionHint = false;
 /** The roll-out prompt is spoken once, when the stack first completes. */
 let saidRolloutPrompt = false;
+/** The payload-choice briefing is spoken once, when that slot opens. */
+let saidPayloadChoice = false;
 
 const KIND_LABEL: Record<PartDefinition['kind'], string> = {
   booster: 'First stage',
@@ -208,7 +267,114 @@ function refreshReadout(): void {
     el.verdict.className = `verdict ${a.verdictLevel}`;
   }
 
+  refreshContract();
+  refreshPicker();
   updatePrompt();
+}
+
+/** Show how high the player is, but only once they are off the floor. */
+function updateAltitude(): void {
+  if (!el.altitude) return;
+  const feet = player.feetHeight;
+  if (feet < 1.5) {
+    el.altitude.classList.add('hidden');
+    return;
+  }
+  el.altitude.classList.remove('hidden');
+  const onStation = isOnGantry({
+    x: player.position.x,
+    z: player.position.z,
+    y: feet,
+  });
+  el.altitude.textContent = onStation
+    ? `FEET ${feet.toFixed(1)} m · WORK PLATFORM`
+    : `FEET ${feet.toFixed(1)} m`;
+}
+
+/** Paint the contract requirement checklist. */
+function refreshContract(): void {
+  if (el.contractBrief) el.contractBrief.textContent = contract.brief;
+
+  const evaluation = contractStatus();
+
+  if (el.contractPay) {
+    el.contractPay.textContent = evaluation.satisfied
+      ? `$${evaluation.payment}M`
+      : `$${contract.payment}M`;
+  }
+
+  if (!el.contractChecks) return;
+  el.contractChecks.innerHTML = '';
+  for (const check of evaluation.checks) {
+    const li = document.createElement('li');
+    li.className = check.met ? 'met' : 'unmet';
+
+    const mark = document.createElement('span');
+    mark.className = 'mark';
+    mark.textContent = check.met ? '✓' : '✗';
+
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = check.label;
+
+    const detail = document.createElement('span');
+    detail.className = 'detail';
+    detail.textContent = check.detail;
+
+    li.append(mark, label, detail);
+    el.contractChecks.appendChild(li);
+  }
+}
+
+/**
+ * The payload picker, shown only when the next slot offers a choice.
+ *
+ * Each option shows what it costs the player in the terms that matter: mass,
+ * science, money, and whether it clears the contract's science floor.
+ */
+function refreshPicker(): void {
+  if (!el.picker || !el.pickerOptions) return;
+
+  if (!assembly.hasChoice() || mission.hasFailed || rolledOut) {
+    el.picker.classList.add('hidden');
+    return;
+  }
+
+  const options = assembly.candidates();
+  const selected = assembly.nextExpected();
+  el.picker.classList.remove('hidden');
+  el.pickerOptions.innerHTML = '';
+
+  for (const option of options) {
+    const cell = document.createElement('div');
+    cell.className = option.id === selected?.id ? 'pick active' : 'pick';
+
+    const title = document.createElement('h4');
+    title.textContent = option.name;
+
+    const dl = document.createElement('dl');
+    const science = option.science ?? 0;
+    const rows: Array<[string, string, string]> = [
+      ['Mass', `${(option.dryMass / 1000).toFixed(0)} t`, ''],
+      [
+        'Science',
+        String(science),
+        science >= contract.minScience ? '' : 'fail',
+      ],
+      ['Cost', `$${option.cost}M`, option.cost > mission.status.budget ? 'fail' : ''],
+    ];
+    for (const [term, value, cls] of rows) {
+      const dt = document.createElement('dt');
+      dt.textContent = term;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      if (cls) dd.className = cls;
+      dl.append(dt, dd);
+    }
+
+    cell.append(title, dl);
+    el.pickerOptions.appendChild(cell);
+  }
 }
 
 /**
@@ -419,8 +585,32 @@ mission.onWarning = (text) => {
  * Refuse a build action and say why, when the player is not at the stand.
  * Returns true when the action was blocked.
  */
-function blockedByDistance(): boolean {
-  if (isInWorkZone(player.position)) return false;
+function blockedByDistance(kind?: string): boolean {
+  const position = {
+    x: player.position.x,
+    z: player.position.z,
+    y: player.feetHeight,
+  };
+
+  // One source of truth for the rule, shared with the tests. Duplicating the
+  // check here is how the "fit the booster from 56 m up" bug got in.
+  if (kind && canWorkOn(kind, position)) return false;
+  if (!kind && isInWorkZone(player.position) && position.y <= 1.5) return false;
+
+  if (kind && stationFor(kind) === 'gantry') {
+    log('OUT OF REACH  fit from the top gantry platform');
+    say(
+      `That goes on top of the stack, ${GANTRY_WORK_HEIGHT.toFixed(0)} metres up. Take the ladder on the far side of the gantry and fit it from the top platform.`,
+    );
+    return true;
+  }
+
+  if (position.y > 1.5) {
+    log('OUT OF REACH  come back down to the floor');
+    say('You cannot work on the lower stages from up there. Come back down.');
+    return true;
+  }
+
   const away = distanceToStand(player.position) - WORK_ZONE_RADIUS;
   log(`OUT OF REACH  ${away.toFixed(0)} m from the stand`);
   say('You are not at the stand, engineer. Walk into the painted circle.');
@@ -429,13 +619,13 @@ function blockedByDistance(): boolean {
 
 function attachNextPart(): void {
   if (mission.hasFailed) return;
-  if (blockedByDistance()) return;
 
   const part = assembly.nextExpected();
   if (!part) {
     say('Nothing left to fit. The vehicle is complete.');
     return;
   }
+  if (blockedByDistance(part.kind)) return;
 
   // Charge first: if the programme cannot afford the part, the mission ends
   // and the part never goes on.
@@ -448,6 +638,14 @@ function attachNextPart(): void {
   refreshReadout();
 
   // When the stack completes, the director passes judgement on it.
+  // The payload slot is the first real decision, so it gets its own briefing.
+  if (assembly.hasChoice() && !saidPayloadChoice) {
+    saidPayloadChoice = true;
+    window.setTimeout(() => {
+      if (!mission.hasFailed) say(script.PAYLOAD_CHOICE);
+    }, 2200);
+  }
+
   if (assembly.isComplete()) {
     const analysis = assembly.analyze();
     window.setTimeout(() => {
@@ -512,12 +710,14 @@ function rollOut(): void {
     return;
   }
 
-  const analysis = assembly.analyze();
-  if (!analysis.canReachOrbit) {
-    log('ROLL OUT REFUSED');
+  const evaluation = contractStatus();
+  if (!evaluation.satisfied) {
+    const failed = evaluation.checks.filter((c) => !c.met).map((c) => c.label);
+    log(`ROLL OUT REFUSED  ${failed.join(', ')}`);
     say(script.ROLLOUT_REFUSED, true);
     return;
   }
+  const analysis = assembly.analyze();
 
   rolledOut = true;
   const status = mission.status;
@@ -577,6 +777,19 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyH' || e.code === 'Slash') toggleHelp();
   if (e.code === 'KeyV') narrator.toggle();
   if (e.code === 'KeyF') rollOut();
+  if (e.code === 'Tab') {
+    // Cycle the payload choice. Only meaningful at the payload slot, and the
+    // assembly refuses when there is nothing to choose between.
+    e.preventDefault();
+    const picked = assembly.cyclePayload(e.shiftKey ? -1 : 1);
+    if (picked) {
+      log(`SELECTED  ${picked.name}  $${picked.cost}M`);
+      say(
+        `${picked.name}. ${picked.science ?? 0} units of science, ${(picked.dryMass / 1000).toFixed(0)} tonnes, ${picked.cost} million.`,
+      );
+      refreshReadout();
+    }
+  }
 });
 
 // --------------------------------------------------------------- start up
@@ -646,6 +859,7 @@ function restartMission(): void {
   spokenIntro = false;
   saidInspectionHint = false;
   saidRolloutPrompt = false;
+  saidPayloadChoice = false;
   el.failure?.classList.add('hidden');
   el.success?.classList.add('hidden');
   refreshReadout();
@@ -702,6 +916,12 @@ function frame(): void {
   const dt = Math.min(0.05, clock.getDelta());
   const elapsed = clock.elapsedTime;
 
+  // Tell the controller what it is standing on before it moves, so climbing
+  // and falling use this frame's geometry.
+  const pos = player.position;
+  player.onLadder = env.isLadderAt(pos.x, pos.z);
+  player.supportHeight = env.supportHeightAt(pos.x, pos.z, player.feetHeight);
+
   player.update(dt);
   env.update(elapsed);
 
@@ -712,6 +932,7 @@ function frame(): void {
     inspectorTimer = 0;
     updateInspector();
     updatePrompt();
+    updateAltitude();
   }
 
   renderer.render(env.scene, camera);

@@ -13,9 +13,9 @@
 
 export const INTRO = [
   'Morning, engineer. Welcome to the assembly building.',
-  'That stand in front of you is empty, and we have a launch window in twenty four days. Your job is to put a vehicle on it that can actually reach orbit.',
+  'Read the contract on your right before you touch anything. The Science Directorate wants an instrument package in orbit above two hundred kilometres, returning at least a hundred units of science. How you do that is up to you.',
   'Walk into the painted circle on the floor. You can only work on the vehicle from inside it, same as any real assembly bay. Once you are there, press E to fit the first stage.',
-  'And look at the parts while you are down there. Every one of them is a decision you are making with the programme’s money.',
+  'And I will warn you now: the payload is your decision, not mine. The cheap one will not satisfy the contract and the heavy one will barely make orbit. Choose carefully, because the rocket equation does not care what you were hoping for.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */
@@ -30,6 +30,12 @@ export const ON_FIT: Record<string, string> = {
     'Upper stage mated. Watch the delta-v figure jump. Hydrogen gives us better efficiency than the booster, and up there efficiency is worth more than raw thrust.',
   telescope:
     'Telescope is installed. Now look at what happened to your margin. Eight tonnes of payload just cost you about three thousand metres per second of delta-v. Every mission planner in the world makes that trade, and none of them enjoy it.',
+  'comms-probe':
+    'Relay is on. It flies beautifully and it does not satisfy the contract. Check the science requirement before you roll that out.',
+  'crew-capsule':
+    'Capsule is mated, and there are three people who will be sitting in it. More science than the telescope, less margin. I would want to fly a very clean ascent with that on top.',
+  'science-lab':
+    'Laboratory is on. That is the most science available and almost none of the delta-v margin. It satisfies the contract on paper. Whether it survives a real ascent depends entirely on how well you fly.',
   fairing:
     'Fairing closed out. That shell is dead weight we throw away at a hundred kilometres, but without it the payload would not survive the lower atmosphere. The stack is flight ready. Check the board.',
 };
@@ -72,6 +78,10 @@ export const FAILURE_LESSON: Record<string, string> = {
   confidence:
     'Lesson: engineering credibility is a resource like any other. Every decision you reverse spends some of it, and you need it when you have to argue for something unpopular.',
 };
+
+/** Said the first time the player reaches the payload slot. */
+export const PAYLOAD_CHOICE =
+  'Lower stages are on. Now the decision that matters. Press Tab to cycle the payloads and read what each one costs you, then climb the ladder on the gantry and fit it from the top platform. Fifty tonnes of rocket does not get built from the floor.';
 
 /** Said when the player tries to roll out a vehicle that cannot make orbit. */
 export const ROLLOUT_REFUSED =
