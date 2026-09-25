@@ -385,41 +385,6 @@ kbd {
   white-space: nowrap;
 }
 
-/* controls button, bottom-centre */
-
-#help-button {
-  position: absolute;
-  left: 50%;
-  bottom: 74px;
-  transform: translateX(-50%);
-  pointer-events: auto;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--dim);
-  background: var(--panel);
-  backdrop-filter: blur(8px);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  padding: 6px 12px;
-  cursor: pointer;
-  transition: color 0.15s ease, border-color 0.15s ease;
-}
-
-#help-button:hover {
-  color: var(--cyan);
-  border-color: var(--cyan);
-}
-
-#help-button:focus-visible {
-  outline: 2px solid var(--cyan);
-  outline-offset: 2px;
-}
-
 /* controls panel */
 
 #help {
@@ -619,6 +584,285 @@ kbd {
     width: 258px;
   }
   #build-log {
+    display: none;
+  }
+}
+
+/* ---------------- mission resources ---------------- */
+
+#resources {
+  position: absolute;
+  top: 242px;
+  left: 20px;
+  width: 288px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+#resources header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.res-row {
+  padding: 10px 13px 0;
+}
+
+.res-row:last-child {
+  padding-bottom: 13px;
+}
+
+.res-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 5px;
+}
+
+.res-head b {
+  font-size: 12px;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.res-bar {
+  height: 6px;
+  background: #0b111c;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.res-bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  transition: width 0.4s ease, background 0.3s ease;
+}
+
+.fill-budget {
+  background: var(--green);
+}
+.fill-days {
+  background: var(--cyan);
+}
+.fill-conf {
+  background: var(--violet);
+}
+
+/* A resource in trouble recolours itself, so the threat is visible at a
+   glance rather than requiring the player to read three numbers. */
+.res-bar i.low {
+  background: var(--amber);
+}
+.res-bar i.critical {
+  background: var(--burn);
+}
+
+.res-head b.low {
+  color: var(--amber);
+}
+.res-head b.critical {
+  color: var(--burn);
+}
+
+/* ---------------- HUD buttons ---------------- */
+
+#hud-buttons {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+#hud-buttons button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+#hud-buttons button:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+#hud-buttons button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+#voice-button[aria-pressed='true'] span[aria-hidden] {
+  color: var(--green);
+}
+
+#voice-button[aria-pressed='false'] {
+  color: var(--faint);
+}
+
+#voice-button[aria-pressed='false'] span[aria-hidden] {
+  color: var(--faint);
+}
+
+.alt-keys {
+  color: var(--faint);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+/* ---------------- mission failed ---------------- */
+
+#failure {
+  z-index: 60;
+  background:
+    radial-gradient(900px 620px at 50% 8%, rgba(255, 107, 61, 0.14), transparent 62%),
+    rgba(6, 9, 15, 0.95);
+}
+
+.fail-card {
+  max-width: 580px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--burn);
+  border-radius: 6px;
+  background: var(--panel-solid);
+  padding: 34px 34px 30px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
+}
+
+.fail-eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--burn);
+  margin: 0 0 14px;
+}
+
+.fail-card h1 {
+  font-family: var(--display);
+  font-size: clamp(26px, 4.4vw, 38px);
+  font-weight: 700;
+  line-height: 1.12;
+  letter-spacing: -0.015em;
+  margin: 0 0 18px;
+  text-wrap: balance;
+}
+
+.fail-text {
+  color: var(--dim);
+  font-size: 15px;
+  line-height: 1.68;
+  margin: 0 0 22px;
+  max-width: 54ch;
+}
+
+.fail-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1px;
+  background: var(--line);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 22px;
+}
+
+.fail-stat {
+  background: var(--panel-2);
+  padding: 11px 13px;
+}
+
+.fail-stat span {
+  display: block;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 4px;
+}
+
+.fail-stat b {
+  font-family: var(--mono);
+  font-size: 15px;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+.fail-stat.spent b {
+  color: var(--burn);
+}
+
+.fail-lesson {
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--amber);
+  background: rgba(255, 188, 77, 0.07);
+  border: 1px solid rgba(255, 188, 77, 0.28);
+  border-radius: 3px;
+  padding: 11px 13px;
+  margin: 0 0 24px;
+}
+
+#fail-retry {
+  width: 100%;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--void);
+  background: var(--amber);
+  border: 0;
+  border-radius: 4px;
+  padding: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+#fail-retry:hover {
+  background: #ffcc70;
+}
+
+#fail-retry:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 3px;
+}
+
+/* On short viewports the two left panels would run into the dialogue box, so
+   the resource bars lose their labels rather than overlapping. */
+@media (max-height: 700px) {
+  #resources .res-head span {
     display: none;
   }
 }

@@ -73,6 +73,57 @@ describe('PlayerController', () => {
     expect(player.position.z).toBeLessThan(startZ - 2);
   });
 
+  it('walks with the arrow keys, which are the primary binding', () => {
+    const startZ = player.position.z;
+    hold('ArrowUp');
+    simulate(player, 1);
+    release('ArrowUp');
+    expect(player.position.z).toBeLessThan(startZ - 2);
+  });
+
+  it('strafes with the left and right arrows', () => {
+    const startX = player.position.x;
+    hold('ArrowRight');
+    simulate(player, 1);
+    release('ArrowRight');
+    expect(player.position.x).toBeGreaterThan(startX + 2);
+  });
+
+  it('treats an arrow and its WASD alias as the same input', () => {
+    hold('ArrowUp');
+    simulate(player, 1);
+    const byArrow = 14 - player.position.z;
+    release('ArrowUp');
+
+    const other = new PlayerController(new THREE.PerspectiveCamera(), BOUNDS);
+    const detachOther = other.attach(document.createElement('canvas'));
+    hold('KeyW');
+    simulate(other, 1);
+    const byLetter = 14 - other.position.z;
+    release('KeyW');
+    detachOther();
+
+    expect(byArrow).toBeCloseTo(byLetter, 4);
+  });
+
+  it('does not double up when an arrow and its alias are held together', () => {
+    hold('ArrowUp');
+    simulate(player, 1);
+    const single = 14 - player.position.z;
+    release('ArrowUp');
+
+    const both = new PlayerController(new THREE.PerspectiveCamera(), BOUNDS);
+    const detachBoth = both.attach(document.createElement('canvas'));
+    hold('ArrowUp', 'KeyW');
+    simulate(both, 1);
+    const doubled = 14 - both.position.z;
+    release('ArrowUp', 'KeyW');
+    detachBoth();
+
+    // Holding both must not move the player twice as fast.
+    expect(doubled).toBeCloseTo(single, 4);
+  });
+
   it('walks backward when S is held', () => {
     const startZ = player.position.z;
     hold('KeyS');

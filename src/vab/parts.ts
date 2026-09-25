@@ -30,6 +30,8 @@ export interface PartDefinition {
   briefing: string;
   /** The single number that makes this part interesting. */
   keyFact: string;
+  /** Cost to fit, in millions of dollars. Drives the mission budget. */
+  cost: number;
 }
 
 export const PART_LIBRARY: PartDefinition[] = [
@@ -46,6 +48,9 @@ export const PART_LIBRARY: PartDefinition[] = [
     briefing:
       'Kerosene and liquid oxygen, nine engines, 145 seconds of burn. It carries 310 tonnes of propellant and weighs only 16 tonnes empty — 95% of this stage is fuel, which is what the rocket equation forces on every launch vehicle ever built.',
     keyFact: '5.9 MN thrust · 95% propellant by mass',
+    // Costs are in millions of dollars, scaled from real per-unit launch
+    // hardware pricing: the first stage dominates, as it does in reality.
+    cost: 148,
   },
   {
     id: 'upper-stage',
@@ -60,6 +65,7 @@ export const PART_LIBRARY: PartDefinition[] = [
     briefing:
       'Liquid hydrogen and oxygen. Less thrust than the booster but a far higher specific impulse of 348 seconds, because hydrogen exhaust leaves the nozzle much faster. That efficiency is why almost every orbital rocket switches propellant for the upper stage.',
     keyFact: 'Isp 348 s · 37 s better than the booster',
+    cost: 96,
   },
   {
     id: 'telescope',
@@ -74,6 +80,7 @@ export const PART_LIBRARY: PartDefinition[] = [
     briefing:
       'A one-metre survey telescope, eight tonnes. Every kilogram here costs delta-v for the whole rest of the flight: swapping this for the 14-tonne laboratory would take roughly 600 m/s out of your budget.',
     keyFact: '8 t · 100 science · 900 W peak',
+    cost: 112,
   },
   {
     id: 'fairing',
@@ -88,6 +95,7 @@ export const PART_LIBRARY: PartDefinition[] = [
     briefing:
       'An aerodynamic shell protecting the payload through the lower atmosphere. It is dead mass you carry to roughly 110 km and then throw away — and without it, dynamic pressure at max-Q would tear the payload apart.',
     keyFact: '1.9 t of mass you deliberately waste',
+    cost: 24,
   },
 ];
 

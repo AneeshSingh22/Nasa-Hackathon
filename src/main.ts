@@ -4,6 +4,9 @@ import { createVABScene, VAB_WIDTH, VAB_DEPTH } from './vab/VABScene';
 import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
 import { PART_LIBRARY, type PartDefinition } from './vab/parts';
+import { Narrator } from './ui/Narrator';
+import { Mission, type FailureReason, type MissionStatus } from './game/Mission';
+import * as script from './content/dialogue';
 
 /**
  * Ad Astra Program — Vertical slice: the Vehicle Assembly Building.
@@ -87,10 +90,40 @@ const el = {
   promptText: document.querySelector<HTMLElement>('#prompt-text'),
   capcom: document.querySelector<HTMLElement>('#capcom-text'),
   log: document.querySelector<HTMLElement>('#build-log'),
+  resBudget: document.querySelector<HTMLElement>('#res-budget'),
+  resBudgetBar: document.querySelector<HTMLElement>('#res-budget-bar'),
+  resDays: document.querySelector<HTMLElement>('#res-days'),
+  resDaysBar: document.querySelector<HTMLElement>('#res-days-bar'),
+  resConf: document.querySelector<HTMLElement>('#res-conf'),
+  resConfBar: document.querySelector<HTMLElement>('#res-conf-bar'),
+  failure: document.querySelector<HTMLElement>('#failure'),
+  failReason: document.querySelector<HTMLElement>('#fail-reason'),
+  failTitle: document.querySelector<HTMLElement>('#fail-title'),
+  failText: document.querySelector<HTMLElement>('#fail-text'),
+  failStats: document.querySelector<HTMLElement>('#fail-stats'),
+  failLesson: document.querySelector<HTMLElement>('#fail-lesson'),
+  failRetry: document.querySelector<HTMLButtonElement>('#fail-retry'),
+  voiceButton: document.querySelector<HTMLButtonElement>('#voice-button'),
+  voiceLabel: document.querySelector<HTMLElement>('#voice-label'),
 };
 
-function say(text: string): void {
+// ------------------------------------------------------- narrator & mission
+
+const narrator = new Narrator();
+const mission = new Mission();
+
+// The narrator drives the dialogue panel, so spoken and written lines can
+// never drift apart.
+narrator.onLine = (text) => {
   if (el.capcom) el.capcom.textContent = text;
+};
+narrator.onEnabledChange = (enabled) => {
+  el.voiceButton?.setAttribute('aria-pressed', String(enabled));
+  if (el.voiceLabel) el.voiceLabel.textContent = enabled ? 'Voice on' : 'Voice off';
+};
+
+function say(text: string, urgent = false): void {
+  narrator.say(text, urgent ? 'urgent' : 'normal');
 }
 
 function log(text: string, good = false): void {
@@ -106,6 +139,8 @@ function log(text: string, good = false): void {
 
 /** True once the player has dismissed the start overlay. */
 let started = false;
+/** The inspection-panel hint is spoken once, on first look. */
+let saidInspectionHint = false;
 
 const KIND_LABEL: Record<PartDefinition['kind'], string> = {
   booster: 'First stage',
@@ -198,6 +233,12 @@ function updateInspector(): void {
   }
 
   el.inspector.classList.remove('hidden');
+  // Point the panel out the first time the player looks at something, then
+  // never mention it again.
+  if (!saidInspectionHint) {
+    saidInspectionHint = true;
+    window.setTimeout(() => say(script.FIRST_INSPECTION), 1400);
+  }
   if (el.inspKind) el.inspKind.textContent = KIND_LABEL[part.kind];
   if (el.inspName) el.inspName.textContent = part.name;
   if (el.inspFact) el.inspFact.textContent = part.keyFact;
@@ -206,38 +247,170 @@ function updateInspector(): void {
 
 // ------------------------------------------------------------- build flow
 
-/** Flight-director lines for each assembly step. */
-const BUILD_DIALOGUE: Record<string, string> = {
-  'core-booster':
-    'Core booster is on the stand. Three hundred and ten tonnes of kerosene and oxygen — that is 95% of the stage by mass. Now fit the upper stage.',
-  'upper-stage':
-    'Upper stage mated. Notice the delta-v jump: hydrogen gives 348 seconds of specific impulse against the booster’s 311, and that efficiency is worth more up here than raw thrust.',
-  telescope:
-    'Telescope is installed. Eight tonnes, and you just watched your delta-v margin drop for it. That is the trade every mission planner makes.',
-  fairing:
-    'Fairing closed out. Stack is flight ready — check the board, then we roll out to the pad.',
+// ------------------------------------------------------ resource display
+
+/** Paint one resource bar, recolouring it as the margin shrinks. */
+function paintResource(
+  valueEl: HTMLElement | null,
+  barEl: HTMLElement | null,
+  text: string,
+  fraction: number,
+): void {
+  const clamped = Math.max(0, Math.min(1, fraction));
+  if (valueEl) {
+    valueEl.textContent = text;
+    valueEl.className = clamped < 0.15 ? 'critical' : clamped < 0.35 ? 'low' : '';
+  }
+  if (barEl) {
+    barEl.style.width = `${clamped * 100}%`;
+    // Keep the base fill class and add the severity class on top of it.
+    const base = barEl.classList[0] ?? '';
+    barEl.className = base;
+    if (clamped < 0.15) barEl.classList.add('critical');
+    else if (clamped < 0.35) barEl.classList.add('low');
+  }
+}
+
+function refreshResources(status: MissionStatus): void {
+  paintResource(
+    el.resBudget,
+    el.resBudgetBar,
+    `$${Math.max(0, status.budget).toFixed(0)}M`,
+    status.budget / 480,
+  );
+  paintResource(
+    el.resDays,
+    el.resDaysBar,
+    `${Math.max(0, status.daysRemaining)} days`,
+    status.daysRemaining / 24,
+  );
+  paintResource(
+    el.resConf,
+    el.resConfBar,
+    `${Math.max(0, status.confidence).toFixed(0)}%`,
+    status.confidence / 100,
+  );
+}
+
+// ---------------------------------------------------------- failure screen
+
+const FAIL_TITLES: Record<string, string> = {
+  budget: 'Out of money',
+  schedule: 'Launch window closed',
+  confidence: 'Programme cancelled',
+};
+
+const FAIL_EYEBROWS: Record<string, string> = {
+  budget: 'Finance review',
+  schedule: 'Mission scrubbed',
+  confidence: 'Director’s decision',
+};
+
+function showFailure(reason: FailureReason, text: string): void {
+  if (!reason) return;
+  const status = mission.status;
+
+  player.releaseLock();
+  setHelp(false);
+
+  if (el.failReason) el.failReason.textContent = FAIL_EYEBROWS[reason] ?? 'Programme halted';
+  if (el.failTitle) el.failTitle.textContent = FAIL_TITLES[reason] ?? 'Mission scrubbed';
+  if (el.failText) el.failText.textContent = text;
+  if (el.failLesson) el.failLesson.textContent = script.FAILURE_LESSON[reason] ?? '';
+
+  if (el.failStats) {
+    const spent = 480 - status.budget;
+    el.failStats.innerHTML = '';
+    const stats: Array<[string, string, boolean]> = [
+      ['Spent', `$${spent.toFixed(0)}M`, reason === 'budget'],
+      ['Days used', `${24 - status.daysRemaining}`, reason === 'schedule'],
+      ['Confidence', `${Math.max(0, status.confidence).toFixed(0)}%`, reason === 'confidence'],
+    ];
+    for (const [label, value, highlight] of stats) {
+      const cell = document.createElement('div');
+      cell.className = highlight ? 'fail-stat spent' : 'fail-stat';
+      const span = document.createElement('span');
+      span.textContent = label;
+      const b = document.createElement('b');
+      b.textContent = value;
+      cell.append(span, b);
+      el.failStats.appendChild(cell);
+    }
+  }
+
+  el.failure?.classList.remove('hidden');
+  // Urgent, so it interrupts whatever line was mid-sentence.
+  narrator.say(script.ON_FAILURE[reason] ?? 'The mission is over.', 'urgent');
+}
+
+mission.onChange = (status) => refreshResources(status);
+mission.onFailure = (reason, text) => showFailure(reason, text);
+mission.onWarning = (text) => {
+  log('CAUTION', false);
+  narrator.say(text, 'urgent');
 };
 
 function attachNextPart(): void {
-  const part = assembly.attachNext();
+  if (mission.hasFailed) return;
+
+  const part = assembly.nextExpected();
   if (!part) {
     say('Nothing left to fit. The vehicle is complete.');
     return;
   }
-  log(`FITTED  ${part.name}`, true);
-  say(BUILD_DIALOGUE[part.id] ?? `${part.name} fitted.`);
+
+  // Charge first: if the programme cannot afford the part, the mission ends
+  // and the part never goes on.
+  mission.fitPart(part.cost);
+  if (mission.hasFailed) return;
+
+  assembly.attachNext();
+  log(`FITTED  ${part.name}  −$${part.cost}M`, true);
+  say(script.ON_FIT[part.id] ?? `${part.name} fitted.`);
   refreshReadout();
+
+  // When the stack completes, the director passes judgement on it.
+  if (assembly.isComplete()) {
+    const analysis = assembly.analyze();
+    window.setTimeout(() => {
+      if (mission.hasFailed) return;
+      say(analysis.canReachOrbit ? script.STACK_READY : script.STACK_SHORT);
+    }, 900);
+  }
 }
 
+let removeLineIndex = 0;
+
 function detachTopPart(): void {
+  if (mission.hasFailed) return;
+
   const part = assembly.detachTop();
   if (!part) {
     say('The stand is already empty.');
     return;
   }
-  log(`REMOVED  ${part.name}`);
-  say(`${part.name} removed. Watch what that does to the delta-v figure.`);
+
+  mission.removePart(part.cost);
+  log(`REMOVED  ${part.name}  +$${(part.cost * 0.5).toFixed(0)}M`);
   refreshReadout();
+  if (mission.hasFailed) return;
+  say(script.rotate(script.ON_REMOVE, removeLineIndex++));
+}
+
+function clearStand(): void {
+  if (mission.hasFailed) return;
+  if (assembly.parts.length === 0) {
+    say('The stand is already empty.');
+    return;
+  }
+
+  const refund = assembly.parts.reduce((sum, p) => sum + p.cost, 0);
+  assembly.clear();
+  mission.clearStand(refund);
+  log('STAND CLEARED');
+  refreshReadout();
+  if (mission.hasFailed) return;
+  say(script.ON_CLEAR);
 }
 
 window.addEventListener('keydown', (e) => {
@@ -247,13 +420,9 @@ window.addEventListener('keydown', (e) => {
   if (e.repeat) return;
   if (e.code === 'KeyE') attachNextPart();
   if (e.code === 'KeyQ') detachTopPart();
-  if (e.code === 'KeyR') {
-    assembly.clear();
-    log('STACK CLEARED');
-    say('Stand cleared. Start again from the core booster.');
-    refreshReadout();
-  }
+  if (e.code === 'KeyR') clearStand();
   if (e.code === 'KeyH' || e.code === 'Slash') toggleHelp();
+  if (e.code === 'KeyV') narrator.toggle();
 });
 
 // --------------------------------------------------------------- start up
@@ -263,6 +432,9 @@ startButton.addEventListener('click', () => {
   startOverlay.classList.add('hidden');
   hud.classList.remove('hidden');
   player.requestLock(canvas);
+  // Speech synthesis needs a user gesture on most browsers, so the briefing
+  // starts here rather than on page load.
+  runIntro();
 });
 
 // Clicking the viewport re-acquires pointer lock after Escape, which is what
@@ -304,6 +476,51 @@ window.addEventListener('keydown', (e) => {
   }
 });
 
+el.voiceButton?.addEventListener('click', () => narrator.toggle());
+
+// Hide the voice control entirely where speech synthesis is unavailable,
+// rather than offering a button that cannot do anything.
+if (!narrator.available) {
+  el.voiceButton?.classList.add('hidden');
+}
+
+el.failRetry?.addEventListener('click', () => {
+  assembly.clear();
+  mission.reset();
+  removeLineIndex = 0;
+  spokenIntro = false;
+  saidInspectionHint = false;
+  el.failure?.classList.add('hidden');
+  refreshReadout();
+  refreshResources(mission.status);
+  player.requestLock(canvas);
+  runIntro();
+});
+
+// ------------------------------------------------------- intro sequence
+
+let spokenIntro = false;
+let introTimers: number[] = [];
+
+/**
+ * Speak the opening briefing as a paced sequence rather than one wall of
+ * text. The narrator queues utterances itself, but staggering them keeps the
+ * written panel readable at the same pace as the voice.
+ */
+function runIntro(): void {
+  for (const t of introTimers) window.clearTimeout(t);
+  introTimers = [];
+  if (spokenIntro) return;
+  spokenIntro = true;
+
+  script.INTRO.forEach((line, i) => {
+    const id = window.setTimeout(() => {
+      if (!mission.hasFailed) say(line);
+    }, i * 7200);
+    introTimers.push(id);
+  });
+}
+
 // ------------------------------------------------------------- main loop
 
 const clock = new THREE.Clock();
@@ -329,9 +546,7 @@ function frame(): void {
 }
 
 refreshReadout();
-say(
-  'Morning, engineer. That stand is empty and we launch in three weeks. Start with the core booster and work up.',
-);
+refreshResources(mission.status);
 frame();
 
 // Vite HMR: drop the input listeners so reloads do not stack handlers.

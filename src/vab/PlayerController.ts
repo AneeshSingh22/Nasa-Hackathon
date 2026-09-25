@@ -130,13 +130,26 @@ export class PlayerController {
     if (this.locked) document.exitPointerLock();
   }
 
+  /**
+   * Movement bindings. Arrow keys are the primary scheme; WASD is kept as an
+   * alias because players who already know it reach for it without thinking.
+   */
+  private static readonly FORWARD = ['ArrowUp', 'KeyW'];
+  private static readonly BACK = ['ArrowDown', 'KeyS'];
+  private static readonly LEFT = ['ArrowLeft', 'KeyA'];
+  private static readonly RIGHT = ['ArrowRight', 'KeyD'];
+
+  private held(codes: readonly string[]): boolean {
+    return codes.some((c) => this.keys.has(c));
+  }
+
   /** True while the player is holding a movement key. */
   private get isMoving(): boolean {
     return (
-      this.keys.has('KeyW') ||
-      this.keys.has('KeyA') ||
-      this.keys.has('KeyS') ||
-      this.keys.has('KeyD')
+      this.held(PlayerController.FORWARD) ||
+      this.held(PlayerController.BACK) ||
+      this.held(PlayerController.LEFT) ||
+      this.held(PlayerController.RIGHT)
     );
   }
 
@@ -145,10 +158,10 @@ export class PlayerController {
     // into world space by yaw only — looking up must not make you fly.
     let forward = 0;
     let strafe = 0;
-    if (this.keys.has('KeyW')) forward += 1;
-    if (this.keys.has('KeyS')) forward -= 1;
-    if (this.keys.has('KeyD')) strafe += 1;
-    if (this.keys.has('KeyA')) strafe -= 1;
+    if (this.held(PlayerController.FORWARD)) forward += 1;
+    if (this.held(PlayerController.BACK)) forward -= 1;
+    if (this.held(PlayerController.RIGHT)) strafe += 1;
+    if (this.held(PlayerController.LEFT)) strafe -= 1;
 
     const wish = new THREE.Vector3(strafe, 0, -forward);
     if (wish.lengthSq() > 0) {

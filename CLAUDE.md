@@ -55,7 +55,8 @@ src/
   vab/         Lane B — assembly building: player controller, parts, stacking.
   flight/      Lane B — ascent and orbital flight (not yet built).
   render/      Lane D — shared rendering helpers, effects, camera rigs.
-  ui/          Lane C — HUD panels and overlays.
+  game/        Lane B — mission constraints, resources, lose conditions.
+  ui/          Lane C — HUD panels, overlays, the narrator.
   content/     Lane E — part specs, mission scripts, dialogue, citations.
   main.ts      Integration point. Changes here get reviewed by whoever is producing.
 ```
@@ -141,10 +142,25 @@ spacecraft scale, four-part rocket assembly, and a live engineering readout
 driven by `physics/rocket.ts`. Press `E` to fit parts and watch the Δv figure
 drop as payload mass goes on.
 
+**Mission constraints.** Budget, launch window and director confidence all run
+down, and any of them reaching zero ends the mission with a review-board
+screen. Balance is pinned by `game/Mission.test.ts`: a clean build finishes
+with margin on all three, two telescope swaps bankrupt the programme, and cheap
+swaps run the schedule out instead. Retune those numbers only with the tests in
+front of you.
+
+**The narrator.** `ui/Narrator.ts` speaks the flight director's lines through
+the Web Speech API and mirrors every one into the dialogue panel, so spoken and
+written text cannot drift apart. Speech is always optional: it degrades to
+silent text where the API is missing and the player can mute it with `V`.
+Script lives in `content/dialogue.ts` and is written to be heard — short
+sentences, no parentheses, no figures that only parse on the page.
+
 ## What comes next, in order
 
 1. **Roll out to the pad** — transition from the VAB to the launch pad, with the
-   camera moving to a launch view.
+   camera moving to a launch view. Gate it on `analysis.canReachOrbit` so a
+   vehicle that cannot make orbit never gets to try.
 2. **Flyable ascent** — throttle, pitch, staging, max-Q, with the HUD showing
    live apoapsis. The ascent physics is already verified by headless simulation.
 3. **Orbital map view** — switch from first-person to a map with manoeuvre

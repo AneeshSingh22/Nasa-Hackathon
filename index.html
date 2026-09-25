@@ -26,7 +26,7 @@
             the numbers on the wall are the same ones that will fly.
           </p>
           <div class="controls">
-            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Walk</span></div>
+            <div><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd><span>Walk</span></div>
             <div><kbd>Shift</kbd><span>Run</span></div>
             <div><kbd>Mouse</kbd><span>Look</span></div>
             <div><kbd>E</kbd><span>Attach next stage</span></div>
@@ -71,6 +71,26 @@
           </p>
         </section>
 
+        <!-- Mission resources: the three ways to lose -->
+        <section id="resources" aria-label="Mission resources">
+          <header>
+            <span class="panel-title">Programme Status</span>
+            <span id="res-mission" class="pill">Mission 02</span>
+          </header>
+          <div class="res-row">
+            <div class="res-head"><span>Budget</span><b id="res-budget">$480M</b></div>
+            <div class="res-bar"><i id="res-budget-bar" class="fill-budget"></i></div>
+          </div>
+          <div class="res-row">
+            <div class="res-head"><span>Launch window</span><b id="res-days">24 days</b></div>
+            <div class="res-bar"><i id="res-days-bar" class="fill-days"></i></div>
+          </div>
+          <div class="res-row">
+            <div class="res-head"><span>Director confidence</span><b id="res-conf">80%</b></div>
+            <div class="res-bar"><i id="res-conf-bar" class="fill-conf"></i></div>
+          </div>
+        </section>
+
         <!-- Part inspection card, shown when looking at a part -->
         <section id="inspector" class="hidden" aria-live="polite">
           <span id="insp-kind" class="insp-kind">Stage</span>
@@ -96,9 +116,14 @@
         <div id="build-log" aria-live="polite"></div>
 
         <!-- Persistent controls button, bottom-centre under the prompt -->
-        <button id="help-button" type="button" aria-expanded="false" aria-controls="help">
-          <kbd>H</kbd> Controls
-        </button>
+        <div id="hud-buttons">
+          <button id="help-button" type="button" aria-expanded="false" aria-controls="help">
+            <kbd>H</kbd> Controls
+          </button>
+          <button id="voice-button" type="button" aria-pressed="true">
+            <span aria-hidden="true">&#9679;</span> <span id="voice-label">Voice on</span>
+          </button>
+        </div>
 
         <!-- Controls reference, toggled by the button or the H key -->
         <section id="help" class="hidden" aria-label="Controls">
@@ -110,8 +135,8 @@
           <div class="help-body">
             <h3>Moving</h3>
             <dl class="keymap">
-              <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt>
-              <dd>Walk around the bay</dd>
+              <dt><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dt>
+              <dd>Walk around the bay <span class="alt-keys">(WASD also works)</span></dd>
               <dt><kbd>Shift</kbd></dt>
               <dd>Run</dd>
               <dt>Mouse</dt>
@@ -130,6 +155,8 @@
               <dd>Clear the stand and start over</dd>
               <dt><kbd>H</kbd></dt>
               <dd>Show or hide this panel</dd>
+              <dt><kbd>V</kbd></dt>
+              <dd>Mute or unmute the flight director</dd>
             </dl>
 
             <h3>What you are looking at</h3>
@@ -147,6 +174,18 @@
             </p>
           </div>
         </section>
+      </div>
+
+      <!-- Mission failed: the review board -->
+      <div id="failure" class="overlay hidden">
+        <div class="fail-card">
+          <p class="fail-eyebrow" id="fail-reason">Programme halted</p>
+          <h1 id="fail-title">Mission scrubbed</h1>
+          <p class="fail-text" id="fail-text">—</p>
+          <div class="fail-stats" id="fail-stats"></div>
+          <p class="fail-lesson" id="fail-lesson">—</p>
+          <button id="fail-retry">Start over</button>
+        </div>
       </div>
     </div>
 

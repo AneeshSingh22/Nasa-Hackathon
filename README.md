@@ -20,13 +20,14 @@ the assembly bay floor.
 
 | Key | Action |
 | --- | --- |
-| `W` `A` `S` `D` | Walk |
+| Arrow keys | Walk (`WASD` also works) |
 | `Shift` | Run |
 | Mouse | Look |
 | `E` | Fit the next stage |
 | `Q` | Remove the top stage |
-| `R` | Clear the stack |
+| `R` | Clear the stand |
 | `H` | Show or hide the controls panel |
+| `V` | Mute or unmute the flight director |
 | `Esc` | Release the cursor — click the view to take it back |
 
 Look directly at any part of the rocket to read its engineering briefing. The
@@ -51,6 +52,35 @@ and the readout shows 13 873 m/s of Δv. Add the eight-tonne telescope and it
 drops to 10 924. Add the fairing and it falls again to 10 501. That is
 Tsiolkovsky's rocket equation doing its work, and no tooltip is needed to
 explain it.
+
+## How you lose
+
+The assembly phase is a game, not a sandbox. Three resources run down and any
+of them can end the mission:
+
+| Resource | Starts at | Spent by |
+| --- | --- | --- |
+| Budget | $480M | Fitting parts; removals refund only half |
+| Launch window | 24 days | 2 days to fit, 3 to remove, 5 to clear the stand |
+| Director confidence | 80% | Falls 13 points per teardown |
+
+A clean build costs $380M and 8 days, leaving real margin. Careless rebuilding
+does not: two swaps of the expensive telescope bankrupt the programme, while
+cheap fairing swaps let you survive long enough to run the clock out instead.
+**Which resource kills you depends on what you waste**, which is the decision
+the phase is built around.
+
+Failure opens a review board that names the resource, shows what you spent, and
+states the engineering lesson — real programmes lose most of their budget to
+rework, which is why design reviews happen on paper before hardware is cut.
+
+## The flight director
+
+Elena Vásquez narrates the build aloud through the Web Speech API — no audio
+files, no bundle cost, and it degrades to silent text wherever speech is
+unavailable. She reacts to what you actually did: fitting the telescope gets a
+line about the delta-v you just spent, and a resource running low gets an
+urgent warning that cuts off whatever she was saying. Press `V` to mute.
 
 ## Verified physics
 
