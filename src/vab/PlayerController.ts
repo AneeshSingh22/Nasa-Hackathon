@@ -60,6 +60,12 @@ export class PlayerController {
   /** Top of the ladder, so the player cannot climb into the roof. */
   ladderTop = Infinity;
   /**
+   * True when the player is on a ladder but level with a platform they could
+   * step onto. Forward input then walks instead of climbing, so arriving
+   * somewhere is not a trap.
+   */
+  atLadderRest = false;
+  /**
    * Solid obstacles the player cannot walk through, as vertical cylinders.
    *
    * The rocket was a pass-through hologram: the meshes existed but nothing
@@ -69,6 +75,10 @@ export class PlayerController {
   obstacles: Array<{ x: number; z: number; radius: number; top: number }> = [];
   /** Set by the scene each frame: the surface height under the player. */
   supportHeight = 0;
+  /**
+   * Multiplier on walking speed, for carrying heavy parts. 1 is unencumbered.
+   */
+  speedFactor = 1;
   /** True while falling, so the HUD and narrator can react. */
   private falling = false;
 
@@ -212,11 +222,16 @@ export class PlayerController {
     if (this.held(PlayerController.RIGHT)) strafe += 1;
     if (this.held(PlayerController.LEFT)) strafe -= 1;
 
-    // On a ladder the up and down keys climb, so they must not also walk:
-    // holding UP used to move the player forward off the ladder's detection
-    // radius within a fraction of a second, which read as climbing being
-    // broken after about a tenth of a second.
-    if (this.onLadder) {
+    // While climbing, the up and down keys drive the climb rather than
+    // walking — otherwise holding up carries the player off the ladder's
+    // detection radius within a fraction of a second, which reads as climbing
+    // being broken immediately.
+    //
+    // But this must NOT apply merely because the player is standing near a
+    // ladder: zeroing forward unconditionally trapped them at the top, unable
+    // to step onto the platform they had just climbed to.
+    const climbing = this.onLadder && !this.atLadderRest;
+    if (climbing) {
       forward = 0;
     }
 
@@ -225,9 +240,10 @@ export class PlayerController {
       wish.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
     }
 
-    const speed = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')
+    const base = this.keys.has('ShiftLeft') || this.keys.has('ShiftRight')
       ? RUN_SPEED
       : WALK_SPEED;
+    const speed = base * this.speedFactor;
 
     // Accelerate toward the wish direction, damp toward rest otherwise.
     this.velocity.x += (wish.x * speed - this.velocity.x) * Math.min(1, ACCELERATION * dt);
@@ -246,17 +262,26 @@ export class PlayerController {
     this.groundHeight = this.supportHeight;
     const feet = p.y - EYE_HEIGHT;
 
-    if (this.onLadder) {
+    // Treat the ladder as a ladder only when the player is actually using it
+    // to change height. At a platform level with forward held they are walking
+    // off, not climbing, and running the ladder branch then pinned them in
+    // place at the top — the trap this flag exists to prevent.
+    const wantsUp = this.held(PlayerController.FORWARD);
+    const wantsDown = this.held(PlayerController.BACK);
+    const usingLadder =
+      this.onLadder && (this.atLadderRest ? wantsDown : wantsUp || wantsDown);
+
+    if (usingLadder) {
       let climb = 0;
-      if (this.held(PlayerController.FORWARD)) climb += 1;
-      if (this.held(PlayerController.BACK)) climb -= 1;
+      if (wantsUp && !this.atLadderRest) climb += 1;
+      if (wantsDown) climb -= 1;
       this.verticalSpeed = 0;
       this.falling = false;
 
-      // Hold the player on the ladder column. Small strafe drift would
-      // otherwise carry them out of the detection radius mid-climb and drop
-      // them.
-      if (this.ladderX !== null) {
+      // Latch to the column only while actually moving up or down. Latching
+      // whenever the player merely stands near a ladder pinned them to it and
+      // fought every attempt to walk off onto the platform.
+      if (this.ladderX !== null && climb !== 0) {
         p.x += (this.ladderX - p.x) * Math.min(1, 12 * dt);
         p.z += (0 - p.z) * Math.min(1, 12 * dt);
       }

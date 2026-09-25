@@ -21,8 +21,8 @@
  * through the advice button.
  */
 export const INTRO = [
-  'Morning, engineer. The contract is on your right — read it before you build.',
-  'Walk into the painted circle and press E to start. Press T any time you want my advice.',
+  'Morning, engineer. Contract is on your right. Parts are on the stations around the bay.',
+  'Collect the first stage from the left wall, carry it to the stand, and press E to fit it. Press T any time you want my advice.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */
@@ -82,7 +82,7 @@ export const FAILURE_LESSON: Record<string, string> = {
 
 /** Said the first time the player reaches the payload slot. */
 export const PAYLOAD_CHOICE =
-  'Payload is your call. Tab to compare, then climb the gantry ladder and fit it from the top.';
+  'Payload is your call. Four options along the back wall — read the placards, then carry your pick up the gantry ladder.';
 
 /** Said when the player tries to roll out a vehicle that cannot make orbit. */
 export const ROLLOUT_REFUSED =

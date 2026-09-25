@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createMaterials, type Materials } from './parts';
+import { STATIONS } from './stations';
 
 /**
  * The Vehicle Assembly Building.
@@ -9,8 +10,8 @@ import { createMaterials, type Materials } from './parts';
  * how big a launch vehicle actually is, which is something a 2D game cannot do.
  */
 
-export const VAB_WIDTH = 46;
-export const VAB_DEPTH = 40;
+export const VAB_WIDTH = 60;
+export const VAB_DEPTH = 46;
 export const VAB_HEIGHT = 58;
 
 export interface VABEnvironment {
@@ -34,24 +35,53 @@ export interface VABEnvironment {
    * it while climbing rather than letting them drift off.
    */
   ladderAt: (x: number, z: number) => { x: number; top: number } | null;
+  /** True when this height is level with a platform the player can step onto. */
+  isAtPlatformLevel: (feetY: number) => boolean;
+  /**
+   * Everything solid in the room, as vertical cylinders.
+   *
+   * The benches, the gantry legs and the structural columns. The vehicle
+   * itself is added by the caller, since it grows as it is built.
+   */
+  staticObstacles: Array<{ x: number; z: number; radius: number; top: number }>;
 }
 
 export function createVABScene(): VABEnvironment {
   const scene = new THREE.Scene();
-  scene.background = new THREE.Color(0x0a0d14);
-  scene.fog = new THREE.Fog(0x0a0d14, 40, 130);
+  // A real high bay is painted white and lit hard. The first version was a
+  // dark warehouse, which looked atmospheric and read as unfinished.
+  scene.background = new THREE.Color(0x1b2434);
+  scene.fog = new THREE.Fog(0x1b2434, 80, 210);
 
   const mats = createMaterials();
 
   const concrete = new THREE.MeshStandardMaterial({
-    color: 0x3a3f4a,
-    roughness: 0.92,
+    color: 0x8d949f,
+    roughness: 0.86,
     metalness: 0.02,
   });
   const wallMat = new THREE.MeshStandardMaterial({
-    color: 0x21262f,
-    roughness: 0.88,
-    metalness: 0.06,
+    color: 0xd6dae0,
+    roughness: 0.76,
+    metalness: 0.04,
+  });
+  /** Painted floor, for the bay markings. */
+  const floorPaint = new THREE.MeshStandardMaterial({
+    color: 0x3f6fa8,
+    roughness: 0.7,
+    metalness: 0.05,
+  });
+  /** Station bench tops. */
+  const benchMat = new THREE.MeshStandardMaterial({
+    color: 0x4a5462,
+    roughness: 0.55,
+    metalness: 0.45,
+  });
+  /** Placard faces, which read as printed signage. */
+  const placardMat = new THREE.MeshStandardMaterial({
+    color: 0xf2f4f7,
+    roughness: 0.9,
+    metalness: 0.0,
   });
   const steel = new THREE.MeshStandardMaterial({
     color: 0x4b5260,
@@ -236,66 +266,140 @@ export function createVABScene(): VABEnvironment {
   assemblyRoot.position.set(0, 1.6, 0);
   scene.add(assemblyRoot);
 
-  // ---- lighting ----
-  // Dim ambient so the work lights do the real work and the room has contrast.
-  scene.add(new THREE.AmbientLight(0x2e3847, 1.5));
+  // ---- part stations ----
+  // Each component sits on its own bench with a placard, so choosing a payload
+  // means walking to a different station rather than cycling a menu.
+  const stationObstacles: Array<{ x: number; z: number; radius: number; top: number }> = [];
 
-  // A cool fill from above, standing in for daylight through high windows.
-  const hemi = new THREE.HemisphereLight(0x4a6a92, 0x14161c, 0.75);
+  for (const station of STATIONS) {
+    const bench = new THREE.Group();
+    bench.position.set(station.x, 0, station.z);
+    bench.rotation.y = station.rotation;
+
+    // Bench top and legs.
+    const top = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.18, 2.6), benchMat);
+    top.position.y = 0.95;
+    top.castShadow = true;
+    top.receiveShadow = true;
+    bench.add(top);
+
+    for (const lx of [-2.0, 2.0]) {
+      for (const lz of [-1.0, 1.0]) {
+        const leg = new THREE.Mesh(
+          new THREE.BoxGeometry(0.16, 0.95, 0.16),
+          benchMat,
+        );
+        leg.position.set(lx, 0.475, lz);
+        bench.add(leg);
+      }
+    }
+
+    // Angled placard at the back of the bench, facing the room.
+    const placard = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.5, 0.08), placardMat);
+    placard.position.set(0, 1.85, -1.1);
+    placard.rotation.x = -0.22;
+    placard.castShadow = true;
+    bench.add(placard);
+
+    // Coloured stripe along the front edge, keyed to the bay, so the three
+    // groups of stations read as groups from across the room.
+    const stripeColour =
+      station.bay === 'stages' ? 0xff6b3d : station.bay === 'payloads' ? 0x52d9ec : 0xffbc4d;
+    const stripe = new THREE.Mesh(
+      new THREE.BoxGeometry(4.6, 0.1, 0.12),
+      new THREE.MeshStandardMaterial({
+        color: stripeColour,
+        emissive: stripeColour,
+        emissiveIntensity: 0.35,
+        roughness: 0.6,
+      }),
+    );
+    stripe.position.set(0, 1.05, 1.32);
+    bench.add(stripe);
+
+    scene.add(bench);
+
+    // Benches are solid, so the player walks round them.
+    stationObstacles.push({ x: station.x, z: station.z, radius: 2.6, top: 1.1 });
+  }
+
+  // ---- floor markings ----
+  // Painted walkways between the bays, which is how a real high bay routes
+  // people around the hardware.
+  for (const z of [-11, 11]) {
+    const lane = new THREE.Mesh(new THREE.PlaneGeometry(VAB_WIDTH - 6, 0.22), floorPaint);
+    lane.rotation.x = -Math.PI / 2;
+    lane.position.set(0, 0.012, z);
+    scene.add(lane);
+  }
+  for (const x of [-13.5, 13.5]) {
+    const lane = new THREE.Mesh(new THREE.PlaneGeometry(0.22, VAB_DEPTH - 6), floorPaint);
+    lane.rotation.x = -Math.PI / 2;
+    lane.position.set(x, 0.012, 0);
+    scene.add(lane);
+  }
+
+  // ---- lighting ----
+  // A working high bay is bright and evenly lit. The original scene used a
+  // dim ambient and five point lights, which left most of the room in shadow
+  // and made a finished build look like a prototype.
+  scene.add(new THREE.AmbientLight(0xdfe7f2, 2.4));
+
+  const hemi = new THREE.HemisphereLight(0xeaf2ff, 0x6b7280, 1.9);
   scene.add(hemi);
 
-  // The key light: a bank of work lights on the gantry side, casting the
-  // shadow that gives the rocket its sense of mass.
-  const key = new THREE.DirectionalLight(0xfff0dd, 2.1);
-  key.position.set(16, 40, 12);
+  // Key light, casting the shadow that gives the vehicle its sense of mass.
+  const key = new THREE.DirectionalLight(0xfff6e8, 2.6);
+  key.position.set(22, 52, 18);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 1;
-  key.shadow.camera.far = 120;
-  const s = 34;
-  key.shadow.camera.left = -s;
-  key.shadow.camera.right = s;
-  key.shadow.camera.top = s;
-  key.shadow.camera.bottom = -s;
+  key.shadow.camera.far = 160;
+  const shadowSpan = 46;
+  key.shadow.camera.left = -shadowSpan;
+  key.shadow.camera.right = shadowSpan;
+  key.shadow.camera.top = shadowSpan;
+  key.shadow.camera.bottom = -shadowSpan;
   key.shadow.bias = -0.0004;
   scene.add(key);
 
-  // Cool rim light from the opposite side to separate the rocket from the wall.
-  const rim = new THREE.DirectionalLight(0x6aa6ff, 0.85);
-  rim.position.set(-20, 26, -16);
-  scene.add(rim);
+  // Fill from the opposite side so nothing reads as a silhouette.
+  const fill = new THREE.DirectionalLight(0xcfe0ff, 1.25);
+  fill.position.set(-26, 34, -20);
+  scene.add(fill);
 
-  // Practical lights: visible fixtures with point lights, which is what makes
-  // the interior feel lit rather than merely bright.
-  const lampMat = new THREE.MeshStandardMaterial({
-    color: 0xfff4e0,
-    emissive: 0xfff0d0,
-    emissiveIntensity: 2.4,
+  // Overhead high-bay fixtures: a grid of them, as the real building has.
+  const fixtureMat = new THREE.MeshStandardMaterial({
+    color: 0xffffff,
+    emissive: 0xfff8ec,
+    emissiveIntensity: 2.8,
   });
   const flickerLights: THREE.PointLight[] = [];
-  const lampPositions: Array<[number, number]> = [
-    [-14, -12], [14, -12], [-14, 12], [14, 12], [0, 0],
-  ];
-  for (const [x, z] of lampPositions) {
-    const housing = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.9, 1.15, 0.5, 16),
-      lampMat,
-    );
-    housing.position.set(x, VAB_HEIGHT - 3.2, z);
-    scene.add(housing);
+  for (let gx = -2; gx <= 2; gx++) {
+    for (let gz = -1; gz <= 1; gz++) {
+      const x = gx * 13;
+      const z = gz * 15;
 
-    const lamp = new THREE.PointLight(0xffeccd, 55, 48, 2);
-    lamp.position.set(x, VAB_HEIGHT - 4, z);
-    scene.add(lamp);
-    flickerLights.push(lamp);
+      const housing = new THREE.Mesh(
+        new THREE.BoxGeometry(3.4, 0.3, 1.2),
+        fixtureMat,
+      );
+      housing.position.set(x, VAB_HEIGHT - 3.0, z);
+      scene.add(housing);
+
+      const lamp = new THREE.PointLight(0xfff4e2, 42, 62, 2);
+      lamp.position.set(x, VAB_HEIGHT - 4.2, z);
+      scene.add(lamp);
+      flickerLights.push(lamp);
+    }
   }
 
-  // Low-level orange floods at the base, which read as safety lighting and
-  // give the bottom of the rocket some warmth.
-  for (const sx of [-1, 1]) {
-    const flood = new THREE.PointLight(0xff8a3d, 16, 22, 2);
-    flood.position.set(sx * 9, 2.2, 7);
-    scene.add(flood);
+  // Work lights low down around the stand, so the base of the vehicle and the
+  // player's own hands are lit.
+  for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
+    const work = new THREE.PointLight(0xffffff, 26, 30, 2);
+    work.position.set(Math.cos(angle) * 11, 6.5, Math.sin(angle) * 11);
+    scene.add(work);
   }
 
   const baseIntensities = flickerLights.map((l) => l.intensity);
@@ -307,10 +411,33 @@ export function createVABScene(): VABEnvironment {
   const LADDER_X = 10.4;
   const LADDER_TOP = 45.6;
 
+  // Structural columns and gantry legs are solid too — walking through a
+  // support column reads as badly as walking through the rocket.
+  const structureObstacles = [
+    ...stationObstacles,
+    { x: 10.4, z: 2.0, radius: 0.7, top: VAB_HEIGHT * 0.85 },
+    { x: 10.4, z: -2.0, radius: 0.7, top: VAB_HEIGHT * 0.85 },
+  ];
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      structureObstacles.push({
+        x: sx * (halfW - 1.4),
+        z: sz * (halfD - 1.4),
+        radius: 1.1,
+        top: VAB_HEIGHT,
+      });
+    }
+  }
+
   return {
     scene,
     materials: mats,
     assemblyRoot,
+    staticObstacles: structureObstacles,
+
+    isAtPlatformLevel(feetY: number) {
+      return platformHeights.some((h) => Math.abs(h - feetY) < 0.6);
+    },
 
     ladderAt(x: number, z: number) {
       // Generous radius: a climber fumbling for the ladder should find it.

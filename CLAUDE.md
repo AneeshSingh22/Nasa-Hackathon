@@ -52,7 +52,8 @@ to that person first.
 ```
 src/
   physics/     Lane A — simulation core. Pure functions, no Three.js, no DOM.
-  vab/         Lane B — assembly building: player controller, parts, stacking.
+  vab/         Lane B — assembly building: player controller, parts, stacking,
+               station floor plan.
   flight/      Lane B — ascent and orbital flight (not yet built).
   render/      Lane D — shared rendering helpers, effects, camera rigs.
   game/        Lane B — mission constraints, resources, lose conditions,
@@ -111,6 +112,13 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
   position changed — `PlayerController.test.ts` has them.
+- **A ladder must suppress forward walking only while climbing.** The first fix
+  zeroed forward input whenever the player was *near* a ladder, and latched them
+  to its column. That trapped them at the top: they could not step onto the
+  platform they had just climbed to, and the latch dragged them back every
+  frame. The controller now tracks `atLadderRest` — level with a platform — and
+  at rest the ladder branch does not run at all, so forward walks. See
+  `getting off a ladder` in `PlayerController.test.ts`.
 - **A ladder must suppress forward walking.** Holding up both climbed and
   walked, carrying the player off the ladder's detection radius within about a
   tenth of a second. It looked exactly like climbing being broken. The
@@ -162,6 +170,22 @@ screen. Balance is pinned by `game/Mission.test.ts`: a clean build finishes
 with margin on all three, two telescope swaps bankrupt the programme, and cheap
 swaps run the schedule out instead. Retune those numbers only with the tests in
 front of you.
+
+**Assembly is carry-and-place, not a menu.** Parts live on stations
+(`vab/stations.ts`), the player collects one with `E`, carries it — slowed in
+proportion to its mass via `game/carry.ts` — and places it at the stand or from
+the gantry. Choosing a payload means walking to a different bench. An earlier
+version cycled a menu with Tab and auto-placed on `E`, which gave the player
+nothing to do and taught them nothing about the parts.
+
+**The room is lit like a working high bay.** Bright ambient, a hemisphere fill,
+a grid of overhead fixtures and low work lights. The first version was a dark
+warehouse with five point lights: atmospheric, and it read as unfinished.
+
+**Everything solid is a cylinder on `PlayerController.obstacles`.** Benches,
+gantry legs, structural columns and the vehicle. `VABScene` exports
+`staticObstacles` for the fixed structure and `main.ts` appends the rocket,
+whose height grows as it is built.
 
 **The contract is what makes assembly a game.** `game/contract.ts` states a
 requirement and leaves the vehicle to the player. Before it existed, the build

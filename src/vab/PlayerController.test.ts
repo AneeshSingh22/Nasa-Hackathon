@@ -429,3 +429,135 @@ describe('solid obstacles', () => {
     expect(player.position.z).toBeLessThan(13);
   });
 });
+
+describe('getting off a ladder', () => {
+  let player: PlayerController;
+  let detach: () => void;
+
+  beforeEach(() => {
+    player = new PlayerController(new THREE.PerspectiveCamera(), BOUNDS);
+    detach = player.attach(document.createElement('canvas'));
+    return () => {
+      detach();
+      release('ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight');
+    };
+  });
+
+  /** Player at the top of a ladder, level with a platform. */
+  function atTop(): void {
+    player.position.set(10.4, 45.6 + 1.72, 0);
+    player.onLadder = true;
+    player.ladderX = 10.4;
+    player.ladderTop = 45.6;
+    player.supportHeight = 45.6;
+    player.atLadderRest = true;
+  }
+
+  it('can walk off the top of the ladder onto the platform', () => {
+    // The bug that trapped the player: forward input was zeroed whenever they
+    // were near a ladder, and the latch pulled them back to the column, so
+    // arriving at the top was a dead end.
+    atTop();
+    const startX = player.position.x;
+
+    hold('ArrowUp');
+    for (let i = 0; i < 90; i++) {
+      player.onLadder = true;
+      player.ladderX = 10.4;
+      player.atLadderRest = true;
+      player.supportHeight = 45.6;
+      player.update(1 / 60);
+    }
+    release('ArrowUp');
+
+    // Should have moved horizontally, not stayed pinned.
+    const moved = Math.hypot(player.position.x - startX, player.position.z);
+    expect(moved).toBeGreaterThan(2);
+    // And should still be up on the platform, not fallen.
+    expect(player.feetHeight).toBeCloseTo(45.6, 1);
+  });
+
+  it('still climbs when not level with a platform', () => {
+    player.position.set(10.4, 20 + 1.72, 0);
+    player.onLadder = true;
+    player.ladderX = 10.4;
+    player.ladderTop = 45.6;
+    player.supportHeight = 0;
+    player.atLadderRest = false;
+
+    hold('ArrowUp');
+    for (let i = 0; i < 60; i++) {
+      player.onLadder = true;
+      player.ladderX = 10.4;
+      player.atLadderRest = false;
+      player.update(1 / 60);
+    }
+    release('ArrowUp');
+
+    expect(player.feetHeight).toBeGreaterThan(22);
+  });
+
+  it('can climb back down from the top', () => {
+    atTop();
+    hold('ArrowDown');
+    for (let i = 0; i < 60; i++) {
+      player.onLadder = true;
+      player.ladderX = 10.4;
+      // Descending leaves platform level immediately.
+      player.atLadderRest = false;
+      player.supportHeight = 0;
+      player.update(1 / 60);
+    }
+    release('ArrowDown');
+
+    expect(player.feetHeight).toBeLessThan(43);
+  });
+
+  it('is not latched to the column while standing still', () => {
+    atTop();
+    // Nudge away from the column with no keys held.
+    player.position.x = 8.0;
+    for (let i = 0; i < 60; i++) {
+      player.onLadder = true;
+      player.ladderX = 10.4;
+      player.atLadderRest = true;
+      player.supportHeight = 45.6;
+      player.update(1 / 60);
+    }
+    // The latch must not have dragged them back onto the ladder.
+    expect(Math.abs(player.position.x - 8.0)).toBeLessThan(0.6);
+  });
+});
+
+describe('carrying slows the player', () => {
+  let player: PlayerController;
+  let detach: () => void;
+
+  beforeEach(() => {
+    player = new PlayerController(new THREE.PerspectiveCamera(), BOUNDS);
+    detach = player.attach(document.createElement('canvas'));
+    return () => {
+      detach();
+      release('ArrowUp');
+    };
+  });
+
+  it('walks slower with a heavy part than empty handed', () => {
+    hold('ArrowUp');
+    simulate(player, 1);
+    const empty = 14 - player.position.z;
+    release('ArrowUp');
+
+    const laden = new PlayerController(new THREE.PerspectiveCamera(), BOUNDS);
+    const d = laden.attach(document.createElement('canvas'));
+    laden.speedFactor = 0.58; // a 14-tonne laboratory
+    hold('ArrowUp');
+    simulate(laden, 1);
+    const carrying = 14 - laden.position.z;
+    release('ArrowUp');
+    d();
+
+    expect(carrying).toBeLessThan(empty * 0.75);
+    expect(carrying).toBeGreaterThan(0);
+  });
+});

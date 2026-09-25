@@ -1201,3 +1201,43 @@ kbd {
 .pick dd.good {
   color: var(--green);
 }
+
+/* ---------------- carrying indicator ---------------- */
+
+#carrying {
+  position: absolute;
+  left: 50%;
+  bottom: 186px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 8px 15px;
+  border: 1px solid rgba(255, 188, 77, 0.45);
+  border-radius: 4px;
+  background: rgba(24, 32, 47, 0.92);
+  backdrop-filter: blur(8px);
+  white-space: nowrap;
+}
+
+.carry-label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--amber);
+}
+
+#carry-name {
+  font-family: var(--display);
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ink);
+}
+
+.carry-mass {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--dim);
+  font-variant-numeric: tabular-nums;
+}

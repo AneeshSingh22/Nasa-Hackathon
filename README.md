@@ -26,7 +26,7 @@ the assembly bay floor.
 | `E` | Fit the next stage |
 | `Q` | Remove the top stage |
 | `R` | Clear the stand |
-| `Tab` | Compare payloads (cycles the selection, fits nothing) |
+| `E` | Collect a part at its station, or place what you are carrying |
 | `G` | Swap an already-fitted payload |
 | `F` | Roll out to the pad |
 | `T` | Ask the flight director for advice |
@@ -60,6 +60,23 @@ and the readout shows 13 873 m/s of Δv. Add the eight-tonne telescope and it
 drops to 10 924. Add the fairing and it falls again to 10 501. That is
 Tsiolkovsky's rocket equation doing its work, and no tooltip is needed to
 explain it.
+
+## Assembly is a physical job
+
+Parts are stored on stations around the high bay: **stages** along the left
+wall, the four **payload** options across the back, the **fairing** on the
+right. Each bench has a placard, and looking at one shows what the part is,
+what it costs, and — for payloads — the Δv margin that choice would leave you.
+
+Walk to a station, press `E` to collect the part, carry it to the assembly
+stand, and press `E` again to fit it. **Heavy parts slow you down**, which puts
+the cost of mass in your legs rather than on a readout. The two stages are
+crane lifts rather than hand carries.
+
+The payload and fairing go on top of a 55-metre stack, so those are fitted from
+the top gantry platform: climb the ladder, walk onto the platform, then place
+the part. Your payload choice is simply which bench you walked to — there is no
+menu.
 
 ## The decision the phase is built on
 

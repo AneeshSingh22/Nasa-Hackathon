@@ -3,13 +3,12 @@ import './style.css';
 import { createVABScene, VAB_WIDTH, VAB_DEPTH } from './vab/VABScene';
 import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
-import { PART_LIBRARY, type PartDefinition } from './vab/parts';
+import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
 import { Narrator } from './ui/Narrator';
 import { Mission, type FailureReason, type MissionStatus } from './game/Mission';
 import * as script from './content/dialogue';
 import {
   isInWorkZone,
-  promptOpacity,
   distanceToStand,
   WORK_ZONE_RADIUS,
   canWorkOn,
@@ -19,6 +18,13 @@ import {
 } from './game/workzone';
 import { CONTRACT_FIRST_ORBIT, evaluate } from './game/contract';
 import { adviseOn } from './game/advice';
+import { stationNear, type StationDefinition } from './vab/stations';
+import {
+  carrySpeedFactor,
+  needsCrane,
+  holdOffset,
+  type CarriedPart,
+} from './game/carry';
 import { deltaV } from './physics/rocket';
 
 const contract = CONTRACT_FIRST_ORBIT;
@@ -181,8 +187,9 @@ const el = {
   contractBrief: document.querySelector<HTMLElement>('#contract-brief'),
   contractChecks: document.querySelector<HTMLElement>('#contract-checks'),
   contractPay: document.querySelector<HTMLElement>('#contract-pay'),
-  picker: document.querySelector<HTMLElement>('#picker'),
-  pickerOptions: document.querySelector<HTMLElement>('#picker-options'),
+  carrying: document.querySelector<HTMLElement>('#carrying'),
+  carryName: document.querySelector<HTMLElement>('#carry-name'),
+  carryMass: document.querySelector<HTMLElement>('#carry-mass'),
   altitude: document.querySelector<HTMLElement>('#altitude'),
 };
 
@@ -350,60 +357,18 @@ function refreshContract(): void {
   }
 }
 
-/**
- * The payload picker, shown only when the next slot offers a choice.
- *
- * Each option shows what it costs the player in the terms that matter: mass,
- * science, money, and whether it clears the contract's science floor.
- */
+/** Show what the player is carrying, and what it weighs. */
 function refreshPicker(): void {
-  if (!el.picker || !el.pickerOptions) return;
-
-  if (!assembly.hasChoice() || mission.hasFailed || rolledOut) {
-    el.picker.classList.add('hidden');
+  if (!el.carrying) return;
+  if (!carried) {
+    el.carrying.classList.add('hidden');
     return;
   }
-
-  const options = assembly.candidates();
-  const selected = assembly.nextExpected();
-  el.picker.classList.remove('hidden');
-  el.pickerOptions.innerHTML = '';
-
-  for (const option of options) {
-    const cell = document.createElement('div');
-    cell.className = option.id === selected?.id ? 'pick active' : 'pick';
-
-    const title = document.createElement('h4');
-    title.textContent = option.name;
-
-    const dl = document.createElement('dl');
-    const science = option.science ?? 0;
-    const margin = projectedMargin(option);
-    const rows: Array<[string, string, string]> = [
-      ['Mass', `${(option.dryMass / 1000).toFixed(0)} t`, ''],
-      [
-        'Science',
-        String(science),
-        science >= contract.minScience ? 'good' : 'fail',
-      ],
-      ['Cost', `$${option.cost}M`, option.cost > mission.status.budget ? 'fail' : ''],
-      [
-        'Δv margin',
-        `${margin >= 0 ? '+' : ''}${margin.toFixed(0)}`,
-        margin < 0 ? 'fail' : margin < 200 ? 'tight' : 'good',
-      ],
-    ];
-    for (const [term, value, cls] of rows) {
-      const dt = document.createElement('dt');
-      dt.textContent = term;
-      const dd = document.createElement('dd');
-      dd.textContent = value;
-      if (cls) dd.className = cls;
-      dl.append(dt, dd);
-    }
-
-    cell.append(title, dl);
-    el.pickerOptions.appendChild(cell);
+  const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
+  el.carrying.classList.remove('hidden');
+  if (el.carryName) el.carryName.textContent = partDef?.name ?? 'Part';
+  if (el.carryMass) {
+    el.carryMass.textContent = `${(carried.mass / 1000).toFixed(1)} t`;
   }
 }
 
@@ -421,44 +386,78 @@ function updatePrompt(): void {
     return;
   }
 
-  const opacity = promptOpacity(player.position);
-  el.prompt.style.opacity = String(opacity);
-  if (opacity === 0) return;
+  const station = stationNear(player.position.x, player.position.z);
+  const slot = assembly.nextSlot();
+  const position = {
+    x: player.position.x,
+    z: player.position.z,
+    y: player.feetHeight,
+  };
 
-  const inZone = isInWorkZone(player.position);
-  const next = assembly.nextExpected();
-
-  if (!inZone) {
-    el.promptText.textContent = next
-      ? `Walk to the stand to fit the ${next.name}`
-      : 'Walk to the stand';
-    el.prompt.classList.add('prompt-far');
-    return;
-  }
-
-  el.prompt.classList.remove('prompt-far');
-
-  if (next) {
-    el.promptText.textContent = `Fit the ${next.name}`;
+  // Carrying something: the job is to get it to the right place.
+  if (carried) {
+    const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
+    el.prompt.style.opacity = '1';
     if (el.promptKey) el.promptKey.textContent = 'E';
+
+    if (partDef && canWorkOn(partDef.kind, position)) {
+      el.prompt.classList.remove('prompt-far');
+      el.promptText.textContent = `Place the ${partDef.name}`;
+    } else if (station && station.partId === carried.partId) {
+      el.prompt.classList.remove('prompt-far');
+      el.promptText.textContent = `Put the ${partDef?.name ?? 'part'} back`;
+    } else {
+      el.prompt.classList.add('prompt-far');
+      el.promptText.textContent =
+        partDef && stationFor(partDef.kind) === 'gantry'
+          ? `Carry it up the gantry ladder`
+          : `Carry it to the assembly stand`;
+    }
     return;
   }
 
-  // Stack is complete: the action is now roll out, and the board decides
-  // whether it is allowed.
-  const ready = assembly.analyze().canReachOrbit;
-  if (el.promptKey) el.promptKey.textContent = 'F';
-  el.promptText.textContent = ready
-    ? 'Roll out to the pad'
-    : 'Vehicle cannot reach orbit — change the design';
-
-  if (ready && !saidRolloutPrompt) {
-    saidRolloutPrompt = true;
-    window.setTimeout(() => {
-      if (!mission.hasFailed && !rolledOut) say(script.ROLLOUT_PROMPT);
-    }, 2600);
+  // Empty handed at a station: offer the part.
+  if (station) {
+    const partDef = PART_LIBRARY.find((p) => p.id === station.partId);
+    const wanted = slot === partDef?.kind;
+    el.prompt.style.opacity = '1';
+    if (el.promptKey) el.promptKey.textContent = 'E';
+    el.prompt.classList.toggle('prompt-far', !wanted);
+    el.promptText.textContent = wanted
+      ? `Collect the ${partDef?.name ?? 'part'}`
+      : `${partDef?.name ?? 'Part'} — not needed yet`;
+    return;
   }
+
+  // Stack complete: roll out.
+  if (!slot) {
+    const ready = contractStatus().satisfied;
+    el.prompt.style.opacity = '1';
+    if (el.promptKey) el.promptKey.textContent = 'F';
+    el.prompt.classList.remove('prompt-far');
+    el.promptText.textContent = ready
+      ? 'Roll out to the pad'
+      : 'Contract not satisfied — check the panel';
+
+    if (ready && !saidRolloutPrompt) {
+      saidRolloutPrompt = true;
+      window.setTimeout(() => {
+        if (!mission.hasFailed && !rolledOut) say(script.ROLLOUT_PROMPT);
+      }, 1800);
+    }
+    return;
+  }
+
+  // Empty handed, nowhere in particular: point at the next station.
+  const target = PART_LIBRARY.find((p) => p.kind === slot);
+  el.prompt.style.opacity = '0.75';
+  el.prompt.classList.add('prompt-far');
+  if (el.promptKey) el.promptKey.textContent = 'E';
+  el.promptText.textContent = target
+    ? `Collect the ${target.name} from its station`
+    : 'Collect the next part';
 }
+
 
 // ------------------------------------------------------- part inspection
 
@@ -482,7 +481,16 @@ let inspected: PartDefinition | null = null;
 function updateInspector(): void {
   raycaster.setFromCamera(screenCentre, camera);
   const hits = raycaster.intersectObject(env.assemblyRoot, true);
-  const part = hits.length > 0 && hits[0] ? partFromObject(hits[0].object) : null;
+  let part = hits.length > 0 && hits[0] ? partFromObject(hits[0].object) : null;
+
+  // Standing at a station also reads that station's part, so the placard is
+  // legible without having to aim at a small mesh.
+  if (!part) {
+    const station = stationNear(player.position.x, player.position.z);
+    if (station) {
+      part = PART_LIBRARY.find((p) => p.id === station.partId) ?? null;
+    }
+  }
 
   if (part?.id === inspected?.id) return;
   inspected = part;
@@ -496,8 +504,22 @@ function updateInspector(): void {
   el.inspector.classList.remove('hidden');
   if (el.inspKind) el.inspKind.textContent = KIND_LABEL[part.kind];
   if (el.inspName) el.inspName.textContent = part.name;
-  if (el.inspFact) el.inspFact.textContent = part.keyFact;
   if (el.inspBrief) el.inspBrief.textContent = part.briefing;
+
+  if (el.inspFact) {
+    // For payloads, show what this choice would leave in the tanks. That is
+    // the number the decision actually turns on, and it belongs in front of
+    // the player while they are standing at the bench deciding.
+    if (part.kind === 'payload') {
+      const margin = projectedMargin(part);
+      const science = part.science ?? 0;
+      el.inspFact.textContent =
+        `${(part.dryMass / 1000).toFixed(0)} t · ${science} science · ` +
+        `$${part.cost}M · Δv margin ${margin >= 0 ? '+' : ''}${margin.toFixed(0)} m/s`;
+    } else {
+      el.inspFact.textContent = part.keyFact;
+    }
+  }
 }
 
 // ------------------------------------------------------------- build flow
@@ -641,45 +663,6 @@ function blockedByDistance(kind?: string): boolean {
   return true;
 }
 
-function attachNextPart(): void {
-  if (mission.hasFailed) return;
-
-  const part = assembly.nextExpected();
-  if (!part) {
-    say('Nothing left to fit. The vehicle is complete.');
-    return;
-  }
-  if (blockedByDistance(part.kind)) return;
-
-  // Charge first: if the programme cannot afford the part, the mission ends
-  // and the part never goes on.
-  mission.fitPart(part.cost);
-  if (mission.hasFailed) return;
-
-  assembly.attachNext();
-  log(`FITTED  ${part.name}  −$${part.cost}M`, true);
-  say(script.ON_FIT[part.id] ?? `${part.name} fitted.`);
-  refreshReadout();
-
-  // When the stack completes, the director passes judgement on it.
-  // The payload slot is the first real decision, so it gets one short line.
-  // Everything beyond this is on request only.
-  if (assembly.hasChoice() && !saidPayloadChoice) {
-    saidPayloadChoice = true;
-    window.setTimeout(() => {
-      if (!mission.hasFailed) say(script.PAYLOAD_CHOICE);
-    }, 1200);
-  }
-
-  if (assembly.isComplete()) {
-    const analysis = assembly.analyze();
-    window.setTimeout(() => {
-      if (mission.hasFailed) return;
-      say(analysis.canReachOrbit ? script.STACK_READY : script.STACK_SHORT);
-    }, 900);
-  }
-}
-
 let removeLineIndex = 0;
 
 function detachTopPart(): void {
@@ -758,6 +741,81 @@ function swapPayload(): void {
 }
 
 /**
+ * The single context action.
+ *
+ * Standing at a station with empty hands picks the part up. Carrying a part to
+ * the stand places it. One key that does the obviously right thing beats three
+ * keys the player has to remember.
+ */
+function interact(): void {
+  if (mission.hasFailed || rolledOut) return;
+
+  const station = stationNear(player.position.x, player.position.z);
+
+  if (!carried) {
+    if (station) {
+      pickUp(station);
+      return;
+    }
+    const slot = assembly.nextSlot();
+    say(
+      slot
+        ? 'Nothing in your hands. Collect the part from its station first.'
+        : 'The vehicle is complete.',
+    );
+    return;
+  }
+
+  // Carrying something: place it if we are in the right spot.
+  const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
+  if (!partDef) return;
+
+  if (station && station.partId === carried.partId) {
+    putBack();
+    return;
+  }
+
+  placeCarried(partDef);
+}
+
+/** Place the carried part on the stack, if the player is in position. */
+function placeCarried(partDef: PartDefinition): void {
+  if (blockedByDistance(partDef.kind)) return;
+
+  // Payload choice is made by which bench you walked to, so tell the
+  // assembly which one is in your hands before it fits the slot.
+  if (partDef.kind === 'payload') assembly.selectPayload(partDef.id);
+
+  mission.fitPart(partDef.cost);
+  if (mission.hasFailed) {
+    releaseCarried();
+    return;
+  }
+
+  const fitted = assembly.attachNext();
+  releaseCarried();
+  if (!fitted) return;
+
+  log(`FITTED  ${fitted.name}  −$${fitted.cost}M`, true);
+  say(script.ON_FIT[fitted.id] ?? `${fitted.name} fitted.`);
+  refreshReadout();
+
+  if (assembly.hasChoice() && !saidPayloadChoice) {
+    saidPayloadChoice = true;
+    window.setTimeout(() => {
+      if (!mission.hasFailed) say(script.PAYLOAD_CHOICE);
+    }, 1200);
+  }
+
+  if (assembly.isComplete()) {
+    window.setTimeout(() => {
+      if (mission.hasFailed) return;
+      say(contractStatus().satisfied ? script.STACK_READY : script.STACK_SHORT);
+    }, 900);
+  }
+}
+
+/**
  * Give advice about the situation the player is actually in.
  *
  * Bound to a key and a button, never volunteered. Points at the trade-off
@@ -794,6 +852,91 @@ function requestAdvice(): void {
 
   // Advice is always spoken if voice is on, and always written.
   narrator.say(advice, 'urgent');
+}
+
+// ------------------------------------------------------------ carrying
+
+/** What the player is holding, if anything. */
+let carried: CarriedPart | null = null;
+/** The mesh shown in the player's hands. */
+let carriedMesh: THREE.Group | null = null;
+
+/**
+ * Pick a part up off the station the player is standing at.
+ *
+ * Stages are too heavy to lift, so those ride the crane: the player still has
+ * to be at the station to release them, but they travel to the stand on their
+ * own.
+ */
+function pickUp(station: StationDefinition): void {
+  if (carried) {
+    say('You are already carrying something.');
+    return;
+  }
+
+  const partDef = PART_LIBRARY.find((p) => p.id === station.partId);
+  if (!partDef) return;
+
+  // Is this part even wanted next?
+  const slot = assembly.nextSlot();
+  if (slot !== partDef.kind) {
+    say(
+      slot
+        ? `Not yet. The stack wants the ${slot === 'booster' ? 'first stage' : slot === 'upper' ? 'second stage' : slot} next.`
+        : 'The vehicle is complete.',
+    );
+    return;
+  }
+
+  const mass = partDef.dryMass + partDef.propellantMass;
+
+  if (needsCrane(mass)) {
+    // Crane job: it goes straight onto the stand from here.
+    log(`CRANE  ${partDef.name}`);
+    say(`Crane has the ${partDef.name}. Walk to the stand and guide it in.`);
+    carried = { partId: partDef.id, mass, stationId: station.id };
+    return;
+  }
+
+  carried = { partId: partDef.id, mass, stationId: station.id };
+  const mesh = buildPartMesh(partDef, env.materials);
+  mesh.scale.setScalar(holdOffset(mass).scale);
+  env.scene.add(mesh);
+  carriedMesh = mesh;
+
+  log(`PICKED UP  ${partDef.name}  ${(mass / 1000).toFixed(1)} t`);
+  say(`${partDef.name}. ${(mass / 1000).toFixed(0)} tonnes — take it to the stand.`);
+}
+
+/** Put the carried part back where it came from. */
+function putBack(): void {
+  if (!carried) return;
+  const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
+  releaseCarried();
+  log(`RETURNED  ${partDef?.name ?? 'part'}`);
+  say('Back on the bench.');
+}
+
+function releaseCarried(): void {
+  if (carriedMesh) {
+    env.scene.remove(carriedMesh);
+    carriedMesh = null;
+  }
+  carried = null;
+}
+
+/** Keep the held part positioned in front of the camera. */
+function updateCarriedMesh(): void {
+  if (!carriedMesh || !carried) return;
+  const offset = holdOffset(carried.mass);
+  const direction = player.lookDirection();
+  const p = camera.position;
+  carriedMesh.position.set(
+    p.x + direction.x * offset.forward,
+    p.y + direction.y * offset.forward - offset.down,
+    p.z + direction.z * offset.forward,
+  );
+  carriedMesh.rotation.y = camera.rotation.y;
 }
 
 /** True once the vehicle has left the building, so actions stop. */
@@ -876,7 +1019,7 @@ window.addEventListener('keydown', (e) => {
   // lock — pointer lock can be refused, and the game must still be playable.
   if (!started) return;
   if (e.repeat) return;
-  if (e.code === 'KeyE') attachNextPart();
+  if (e.code === 'KeyE') interact();
   if (e.code === 'KeyQ') detachTopPart();
   if (e.code === 'KeyR') clearStand();
   if (e.code === 'KeyH' || e.code === 'Slash') toggleHelp();
@@ -1030,15 +1173,28 @@ function frame(): void {
   player.onLadder = ladder !== null;
   player.ladderX = ladder?.x ?? null;
   player.ladderTop = ladder?.top ?? Infinity;
+  // Level with a platform: let the player walk off rather than pinning them
+  // to the ladder.
+  player.atLadderRest =
+    ladder !== null && env.isAtPlatformLevel(player.feetHeight);
   player.supportHeight = env.supportHeightAt(pos.x, pos.z, player.feetHeight);
 
-  // The rocket is solid, and it grows as it is built.
-  player.obstacles = assembly.parts.length > 0
-    ? [{ x: 0, z: 0, radius: 3.4, top: assembly.topWorldY() }]
-    : [];
+  // Everything solid: the room's fixed structure plus the vehicle, which grows
+  // as it is built. Below the gantry platforms the player must walk round the
+  // rocket; above them the stack is beside you, not in the way.
+  const solid = [...env.staticObstacles];
+  if (assembly.parts.length > 0) {
+    solid.push({ x: 0, z: 0, radius: 3.6, top: assembly.topWorldY() });
+  }
+  player.obstacles = solid;
+
+  // Heavy parts slow you down, which is the cost of mass felt in the legs
+  // rather than read off a panel.
+  player.speedFactor = carried ? carrySpeedFactor(carried.mass) : 1;
 
   player.update(dt);
   env.update(elapsed);
+  updateCarriedMesh();
 
   // Raycasting every frame is wasteful for a static stack; 12 Hz is plenty
   // for a panel the player reads.

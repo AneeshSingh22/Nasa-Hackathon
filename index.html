@@ -115,18 +115,12 @@
         <!-- Height readout, shown while off the floor -->
         <div id="altitude" class="hidden">FEET 0.0 m</div>
 
-        <!-- Payload choice, shown only at the payload slot -->
-        <section id="picker" class="hidden" aria-label="Payload selection">
-          <header>
-            <span class="panel-title">Compare payloads</span>
-            <span class="pill"><kbd>Tab</kbd> cycle &middot; <kbd>E</kbd> fit from gantry</span>
-          </header>
-          <div id="picker-options"></div>
-          <p class="picker-foot" id="picker-foot">
-            Contract needs 100 science. Heavier payloads return more and leave
-            less &Delta;v margin.
-          </p>
-        </section>
+        <!-- What you are carrying -->
+        <div id="carrying" class="hidden">
+          <span class="carry-label">Carrying</span>
+          <b id="carry-name">&mdash;</b>
+          <span id="carry-mass" class="carry-mass">&mdash;</span>
+        </div>
 
         <!-- Next-action prompt -->
         <div id="prompt" class="prompt" data-key="E">
@@ -182,15 +176,14 @@
             <h3>Building the vehicle</h3>
             <dl class="keymap">
               <dt><kbd>E</kbd></dt>
-              <dd>Fit the next part, bottom&nbsp;up</dd>
+              <dd>
+                Collect a part at its station, or place the part you are
+                carrying
+              </dd>
               <dt><kbd>Q</kbd></dt>
               <dd>Remove the top part</dd>
               <dt><kbd>R</kbd></dt>
               <dd>Clear the stand and start over</dd>
-              <dt><kbd>Tab</kbd></dt>
-              <dd>Compare payloads &mdash; cycles the selection, fits nothing</dd>
-              <dt><kbd>E</kbd></dt>
-              <dd>Fit the selected payload, from the top gantry platform</dd>
               <dt><kbd>G</kbd></dt>
               <dd>Swap an already-fitted payload for another</dd>
               <dt><kbd>F</kbd></dt>
@@ -203,10 +196,24 @@
               <dd>Mute or unmute her voice</dd>
             </dl>
 
-            <h3>What you are looking at</h3>
+            <h3>How assembly works</h3>
             <p>
-              Look directly at any part of the rocket to read what it is and
-              why it is built that way.
+              Parts are stored on stations around the bay. <strong>Stages</strong>
+              are along the left wall, the four <strong>payload</strong> options
+              across the back, and the <strong>fairing</strong> on the right.
+              Read the placard, press <kbd>E</kbd> to collect the part, carry it
+              to the assembly stand and press <kbd>E</kbd> again to fit it.
+            </p>
+            <p>
+              Heavy parts slow you down. The two stages are crane lifts rather
+              than hand carries. The payload and fairing go on top of the stack,
+              so those are fitted from the top gantry platform &mdash; climb the
+              ladder with <kbd>&uarr;</kbd>, then walk onto the platform.
+            </p>
+            <p>
+              Your payload choice is simply which bench you walk to. Look
+              directly at any fitted part to read what it is and why it is
+              built that way.
             </p>
             <p>
               The <strong>Vehicle Analysis</strong> board is live. Watch the
