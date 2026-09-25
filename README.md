@@ -61,6 +61,13 @@ drops to 10 924. Add the fairing and it falls again to 10 501. That is
 Tsiolkovsky's rocket equation doing its work, and no tooltip is needed to
 explain it.
 
+## The blueprint board
+
+A wall-sized exploded diagram by the entrance shows all four build steps, how
+many options each has, and which are done. Slots tick green as you fit them, so
+"what am I still missing" is answered at a glance rather than by reading ten
+placards.
+
 ## Assembly is a physical job
 
 Parts are stored on stations around the high bay: **stages** along the left

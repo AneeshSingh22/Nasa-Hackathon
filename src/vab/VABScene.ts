@@ -3,6 +3,7 @@ import { createMaterials, type Materials } from './parts';
 import { STATIONS } from './stations';
 import { placardFor } from './placards';
 import { createElevator, type ElevatorRig } from './Elevator';
+import { createBlueprintBoard, type BlueprintState } from './blueprint';
 
 /**
  * The Vehicle Assembly Building.
@@ -41,6 +42,8 @@ export interface VABEnvironment {
   staticObstacles: Array<{ x: number; z: number; radius: number; top: number }>;
   /** The service elevator, which the caller drives and rides. */
   elevator: ElevatorRig;
+  /** Redraw the blueprint board after a part is fitted. */
+  refreshBlueprint: (state: BlueprintState) => void;
 }
 
 export function createVABScene(): VABEnvironment {
@@ -317,6 +320,14 @@ export function createVABScene(): VABEnvironment {
   // holding a part was a dead end.
   const elevator = createElevator();
   scene.add(elevator.group);
+
+  // ---- blueprint board ----
+  // A wall-sized exploded diagram showing every slot and which are done.
+  // Reading ten near-identical placards to work out what was missing was the
+  // most confusing thing in the bay; a diagram answers it at a glance.
+  const blueprint = createBlueprintBoard({ fitted: new Map(), nextKind: 'booster' });
+  blueprint.group.position.set(-4, 0, 21.4);
+  scene.add(blueprint.group);
 
   // ---- laboratory fittings ----
   // None of this is interactive. It exists because an assembly building with
@@ -639,6 +650,7 @@ export function createVABScene(): VABEnvironment {
     assemblyRoot,
     staticObstacles: structureObstacles,
     elevator,
+    refreshBlueprint: blueprint.refresh,
 
     isAtPlatformLevel(feetY: number) {
       return platformHeights.some((h) => Math.abs(h - feetY) < 0.6);

@@ -17,7 +17,12 @@
  * the assembly phase was missing.
  */
 
-export type FailureReason = 'budget' | 'schedule' | 'confidence' | null;
+export type FailureReason =
+  | 'budget'
+  | 'schedule'
+  | 'confidence'
+  | 'accident'
+  | null;
 
 export interface MissionConstraints {
   /** Millions of dollars. */
@@ -147,6 +152,18 @@ export class Mission {
     this.failureMessage = text;
     this.onFailure?.(reason, text);
     this.onChange?.(this.status);
+  }
+
+  /**
+   * End the mission outright.
+   *
+   * Used for an accident that cannot be absorbed by a resource penalty — a
+   * fatal fall from the work platform. Without a consequence this severe,
+   * working at height carried no risk at all.
+   */
+  abort(reason: FailureReason, text: string): void {
+    if (this.hasFailed || !reason) return;
+    this.fail(reason, text);
   }
 
   /** Charge for fitting a part. Returns false if the mission has already ended. */

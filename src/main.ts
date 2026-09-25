@@ -18,6 +18,7 @@ import {
 } from './game/workzone';
 import { CONTRACT_FIRST_ORBIT, evaluate } from './game/contract';
 import { adviseOn } from './game/advice';
+import { ELEVATOR_X, ELEVATOR_Z } from './vab/Elevator';
 import { stationNear, type StationDefinition } from './vab/stations';
 import {
   carrySpeedFactor,
@@ -110,26 +111,36 @@ const detachInput = player.attach(canvas);
 player.onFall = (distance) => {
   if (mission.hasFailed || rolledOut) return;
 
-  if (distance < 6) {
+  // A short drop is a stumble. Anything from the work platform is fatal:
+  // without a consequence this severe, working at height carried no risk and
+  // the elevator was a formality.
+  if (distance < 5) {
     log(`STUMBLE  ${distance.toFixed(0)} m drop`);
-    say('Watch your footing up there.');
+    say('Watch your footing.');
     return;
   }
 
-  const days = distance > 25 ? 3 : 1;
-  const confidence = distance > 25 ? 12 : 5;
+  if (distance >= 12) {
+    mission.abort(
+      'accident',
+      `You fell ${distance.toFixed(0)} metres from the work platform. ` +
+        'The bay is shut for an investigation and the launch window will pass ' +
+        'without a vehicle on the pad. Use the elevator, and do not step off ' +
+        'the car while it is up there.',
+    );
+    return;
+  }
+
+  // In between: survivable, but it costs the programme.
+  const days = distance > 8 ? 3 : 1;
+  const confidence = distance > 8 ? 12 : 5;
   mission.penalise({
     days,
     confidence,
     reason: `fall from ${distance.toFixed(0)} m`,
   });
   log(`FALL  ${distance.toFixed(0)} m  −${days}d`);
-  say(
-    distance > 25
-      ? 'Engineer down! Get the safety team in. That is days of paperwork and the director will hear about it.'
-      : 'That was a fall. Safety will want a report, and we have lost a day.',
-    true,
-  );
+  say('That was a fall. Safety will want a report.', true);
 };
 
 function resize() {
@@ -186,6 +197,9 @@ const el = {
   contractBrief: document.querySelector<HTMLElement>('#contract-brief'),
   contractChecks: document.querySelector<HTMLElement>('#contract-checks'),
   contractPay: document.querySelector<HTMLElement>('#contract-pay'),
+  options: document.querySelector<HTMLElement>('#options'),
+  optionsTitle: document.querySelector<HTMLElement>('#options-title'),
+  optionsGrid: document.querySelector<HTMLElement>('#options-grid'),
   carrying: document.querySelector<HTMLElement>('#carrying'),
   carryName: document.querySelector<HTMLElement>('#carry-name'),
   carryMass: document.querySelector<HTMLElement>('#carry-mass'),
@@ -354,6 +368,139 @@ function refreshContract(): void {
     li.append(mark, label, detail);
     el.contractChecks.appendChild(li);
   }
+}
+
+/**
+ * Show every option for the current slot while the player is in that bay.
+ *
+ * This panel was missing entirely, which is why the alternatives were
+ * invisible: nothing told the player that three first stages existed, so the
+ * bay read as ten near-identical benches.
+ */
+function refreshOptions(): void {
+  if (!el.options || !el.optionsGrid) return;
+
+  const slot = assembly.nextSlot();
+  const station = stationNear(player.position.x, player.position.z);
+
+  // Only while standing in the bay that holds the parts for this slot.
+  const inRelevantBay =
+    station !== null &&
+    slot !== null &&
+    PART_LIBRARY.find((p) => p.id === station.partId)?.kind === slot;
+
+  if (!inRelevantBay || carried || mission.hasFailed || rolledOut) {
+    el.options.classList.add('hidden');
+    return;
+  }
+
+  const options = PART_LIBRARY.filter((p) => p.kind === slot);
+  el.options.classList.remove('hidden');
+
+  if (el.optionsTitle) {
+    const heading =
+      slot === 'booster'
+        ? 'First stage'
+        : slot === 'upper'
+          ? 'Second stage'
+          : slot === 'payload'
+            ? 'Payload'
+            : 'Fairing';
+    el.optionsTitle.textContent = `${heading} — ${options.length} available`;
+  }
+
+  // Which one the player has selected, defaulting to the bench they stand at.
+  const selectedId = selectedForSlot.get(slot) ?? station.partId;
+  el.optionsGrid.innerHTML = '';
+
+  for (const option of options) {
+    const cell = document.createElement('div');
+    const affordable = option.cost <= mission.status.budget;
+    cell.className = 'opt';
+    if (option.id === selectedId) cell.classList.add('active');
+    if (!affordable) cell.classList.add('unaffordable');
+
+    if (option.id === selectedId) {
+      const mark = document.createElement('span');
+      mark.className = 'opt-mark';
+      mark.textContent = 'SELECTED';
+      cell.appendChild(mark);
+    }
+
+    const title = document.createElement('h4');
+    title.textContent = option.name;
+    cell.appendChild(title);
+
+    const dl = document.createElement('dl');
+    const mass = option.dryMass + option.propellantMass;
+    const rows: Array<[string, string, string]> = [
+      ['Mass', `${(mass / 1000).toFixed(1)} t`, ''],
+    ];
+    if (option.thrust > 0) {
+      rows.push(['Thrust', `${(option.thrust / 1e6).toFixed(2)} MN`, '']);
+      rows.push(['Isp', `${option.isp} s`, '']);
+    }
+    if (option.science !== undefined) {
+      rows.push([
+        'Science',
+        String(option.science),
+        option.science >= contract.minScience ? 'good' : 'fail',
+      ]);
+    }
+    rows.push(['Cost', `$${option.cost}M`, affordable ? '' : 'fail']);
+
+    if (option.kind === 'payload') {
+      const margin = projectedMargin(option);
+      rows.push([
+        'Δv margin',
+        `${margin >= 0 ? '+' : ''}${margin.toFixed(0)}`,
+        margin < 0 ? 'fail' : margin < 200 ? 'tight' : 'good',
+      ]);
+    }
+
+    for (const [term, value, cls] of rows) {
+      const dt = document.createElement('dt');
+      dt.textContent = term;
+      const dd = document.createElement('dd');
+      dd.textContent = value;
+      if (cls) dd.className = cls;
+      dl.append(dt, dd);
+    }
+    cell.appendChild(dl);
+    el.optionsGrid.appendChild(cell);
+  }
+}
+
+/** The player's choice per slot, so Tab selects without walking. */
+const selectedForSlot = new Map<string, string>();
+
+/**
+ * Move the selection within the current slot's options.
+ *
+ * Lets the player choose from the panel rather than having to walk to a
+ * different bench, while walking to a bench still selects that part.
+ */
+function cycleSelection(direction: 1 | -1): void {
+  const slot = assembly.nextSlot();
+  if (!slot) return;
+
+  const options = PART_LIBRARY.filter((p) => p.kind === slot);
+  if (options.length < 2) return;
+
+  const station = stationNear(player.position.x, player.position.z);
+  const currentId =
+    selectedForSlot.get(slot) ??
+    (station && PART_LIBRARY.find((p) => p.id === station.partId)?.kind === slot
+      ? station.partId
+      : options[0]?.id);
+
+  const at = options.findIndex((p) => p.id === currentId);
+  const next = options[(Math.max(0, at) + direction + options.length) % options.length];
+  if (!next) return;
+
+  selectedForSlot.set(slot, next.id);
+  if (slot === 'payload') assembly.selectPayload(next.id);
+  refreshReadout();
 }
 
 /** Show what the player is carrying, and what it weighs. */
@@ -589,12 +736,14 @@ const FAIL_TITLES: Record<string, string> = {
   budget: 'Out of money',
   schedule: 'Launch window closed',
   confidence: 'Programme cancelled',
+  accident: 'Accident in the bay',
 };
 
 const FAIL_EYEBROWS: Record<string, string> = {
   budget: 'Finance review',
   schedule: 'Mission scrubbed',
   confidence: 'Director’s decision',
+  accident: 'Safety investigation',
 };
 
 function showFailure(reason: FailureReason, text: string): void {
@@ -755,6 +904,51 @@ function swapPayload(): void {
 }
 
 /**
+ * Handle the elevator, if the player is in a position to use it.
+ *
+ * Returns true when the press was consumed. Pressing from outside *calls* the
+ * car to the player's level rather than moving them, which fixes the bug where
+ * stepping off at the top stranded the car up there and the next press
+ * teleported the player.
+ */
+function tryElevator(): boolean {
+  const aboard = env.elevator.contains(player.position.x, player.position.z);
+  const atLanding =
+    !aboard &&
+    Math.hypot(player.position.x - ELEVATOR_X, player.position.z - ELEVATOR_Z) < 4.2;
+
+  if (!aboard && !atLanding) return false;
+
+  // Boarding is only safe when the car is actually at your level.
+  if (atLanding && !env.elevator.isLevelWith(player.feetHeight)) {
+    const result = env.elevator.press(player.feetHeight, false);
+    if (result === 'busy') {
+      say('The car is already moving. Wait for it.');
+    } else {
+      log('ELEVATOR  called');
+      say('Calling the car. Stand clear of the doors.');
+    }
+    return true;
+  }
+
+  if (!aboard) {
+    // Car is here and open — tell the player to step in rather than silently
+    // doing nothing.
+    say('Car is here. Step inside, then press E again.');
+    return true;
+  }
+
+  const result = env.elevator.press(player.feetHeight, true);
+  if (result === 'busy') {
+    say('Already moving.');
+    return true;
+  }
+  log(env.elevator.state === 'rising' ? 'ELEVATOR  ascending' : 'ELEVATOR  descending');
+  say(env.elevator.state === 'rising' ? 'Going up.' : 'Going down.');
+  return true;
+}
+
+/**
  * The single context action.
  *
  * Standing at a station with empty hands picks the part up. Carrying a part to
@@ -764,25 +958,8 @@ function swapPayload(): void {
 function interact(): void {
   if (mission.hasFailed || rolledOut) return;
 
-  // Inside the car, the action is the elevator button — whatever else is going
-  // on. Being carried 45 metres is the most important thing in reach.
-  if (env.elevator.contains(player.position.x, player.position.z)) {
-    const state = env.elevator.state;
-    if (state === 'atBottom') {
-      env.elevator.call();
-      log('ELEVATOR  ascending');
-      say('Going up. Hold on.');
-      return;
-    }
-    if (state === 'atTop') {
-      env.elevator.call();
-      log('ELEVATOR  descending');
-      say('Taking you back down.');
-      return;
-    }
-    say('The car is already moving.');
-    return;
-  }
+  // The elevator takes priority when the player is in it or beside its landing.
+  if (tryElevator()) return;
 
   const station = stationNear(player.position.x, player.position.z);
 
@@ -833,20 +1010,7 @@ function placeCarried(partDef: PartDefinition): void {
   log(`FITTED  ${fitted.name}  −$${fitted.cost}M`, true);
   say(script.ON_FIT[fitted.id] ?? `${fitted.name} fitted.`);
   refreshReadout();
-
-  if (assembly.hasChoice() && !saidPayloadChoice) {
-    saidPayloadChoice = true;
-    window.setTimeout(() => {
-      if (!mission.hasFailed) say(script.PAYLOAD_CHOICE);
-    }, 1200);
-  }
-
-  if (assembly.isComplete()) {
-    window.setTimeout(() => {
-      if (mission.hasFailed) return;
-      say(contractStatus().satisfied ? script.STACK_READY : script.STACK_SHORT);
-    }, 900);
-  }
+  afterFit();
 }
 
 /**
@@ -913,11 +1077,15 @@ function pickUp(station: StationDefinition): void {
     return;
   }
 
-  const partDef = PART_LIBRARY.find((p) => p.id === station.partId);
+  const slot = assembly.nextSlot();
+
+  // Honour the panel selection, so Tab and walking to a bench both work.
+  const selectedId = slot ? selectedForSlot.get(slot) : undefined;
+  const partDef =
+    PART_LIBRARY.find((p) => p.id === (selectedId ?? station.partId)) ??
+    PART_LIBRARY.find((p) => p.id === station.partId);
   if (!partDef) return;
 
-  // Is this part even wanted next?
-  const slot = assembly.nextSlot();
   if (slot !== partDef.kind) {
     say(
       slot
@@ -930,16 +1098,136 @@ function pickUp(station: StationDefinition): void {
   const mass = partDef.dryMass + partDef.propellantMass;
 
   if (needsCrane(mass)) {
-    // Crane job: it goes straight onto the stand from here.
-    log(`CRANE  ${partDef.name}`);
-    say(`Crane has the ${partDef.name}. Walk to the stand and guide it in.`);
-    carried = { partId: partDef.id, mass, stationId: station.id };
+    // Too heavy to lift: the overhead crane flies it to the stand and sets it
+    // down, and the player watches. Saying "the crane has it" and then
+    // silently teleporting the part was the part of this that felt fake.
+    if (!mission.fitPart(partDef.cost) || mission.hasFailed) return;
+    startCraneLift(partDef, station.x, station.z);
     return;
   }
 
   carried = { partId: partDef.id, mass, stationId: station.id };
   log(`STOWED  ${partDef.name}  ${(mass / 1000).toFixed(1)} t`);
   say(`${partDef.name} stowed. Take it to the stand.`);
+}
+
+/**
+ * Everything that happens after a part goes on, whoever placed it.
+ *
+ * Shared by hand placement and the crane so the two paths cannot drift.
+ */
+function afterFit(): void {
+  env.refreshBlueprint({
+    fitted: new Map(assembly.parts.map((p) => [p.kind, p])),
+    nextKind: assembly.nextSlot(),
+  });
+
+  if (assembly.hasChoice() && !saidPayloadChoice) {
+    saidPayloadChoice = true;
+    window.setTimeout(() => {
+      if (!mission.hasFailed) say(script.PAYLOAD_CHOICE);
+    }, 1200);
+  }
+
+  if (assembly.isComplete()) {
+    window.setTimeout(() => {
+      if (mission.hasFailed) return;
+      say(contractStatus().satisfied ? script.STACK_READY : script.STACK_SHORT);
+    }, 900);
+  }
+}
+
+// ---------------------------------------------------------------- crane
+
+interface CraneLift {
+  part: PartDefinition;
+  mesh: THREE.Group;
+  /** 0 to 1 through the whole sequence. */
+  progress: number;
+  from: { x: number; z: number };
+  targetY: number;
+}
+
+let craneLift: CraneLift | null = null;
+
+/** How long the whole lift takes, in seconds. */
+const CRANE_DURATION = 6.5;
+
+/**
+ * Begin a crane lift: hoist the part off its bench, traverse to the stand, and
+ * lower it onto the stack.
+ */
+function startCraneLift(part: PartDefinition, fromX: number, fromZ: number): void {
+  const mesh = buildPartMesh(part, env.materials);
+  env.scene.add(mesh);
+
+  craneLift = {
+    part,
+    mesh,
+    progress: 0,
+    from: { x: fromX, z: fromZ },
+    targetY: env.assemblyRoot.position.y + assembly.stackHeight(),
+  };
+
+  log(`CRANE  lifting ${part.name}`);
+  say(`Crane has the ${part.name}. Stand clear.`);
+}
+
+/** Advance the crane, and fit the part when it touches down. */
+function updateCrane(dt: number): void {
+  if (!craneLift) return;
+
+  craneLift.progress = Math.min(1, craneLift.progress + dt / CRANE_DURATION);
+  const t = craneLift.progress;
+
+  // Three phases: hoist straight up, traverse across, lower onto the stack.
+  const HOIST_TOP = Math.max(craneLift.targetY + 14, 26);
+  let x: number;
+  let z: number;
+  let y: number;
+
+  if (t < 0.3) {
+    const k = t / 0.3;
+    x = craneLift.from.x;
+    z = craneLift.from.z;
+    y = k * HOIST_TOP;
+  } else if (t < 0.68) {
+    const k = (t - 0.3) / 0.38;
+    // Ease the traverse so the load swings rather than sliding linearly.
+    const eased = k * k * (3 - 2 * k);
+    x = craneLift.from.x + (0 - craneLift.from.x) * eased;
+    z = craneLift.from.z + (0 - craneLift.from.z) * eased;
+    y = HOIST_TOP;
+  } else {
+    const k = (t - 0.68) / 0.32;
+    x = 0;
+    z = 0;
+    y = HOIST_TOP + (craneLift.targetY - HOIST_TOP) * (k * k * (3 - 2 * k));
+  }
+
+  craneLift.mesh.position.set(x, y, z);
+  // A slight sway on the load while it travels, because a crane load always
+  // does.
+  craneLift.mesh.rotation.z = Math.sin(t * 9) * 0.02 * (t < 0.68 ? 1 : 0);
+
+  if (t >= 1) {
+    const part = craneLift.part;
+    env.scene.remove(craneLift.mesh);
+    craneLift.mesh.traverse((child) => {
+      if (child instanceof THREE.Mesh) child.geometry.dispose();
+    });
+    craneLift = null;
+
+    // Fit it for real now that it is down.
+    if (part.kind === 'payload') assembly.selectPayload(part.id);
+    const fitted = assembly.attachNextSpecific(part.id);
+    if (fitted) {
+      log(`FITTED  ${fitted.name}  −$${fitted.cost}M`, true);
+      say(script.ON_FIT[fitted.id] ?? `${fitted.name} fitted.`);
+      refreshReadout();
+      afterFit();
+    }
+  }
 }
 
 /** Put the carried part back where it came from. */
@@ -1114,12 +1402,10 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyG') swapPayload();
   if (e.code === 'KeyT') requestAdvice();
   if (e.code === 'Tab') {
-    // Cycling is silent. Narrating every option was the single most annoying
-    // thing in the build: the player is reading a comparison table, not
-    // asking to be read to.
+    // Cycling is silent: the player is reading a comparison table, not asking
+    // to be read to.
     e.preventDefault();
-    const picked = assembly.cyclePayload(e.shiftKey ? -1 : 1);
-    if (picked) refreshReadout();
+    cycleSelection(e.shiftKey ? -1 : 1);
   }
 });
 
@@ -1291,6 +1577,7 @@ function frame(): void {
 
   player.update(dt);
   env.update(elapsed);
+  updateCrane(dt);
 
   // Raycasting every frame is wasteful for a static stack; 12 Hz is plenty
   // for a panel the player reads.
@@ -1301,6 +1588,7 @@ function frame(): void {
     updatePrompt();
     updateAltitude();
     updateGhost();
+    refreshOptions();
   }
 
   renderer.render(env.scene, camera);

@@ -38,7 +38,7 @@ export const STATIONS: StationDefinition[] = [
     x: -23,
     z: 10,
     rotation: Math.PI / 2,
-    label: 'First stage A',
+    label: 'Step 1 · Option A',
     bay: 'stages',
   },
   {
@@ -47,7 +47,7 @@ export const STATIONS: StationDefinition[] = [
     x: -23,
     z: 2,
     rotation: Math.PI / 2,
-    label: 'First stage B',
+    label: 'Step 1 · Option B',
     bay: 'stages',
   },
   {
@@ -56,7 +56,7 @@ export const STATIONS: StationDefinition[] = [
     x: -23,
     z: -6,
     rotation: Math.PI / 2,
-    label: 'First stage C',
+    label: 'Step 1 · Option C',
     bay: 'stages',
   },
 
@@ -65,18 +65,18 @@ export const STATIONS: StationDefinition[] = [
     id: 'st-hydrolox',
     partId: 'upper-stage',
     x: -23,
-    z: -14,
+    z: -13,
     rotation: Math.PI / 2,
-    label: 'Second stage A',
+    label: 'Step 2 · Option A',
     bay: 'stages',
   },
   {
     id: 'st-kerolox',
     partId: 'kerolox-upper',
-    x: -14,
-    z: -19,
-    rotation: 0,
-    label: 'Second stage B',
+    x: -23,
+    z: -19.5,
+    rotation: Math.PI / 2,
+    label: 'Step 2 · Option B',
     bay: 'stages',
   },
 
@@ -87,7 +87,7 @@ export const STATIONS: StationDefinition[] = [
     x: -6,
     z: -19,
     rotation: 0,
-    label: 'Payload A',
+    label: 'Step 3 · Option A',
     bay: 'payloads',
   },
   {
@@ -96,7 +96,7 @@ export const STATIONS: StationDefinition[] = [
     x: 1,
     z: -19,
     rotation: 0,
-    label: 'Payload B',
+    label: 'Step 3 · Option B',
     bay: 'payloads',
   },
   {
@@ -105,7 +105,7 @@ export const STATIONS: StationDefinition[] = [
     x: 8,
     z: -19,
     rotation: 0,
-    label: 'Payload C',
+    label: 'Step 3 · Option C',
     bay: 'payloads',
   },
   {
@@ -114,7 +114,7 @@ export const STATIONS: StationDefinition[] = [
     x: 15,
     z: -19,
     rotation: 0,
-    label: 'Payload D',
+    label: 'Step 3 · Option D',
     bay: 'payloads',
   },
 
@@ -125,7 +125,7 @@ export const STATIONS: StationDefinition[] = [
     x: 23,
     z: -10,
     rotation: -Math.PI / 2,
-    label: 'Fairing',
+    label: 'Step 4 · Fairing',
     bay: 'structure',
   },
 ];

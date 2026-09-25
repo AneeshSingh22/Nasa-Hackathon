@@ -183,3 +183,56 @@ describe('Mission constraints', () => {
     expect(warnings.length).toBeGreaterThan(0);
   });
 });
+
+describe('accidents', () => {
+  it('ends the mission outright', () => {
+    // Working at height had no risk before this: falling cost a few days and
+    // the elevator was a formality.
+    const m = new Mission();
+    m.abort('accident', 'You fell from the work platform.');
+
+    expect(m.hasFailed).toBe(true);
+    expect(m.status.failureReason).toBe('accident');
+    expect(m.status.failureText).toContain('fell');
+  });
+
+  it('reports the accident through the failure callback', () => {
+    const m = new Mission();
+    let reported: string | null = null;
+    m.onFailure = (reason) => {
+      reported = reason;
+    };
+    m.abort('accident', 'Fell 45 metres.');
+    expect(reported).toBe('accident');
+  });
+
+  it('cannot be overridden by a later failure', () => {
+    const m = new Mission();
+    let calls = 0;
+    m.onFailure = () => {
+      calls += 1;
+    };
+    m.abort('accident', 'Fell.');
+    // Draining the budget afterwards must not fire a second ending.
+    for (let i = 0; i < 20; i++) m.fitPart(100);
+    expect(calls).toBe(1);
+    expect(m.status.failureReason).toBe('accident');
+  });
+
+  it('freezes the programme after an accident', () => {
+    const m = new Mission();
+    const before = m.status.budget;
+    m.abort('accident', 'Fell.');
+    expect(m.fitPart(50)).toBe(false);
+    expect(m.status.budget).toBe(before);
+  });
+
+  it('clears on reset, so the player can try again', () => {
+    const m = new Mission();
+    m.abort('accident', 'Fell.');
+    m.reset();
+    expect(m.hasFailed).toBe(false);
+    expect(m.status.failureReason).toBeNull();
+    expect(m.status.budget).toBe(MISSION_2_START.budget);
+  });
+});

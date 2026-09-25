@@ -112,6 +112,12 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
   position changed — `PlayerController.test.ts` has them.
+- **A feature can be correct and still invisible.** The placement preview
+  rendered exactly where it should — 9.8 m above the camera at 38 degrees,
+  outside the 36-degree half-FOV. The player reported it as missing for two
+  rounds. When someone says a feature is not there, check where it is on screen
+  before assuming the logic is wrong. `Elevator.test.ts` now asserts the car
+  stops where both high slots fall inside 34 degrees.
 - **A test that cannot fail is worse than no test.** The collision test walked
   the player for four seconds at 7.4 m/s from a spawn 14 m away, then asserted
   `distance >= 3.39`. The player passed clean through the obstacle and out the

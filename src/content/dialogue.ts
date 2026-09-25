@@ -21,8 +21,8 @@
  * through the advice button.
  */
 export const INTRO = [
-  'Morning, engineer. Contract is on your right. Parts are on the stations around the bay.',
-  'Collect the first stage from the left wall, carry it to the stand, and press E to fit it. Press T any time you want my advice.',
+  'Morning, engineer. Start at the blueprint board behind you — it shows every step and what is still open.',
+  'Parts are on the numbered stations. Step one is the left wall. Press T any time you want my advice.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */
@@ -62,6 +62,8 @@ export const ON_CLEAR =
 
 /** Failure narration, spoken urgently when the mission ends. */
 export const ON_FAILURE: Record<string, string> = {
+  accident:
+    'Medical to the assembly bay. Engineer down from the work platform. Shut it down, all of it.',
   budget:
     'Engineer, finance has stopped the work. We are out of money. The programme is over.',
   schedule:
@@ -72,6 +74,8 @@ export const ON_FAILURE: Record<string, string> = {
 
 /** The lesson shown on the review-board screen for each failure. */
 export const FAILURE_LESSON: Record<string, string> = {
+  accident:
+    'Lesson: working at height is the most dangerous thing that happens in a launch programme. Use the elevator, stay inside the car, and never step off it while it is raised.',
   budget:
     'Lesson: commit to a design before you build it. Real programmes cost most of their budget in rework, which is why NASA runs design reviews on paper long before hardware is cut.',
   schedule:
@@ -82,7 +86,7 @@ export const FAILURE_LESSON: Record<string, string> = {
 
 /** Said the first time the player reaches the payload slot. */
 export const PAYLOAD_CHOICE =
-  'Payload is your call. Four options along the back wall — read the placards, then carry your pick up the gantry ladder.';
+  'Step three, and the one that matters. Four payloads along the back wall. Take your pick up in the elevator.';
 
 /** Said when the player tries to roll out a vehicle that cannot make orbit. */
 export const ROLLOUT_REFUSED =

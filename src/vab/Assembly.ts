@@ -114,6 +114,26 @@ export class Assembly {
     return this.stack.length === Assembly.SLOTS.length;
   }
 
+  /**
+   * Attach a specific part into the next slot.
+   *
+   * Used by the crane, which decides what it is carrying before the lift
+   * begins and must fit exactly that when it touches down.
+   */
+  attachNextSpecific(partId: string): PartDefinition | null {
+    const kind = this.nextSlot();
+    if (!kind) return null;
+    const part = PART_LIBRARY.find((p) => p.id === partId && p.kind === kind);
+    if (!part) return null;
+
+    const mesh = buildPartMesh(part, this.mats);
+    mesh.position.y = this.stackHeight();
+    this.root.add(mesh);
+    this.meshes.set(part.id, mesh);
+    this.stack.push(part);
+    return part;
+  }
+
   /** Attach the part the next slot expects. */
   attachNext(): PartDefinition | null {
     const part = this.nextExpected();

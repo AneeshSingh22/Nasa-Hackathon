@@ -116,6 +116,15 @@
         <!-- Height readout, shown while off the floor -->
         <div id="altitude" class="hidden">FEET 0.0 m</div>
 
+        <!-- Options at the bay you are standing in -->
+        <section id="options" class="hidden" aria-label="Available parts">
+          <header>
+            <span class="panel-title" id="options-title">Options</span>
+            <span class="pill" id="options-hint"><kbd>Tab</kbd> compare &middot; <kbd>E</kbd> collect</span>
+          </header>
+          <div id="options-grid"></div>
+        </section>
+
         <!-- What you are carrying -->
         <div id="carrying" class="hidden">
           <span class="carry-label">Carrying</span>
@@ -202,18 +211,32 @@
 
             <h3>How assembly works</h3>
             <p>
-              Parts are stored on stations around the bay. <strong>Stages</strong>
-              are along the left wall, the four <strong>payload</strong> options
-              across the back, and the <strong>fairing</strong> on the right.
-              Read the placard, press <kbd>E</kbd> to collect the part, carry it
-              to the assembly stand and press <kbd>E</kbd> again to fit it.
+              The <strong>blueprint board</strong> by the entrance shows all four
+              steps and fills in as you build, so you can always see what is
+              still open.
             </p>
             <p>
-              Heavy parts slow you down, and the first stages are crane lifts
-              rather than hand carries. The payload and fairing go on top of the
-              stack, so those are fitted from the top work platform: step into
-              the <strong>service elevator</strong> on the right of the bay and
-              press <kbd>E</kbd> to ride up.
+              Parts sit on numbered stations: <strong>Step 1</strong> first
+              stages and <strong>Step 2</strong> upper stages down the left wall,
+              <strong>Step 3</strong> payloads across the back,
+              <strong>Step 4</strong> fairing on the right. Walk into a bay and
+              a panel lists every option with its specifications. <kbd>Tab</kbd>
+              compares them, <kbd>E</kbd> collects the selected one.
+            </p>
+            <p>
+              The first stages are too heavy to lift, so the overhead crane flies
+              those to the stand while you watch. Everything else you carry.
+            </p>
+            <p>
+              The payload and fairing go on top of the stack, so those are fitted
+              from the work platform. Step into the <strong>service
+              elevator</strong> on the right and press <kbd>E</kbd> to ride up;
+              if the car is at the other end, pressing <kbd>E</kbd> at the
+              landing calls it to you first.
+            </p>
+            <p class="warn-line">
+              Do not step off the car while it is raised. A fall from the
+              platform ends the mission.
             </p>
             <p>
               A translucent preview shows exactly where the part will attach.
