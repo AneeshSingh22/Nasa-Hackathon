@@ -1,0 +1,479 @@
+/*
+ * Mission-console visual identity: dark instrument panels, cyan telemetry,
+ * amber caution, burnt-orange for thrust. Type is Chakra Petch for display,
+ * Inter for reading, JetBrains Mono for anything numeric.
+ */
+
+:root {
+  color-scheme: dark;
+
+  --void: #06090f;
+  --panel: rgba(16, 23, 37, 0.92);
+  --panel-solid: #101725;
+  --panel-2: #18202f;
+  --line: #293450;
+  --ink: #e9eef6;
+  --dim: #94a2bd;
+  --faint: #5f6d88;
+
+  --cyan: #52d9ec;
+  --amber: #ffbc4d;
+  --burn: #ff6b3d;
+  --green: #5fd99a;
+  --violet: #a292f7;
+
+  --display: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
+  --body: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--void);
+  color: var(--ink);
+  font-family: var(--body);
+}
+
+#app {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+}
+
+#viewport {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.hidden {
+  display: none !important;
+}
+
+kbd {
+  font-family: var(--mono);
+  font-size: 11px;
+  background: var(--panel-2);
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 3px;
+  padding: 2px 6px;
+  color: var(--ink);
+}
+
+/* ---------------- start overlay ---------------- */
+
+.overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background:
+    radial-gradient(900px 600px at 70% 10%, rgba(82, 217, 236, 0.09), transparent 60%),
+    rgba(6, 9, 15, 0.93);
+  backdrop-filter: blur(6px);
+}
+
+.start-card {
+  max-width: 560px;
+  width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-solid);
+  padding: 34px 34px 30px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+}
+
+.eyebrow {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin: 0 0 14px;
+}
+
+.start-card h1 {
+  font-family: var(--display);
+  font-size: clamp(28px, 5vw, 42px);
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.015em;
+  margin: 0 0 16px;
+  text-wrap: balance;
+}
+
+.blurb {
+  color: var(--dim);
+  font-size: 15.5px;
+  line-height: 1.65;
+  margin: 0 0 26px;
+  max-width: 52ch;
+}
+
+.controls {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 9px 20px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  margin-bottom: 24px;
+}
+
+.controls > div {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 13px;
+  color: var(--dim);
+}
+
+.controls span {
+  margin-left: 5px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  color: var(--faint);
+}
+
+#start-button {
+  width: 100%;
+  font-family: var(--display);
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--void);
+  background: var(--cyan);
+  border: 0;
+  border-radius: 4px;
+  padding: 14px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+#start-button:hover {
+  background: #7ae4f3;
+}
+
+#start-button:focus-visible {
+  outline: 2px solid var(--amber);
+  outline-offset: 3px;
+}
+
+/* ---------------- HUD ---------------- */
+
+#hud {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+#crosshair {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin: -3px 0 0 -3px;
+  border-radius: 50%;
+  border: 1px solid rgba(233, 238, 246, 0.75);
+  background: rgba(233, 238, 246, 0.25);
+}
+
+/* engineering readout, top-left */
+
+#readout {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 288px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  overflow: hidden;
+}
+
+#readout header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 13px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-title {
+  font-family: var(--display);
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.pill {
+  margin-left: auto;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--faint);
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  padding: 2px 6px;
+}
+
+#readout dl {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 3px 12px;
+  margin: 0;
+  padding: 13px;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+#readout dt {
+  color: var(--faint);
+}
+
+#readout dd {
+  margin: 0;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink);
+}
+
+#readout dd.good {
+  color: var(--green);
+}
+#readout dd.warn {
+  color: var(--amber);
+}
+#readout dd.bad {
+  color: var(--burn);
+}
+
+.budget {
+  padding: 0 13px 12px;
+}
+
+.budget-label {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--faint);
+  margin-bottom: 5px;
+}
+
+.budget-bar {
+  height: 7px;
+  background: #0b111c;
+  border: 1px solid var(--line);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.budget-bar i {
+  display: block;
+  height: 100%;
+  width: 0%;
+  background: var(--cyan);
+  transition: width 0.35s ease, background 0.25s ease;
+}
+
+.verdict {
+  margin: 0;
+  padding: 10px 13px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.55;
+  border-top: 1px solid var(--line);
+}
+
+.verdict.good {
+  color: var(--green);
+  background: rgba(95, 217, 154, 0.08);
+}
+.verdict.warn {
+  color: var(--amber);
+  background: rgba(255, 188, 77, 0.07);
+}
+.verdict.bad {
+  color: var(--burn);
+  background: rgba(255, 107, 61, 0.09);
+}
+
+/* part inspector, right side */
+
+#inspector {
+  position: absolute;
+  top: 20px;
+  right: 20px;
+  width: 300px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--cyan);
+  border-radius: 5px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  padding: 15px 17px;
+}
+
+.insp-kind {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+#inspector h2 {
+  font-family: var(--display);
+  font-size: 18px;
+  font-weight: 600;
+  margin: 5px 0 9px;
+  line-height: 1.2;
+}
+
+.insp-fact {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--amber);
+  margin: 0 0 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--line);
+}
+
+#insp-brief {
+  margin: 0;
+  font-size: 13.5px;
+  line-height: 1.62;
+  color: var(--dim);
+}
+
+/* action prompt, centre-bottom */
+
+.prompt {
+  position: absolute;
+  left: 50%;
+  bottom: 118px;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--ink);
+  white-space: nowrap;
+}
+
+/* CAPCOM, bottom-left */
+
+#capcom {
+  position: absolute;
+  left: 20px;
+  bottom: 20px;
+  max-width: 440px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--violet);
+  border-radius: 4px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  padding: 12px 15px;
+}
+
+.capcom-who {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--violet);
+}
+
+#capcom-text {
+  margin: 6px 0 0;
+  font-size: 13.5px;
+  line-height: 1.6;
+  color: var(--ink);
+}
+
+/* build log, bottom-right */
+
+#build-log {
+  position: absolute;
+  right: 20px;
+  bottom: 20px;
+  width: 300px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  align-items: flex-end;
+}
+
+.log-line {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--dim);
+  background: rgba(16, 23, 37, 0.85);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: 5px 9px;
+  animation: log-in 0.25s ease;
+}
+
+.log-line.good {
+  color: var(--green);
+  border-color: rgba(95, 217, 154, 0.35);
+}
+
+@keyframes log-in {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .log-line {
+    animation: none;
+  }
+  .budget-bar i {
+    transition: none;
+  }
+}
+
+/* Narrow screens: the game needs a keyboard and mouse, but the panels should
+   at least not overlap into nonsense if someone opens it on a laptop. */
+@media (max-width: 900px) {
+  #inspector {
+    width: 260px;
+  }
+  #readout {
+    width: 258px;
+  }
+  #build-log {
+    display: none;
+  }
+}

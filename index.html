@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Ad Astra Program — Vehicle Assembly Building</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+  </head>
+  <body>
+    <div id="app">
+      <canvas id="viewport"></canvas>
+
+      <!-- Click-to-start overlay. Pointer lock requires a user gesture. -->
+      <div id="start-overlay" class="overlay">
+        <div class="start-card">
+          <p class="eyebrow">Ad Astra Program · Mission 02</p>
+          <h1>Vehicle Assembly Building</h1>
+          <p class="blurb">
+            You are the flight engineer. Walk the assembly bay, inspect each
+            stage, and build a launch vehicle that can actually reach orbit —
+            the numbers on the wall are the same ones that will fly.
+          </p>
+          <div class="controls">
+            <div><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd><span>Walk</span></div>
+            <div><kbd>Shift</kbd><span>Run</span></div>
+            <div><kbd>Mouse</kbd><span>Look</span></div>
+            <div><kbd>E</kbd><span>Attach next stage</span></div>
+            <div><kbd>Q</kbd><span>Remove top stage</span></div>
+            <div><kbd>R</kbd><span>Reset stack</span></div>
+            <div><kbd>Esc</kbd><span>Release cursor</span></div>
+          </div>
+          <button id="start-button">Enter the building</button>
+        </div>
+      </div>
+
+      <!-- In-game HUD -->
+      <div id="hud" class="hidden">
+        <div id="crosshair"></div>
+
+        <!-- Engineering readout, styled as a board on the VAB wall -->
+        <section id="readout" aria-label="Vehicle engineering readout">
+          <header>
+            <span class="panel-title">Vehicle Analysis</span>
+            <span id="stack-state" class="pill">Empty stand</span>
+          </header>
+          <dl>
+            <dt>Liftoff mass</dt>
+            <dd id="ro-mass">0 t</dd>
+            <dt>Total &Delta;v</dt>
+            <dd id="ro-dv">0 m/s</dd>
+            <dt>Liftoff TWR</dt>
+            <dd id="ro-twr">—</dd>
+            <dt>Stages</dt>
+            <dd id="ro-stages">0</dd>
+            <dt>Height</dt>
+            <dd id="ro-height">0.0 m</dd>
+          </dl>
+          <div class="budget">
+            <div class="budget-label">
+              <span>Orbit requirement</span><span>9 400 m/s</span>
+            </div>
+            <div class="budget-bar"><i id="budget-fill"></i></div>
+          </div>
+          <p id="verdict" class="verdict warn">
+            Walk to the assembly stand and press E to fit the first stage.
+          </p>
+        </section>
+
+        <!-- Part inspection card, shown when looking at a part -->
+        <section id="inspector" class="hidden" aria-live="polite">
+          <span id="insp-kind" class="insp-kind">Stage</span>
+          <h2 id="insp-name">Part</h2>
+          <p id="insp-fact" class="insp-fact">—</p>
+          <p id="insp-brief">—</p>
+        </section>
+
+        <!-- Next-action prompt -->
+        <div id="prompt" class="prompt">
+          <kbd>E</kbd><span id="prompt-text">Fit the core booster</span>
+        </div>
+
+        <!-- CAPCOM dialogue -->
+        <div id="capcom">
+          <span class="capcom-who">Elena Vásquez · Flight Director</span>
+          <p id="capcom-text">
+            Morning, engineer. That stand is empty and we launch in three weeks.
+            Start with the core booster and work up.
+          </p>
+        </div>
+
+        <div id="build-log" aria-live="polite"></div>
+      </div>
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
