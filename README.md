@@ -26,9 +26,14 @@ the assembly bay floor.
 | `E` | Fit the next stage |
 | `Q` | Remove the top stage |
 | `R` | Clear the stack |
-| `Esc` | Release the cursor |
+| `H` | Show or hide the controls panel |
+| `Esc` | Release the cursor — click the view to take it back |
 
-Look directly at any part of the rocket to read its engineering briefing.
+Look directly at any part of the rocket to read its engineering briefing. The
+in-game **Controls** button, bottom centre, lists every key at any time.
+
+If your browser refuses pointer lock, looking around still works by holding the
+left mouse button and dragging.
 
 ## What is playable right now
 
@@ -61,6 +66,10 @@ The simulation is checked against published values rather than tuned by feel.
 | Density at 11 / 20 / 32 km | within 12% | US Standard Atmosphere 1976 |
 | Max-Q altitude | 7–13 km | Falcon 9 max-Q ~11–13 km |
 | Energy drift over one orbit | < 1 × 10⁻⁶ | RK4 integrator |
+
+The first-person controller has its own suite (11 tests) driving real keyboard
+events through the movement frame, so a regression in walking is caught by
+`npm test` rather than by a player.
 
 The launch vehicle is also verified as *flyable*: 436 t on the pad, liftoff TWR
 1.38, 10 501 m/s total Δv against the ~9 400 m/s that low Earth orbit actually

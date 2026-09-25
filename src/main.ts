@@ -104,6 +104,9 @@ function log(text: string, good = false): void {
   window.setTimeout(() => line.remove(), 9000);
 }
 
+/** True once the player has dismissed the start overlay. */
+let started = false;
+
 const KIND_LABEL: Record<PartDefinition['kind'], string> = {
   booster: 'First stage',
   upper: 'Second stage',
@@ -238,7 +241,10 @@ function detachTopPart(): void {
 }
 
 window.addEventListener('keydown', (e) => {
-  if (!player.isLocked) return;
+  // Build actions work whenever the game is showing, not only under pointer
+  // lock — pointer lock can be refused, and the game must still be playable.
+  if (!started) return;
+  if (e.repeat) return;
   if (e.code === 'KeyE') attachNextPart();
   if (e.code === 'KeyQ') detachTopPart();
   if (e.code === 'KeyR') {
@@ -247,22 +253,55 @@ window.addEventListener('keydown', (e) => {
     say('Stand cleared. Start again from the core booster.');
     refreshReadout();
   }
+  if (e.code === 'KeyH' || e.code === 'Slash') toggleHelp();
 });
 
 // --------------------------------------------------------------- start up
 
 startButton.addEventListener('click', () => {
+  started = true;
   startOverlay.classList.add('hidden');
   hud.classList.remove('hidden');
   player.requestLock(canvas);
 });
 
-// Returning to the overlay when the player releases the cursor keeps the
-// controls discoverable instead of leaving them stuck with a dead screen.
-document.addEventListener('pointerlockchange', () => {
-  if (document.pointerLockElement === canvas) return;
-  startOverlay.classList.remove('hidden');
-  startButton.textContent = 'Resume';
+// Clicking the viewport re-acquires pointer lock after Escape, which is what
+// players expect. The start overlay deliberately does not come back: losing
+// the cursor should not throw away the stack you have built.
+canvas.addEventListener('click', () => {
+  if (started && !player.isLocked) player.requestLock(canvas);
+});
+
+// ------------------------------------------------------------ help panel
+
+const helpPanel = document.querySelector<HTMLElement>('#help');
+const helpButton = document.querySelector<HTMLButtonElement>('#help-button');
+const helpClose = document.querySelector<HTMLButtonElement>('#help-close');
+
+function setHelp(open: boolean): void {
+  if (!helpPanel) return;
+  helpPanel.classList.toggle('hidden', !open);
+  helpButton?.setAttribute('aria-expanded', String(open));
+  // Reading the controls means using the cursor, so release the mouse while
+  // the panel is open and hand it back when the player closes it.
+  if (open) player.releaseLock();
+}
+
+function toggleHelp(): void {
+  if (!helpPanel) return;
+  setHelp(helpPanel.classList.contains('hidden'));
+}
+
+helpButton?.addEventListener('click', () => toggleHelp());
+helpClose?.addEventListener('click', () => {
+  setHelp(false);
+  if (started) player.requestLock(canvas);
+});
+
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Escape' && helpPanel && !helpPanel.classList.contains('hidden')) {
+    setHelp(false);
+  }
 });
 
 // ------------------------------------------------------------- main loop

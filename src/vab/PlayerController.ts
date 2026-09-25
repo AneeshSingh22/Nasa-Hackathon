@@ -33,6 +33,7 @@ export class PlayerController {
   private velocity = new THREE.Vector3();
   private keys = new Set<string>();
   private locked = false;
+  private dragging = false;
   private bounds: PlayerBounds;
 
   /** Head bob accumulator, so walking feels physical rather than gliding. */
@@ -43,7 +44,10 @@ export class PlayerController {
     this.bounds = bounds;
     this.yawObject = new THREE.Object3D();
     this.yawObject.position.set(0, EYE_HEIGHT, 14);
-    this.yaw = Math.PI; // start facing the rocket, which sits at -Z
+    // Start looking at the rocket. The player stands at +Z and the stand is at
+    // the origin, so the view direction must be -Z, which is yaw 0 — Three.js
+    // cameras look down -Z by default. Setting yaw to PI faces the back wall.
+    this.yaw = 0;
   }
 
   get position(): THREE.Vector3 {
@@ -63,18 +67,40 @@ export class PlayerController {
       }
     };
     const onKeyUp = (e: KeyboardEvent) => this.keys.delete(e.code);
+
+    // Only clear held keys when the window itself loses focus (alt-tab). Do
+    // not clear on pointer-lock changes: acquiring lock moves focus off the
+    // start button, and clearing there drops the keys the player is holding.
     const onBlur = () => this.keys.clear();
 
-    const onMouseMove = (e: MouseEvent) => {
-      if (!this.locked) return;
-      this.yaw -= e.movementX * LOOK_SENSITIVITY;
-      this.pitch -= e.movementY * LOOK_SENSITIVITY;
+    const applyLook = (dx: number, dy: number) => {
+      this.yaw -= dx * LOOK_SENSITIVITY;
+      this.pitch -= dy * LOOK_SENSITIVITY;
       this.pitch = Math.max(-MAX_PITCH, Math.min(MAX_PITCH, this.pitch));
+    };
+
+    const onMouseMove = (e: MouseEvent) => {
+      if (this.locked) {
+        applyLook(e.movementX, e.movementY);
+        return;
+      }
+      // Fallback for when pointer lock is unavailable or was refused: look by
+      // dragging with the mouse held down. Without this the game is unplayable
+      // in any view that blocks the Pointer Lock API.
+      if (this.dragging) {
+        applyLook(e.movementX, e.movementY);
+      }
+    };
+
+    const onMouseDown = (e: MouseEvent) => {
+      if (!this.locked && e.button === 0) this.dragging = true;
+    };
+    const onMouseUp = () => {
+      this.dragging = false;
     };
 
     const onLockChange = () => {
       this.locked = document.pointerLockElement === domElement;
-      if (!this.locked) this.keys.clear();
     };
 
     window.addEventListener('keydown', onKeyDown);
@@ -82,6 +108,8 @@ export class PlayerController {
     window.addEventListener('blur', onBlur);
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('pointerlockchange', onLockChange);
+    domElement.addEventListener('mousedown', onMouseDown);
+    window.addEventListener('mouseup', onMouseUp);
 
     return () => {
       window.removeEventListener('keydown', onKeyDown);
@@ -89,6 +117,8 @@ export class PlayerController {
       window.removeEventListener('blur', onBlur);
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('pointerlockchange', onLockChange);
+      domElement.removeEventListener('mousedown', onMouseDown);
+      window.removeEventListener('mouseup', onMouseUp);
     };
   }
 

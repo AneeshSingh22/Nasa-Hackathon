@@ -32,7 +32,7 @@
             <div><kbd>E</kbd><span>Attach next stage</span></div>
             <div><kbd>Q</kbd><span>Remove top stage</span></div>
             <div><kbd>R</kbd><span>Reset stack</span></div>
-            <div><kbd>Esc</kbd><span>Release cursor</span></div>
+            <div><kbd>H</kbd><span>Controls, any time</span></div>
           </div>
           <button id="start-button">Enter the building</button>
         </div>
@@ -94,6 +94,59 @@
         </div>
 
         <div id="build-log" aria-live="polite"></div>
+
+        <!-- Persistent controls button, bottom-centre under the prompt -->
+        <button id="help-button" type="button" aria-expanded="false" aria-controls="help">
+          <kbd>H</kbd> Controls
+        </button>
+
+        <!-- Controls reference, toggled by the button or the H key -->
+        <section id="help" class="hidden" aria-label="Controls">
+          <header>
+            <span class="panel-title">Controls</span>
+            <button id="help-close" type="button" aria-label="Close controls">&times;</button>
+          </header>
+
+          <div class="help-body">
+            <h3>Moving</h3>
+            <dl class="keymap">
+              <dt><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd></dt>
+              <dd>Walk around the bay</dd>
+              <dt><kbd>Shift</kbd></dt>
+              <dd>Run</dd>
+              <dt>Mouse</dt>
+              <dd>Look around</dd>
+              <dt><kbd>Esc</kbd></dt>
+              <dd>Release the cursor — click the view to take it back</dd>
+            </dl>
+
+            <h3>Building the vehicle</h3>
+            <dl class="keymap">
+              <dt><kbd>E</kbd></dt>
+              <dd>Fit the next part, bottom&nbsp;up</dd>
+              <dt><kbd>Q</kbd></dt>
+              <dd>Remove the top part</dd>
+              <dt><kbd>R</kbd></dt>
+              <dd>Clear the stand and start over</dd>
+              <dt><kbd>H</kbd></dt>
+              <dd>Show or hide this panel</dd>
+            </dl>
+
+            <h3>What you are looking at</h3>
+            <p>
+              Look directly at any part of the rocket to read what it is and
+              why it is built that way.
+            </p>
+            <p>
+              The <strong>Vehicle Analysis</strong> board is live. Watch the
+              &Delta;v figure as you add parts: two stages alone give about
+              13&nbsp;900&nbsp;m/s, and the eight-tonne telescope takes roughly
+              3&nbsp;000&nbsp;m/s of that away. Reaching orbit costs about
+              9&nbsp;400&nbsp;m/s, so the margin bar is what tells you whether
+              this vehicle can fly the mission.
+            </p>
+          </div>
+        </section>
       </div>
     </div>
 

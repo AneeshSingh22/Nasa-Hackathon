@@ -1,4 +1,5 @@
-import { defineConfig } from 'vite';
+/// <reference types="vitest" />
+import { defineConfig } from 'vitest/config';
 
 export default defineConfig({
   // Relative base so the production build works from any static host, including
@@ -18,5 +19,11 @@ export default defineConfig({
   },
   server: {
     open: true,
+  },
+  test: {
+    // Physics tests are pure functions and run fastest in Node. Anything under
+    // src/vab drives real keyboard and pointer events, so it needs a DOM.
+    environment: 'node',
+    environmentMatchGlobs: [['src/vab/**', 'jsdom']],
   },
 });

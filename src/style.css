@@ -385,6 +385,151 @@ kbd {
   white-space: nowrap;
 }
 
+/* controls button, bottom-centre */
+
+#help-button {
+  position: absolute;
+  left: 50%;
+  bottom: 74px;
+  transform: translateX(-50%);
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  padding: 6px 12px;
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+#help-button:hover {
+  color: var(--cyan);
+  border-color: var(--cyan);
+}
+
+#help-button:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+/* controls panel */
+
+#help {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  width: min(520px, calc(100vw - 40px));
+  max-height: min(640px, calc(100vh - 60px));
+  display: flex;
+  flex-direction: column;
+  pointer-events: auto;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-solid);
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.65);
+  overflow: hidden;
+  z-index: 40;
+}
+
+#help header {
+  display: flex;
+  align-items: center;
+  padding: 11px 15px;
+  background: var(--panel-2);
+  border-bottom: 1px solid var(--line);
+  flex-shrink: 0;
+}
+
+#help-close {
+  margin-left: auto;
+  font-size: 20px;
+  line-height: 1;
+  color: var(--faint);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+#help-close:hover {
+  color: var(--burn);
+}
+
+#help-close:focus-visible {
+  outline: 2px solid var(--cyan);
+  outline-offset: 2px;
+}
+
+.help-body {
+  padding: 18px 20px 22px;
+  overflow-y: auto;
+}
+
+.help-body h3 {
+  font-family: var(--display);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+  color: var(--cyan);
+  margin: 0 0 10px;
+}
+
+.help-body h3:not(:first-child) {
+  margin-top: 22px;
+  padding-top: 18px;
+  border-top: 1px solid var(--line);
+}
+
+.keymap {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 9px 18px;
+  margin: 0;
+  align-items: baseline;
+}
+
+.keymap dt {
+  display: flex;
+  gap: 3px;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--faint);
+  white-space: nowrap;
+}
+
+.keymap dd {
+  margin: 0;
+  font-size: 13.5px;
+  color: var(--dim);
+  line-height: 1.5;
+}
+
+.help-body p {
+  margin: 0 0 11px;
+  font-size: 13.5px;
+  line-height: 1.66;
+  color: var(--dim);
+}
+
+.help-body p:last-child {
+  margin-bottom: 0;
+}
+
+.help-body strong {
+  color: var(--ink);
+  font-weight: 600;
+}
+
 /* CAPCOM, bottom-left */
 
 #capcom {

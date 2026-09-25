@@ -104,6 +104,14 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   11 300 m/s of Δv and flung itself into a 6 000 km ellipse on every input.
   The vehicle must be sized so that a good ascent succeeds and a sloppy one
   does not. `physics.test.ts` asserts both bounds.
+- **Three.js cameras look down −Z.** The first-person controller shipped with
+  its starting yaw set to `Math.PI`, which faced the back wall two metres away.
+  Walking forward worked perfectly and looked like a dead input. Any camera or
+  heading work needs a test that asserts a *direction*, not just that the
+  position changed — `PlayerController.test.ts` has them.
+- **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
+  moves focus off the start button, so clearing there drops the keys the player
+  is already holding. Clear on `window` `blur` instead.
 
 ## Code style
 
