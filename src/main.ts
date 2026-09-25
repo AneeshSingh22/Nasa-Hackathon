@@ -7,6 +7,12 @@ import { PART_LIBRARY, type PartDefinition } from './vab/parts';
 import { Narrator } from './ui/Narrator';
 import { Mission, type FailureReason, type MissionStatus } from './game/Mission';
 import * as script from './content/dialogue';
+import {
+  isInWorkZone,
+  promptOpacity,
+  distanceToStand,
+  WORK_ZONE_RADIUS,
+} from './game/workzone';
 
 /**
  * Ad Astra Program — Vertical slice: the Vehicle Assembly Building.
@@ -18,14 +24,22 @@ import * as script from './content/dialogue';
  * What comes next: roll out to the pad, then the flyable ascent.
  */
 
-const canvas = document.querySelector<HTMLCanvasElement>('#viewport');
-const startOverlay = document.querySelector<HTMLElement>('#start-overlay');
-const startButton = document.querySelector<HTMLButtonElement>('#start-button');
-const hud = document.querySelector<HTMLElement>('#hud');
-
-if (!canvas || !startOverlay || !startButton || !hud) {
-  throw new Error('Missing required DOM nodes');
+/**
+ * Fetch an element the game cannot run without.
+ *
+ * Returns a non-nullable type, so the narrowing survives into the callbacks
+ * and closures below — a plain null check on a module-level `const` does not.
+ */
+function required<T extends Element>(selector: string): T {
+  const node = document.querySelector<T>(selector);
+  if (!node) throw new Error(`Missing required DOM node: ${selector}`);
+  return node;
 }
+
+const canvas = required<HTMLCanvasElement>('#viewport');
+const startOverlay = required<HTMLElement>('#start-overlay');
+const startButton = required<HTMLButtonElement>('#start-button');
+const hud = required<HTMLElement>('#hud');
 
 // ---------------------------------------------------------------- renderer
 
@@ -88,6 +102,7 @@ const el = {
   inspBrief: document.querySelector<HTMLElement>('#insp-brief'),
   prompt: document.querySelector<HTMLElement>('#prompt'),
   promptText: document.querySelector<HTMLElement>('#prompt-text'),
+  promptKey: document.querySelector<HTMLElement>('#prompt-key'),
   capcom: document.querySelector<HTMLElement>('#capcom-text'),
   log: document.querySelector<HTMLElement>('#build-log'),
   resBudget: document.querySelector<HTMLElement>('#res-budget'),
@@ -105,6 +120,11 @@ const el = {
   failRetry: document.querySelector<HTMLButtonElement>('#fail-retry'),
   voiceButton: document.querySelector<HTMLButtonElement>('#voice-button'),
   voiceLabel: document.querySelector<HTMLElement>('#voice-label'),
+  success: document.querySelector<HTMLElement>('#success'),
+  winText: document.querySelector<HTMLElement>('#win-text'),
+  winStats: document.querySelector<HTMLElement>('#win-stats'),
+  winNote: document.querySelector<HTMLElement>('#win-note'),
+  winAgain: document.querySelector<HTMLButtonElement>('#win-again'),
 };
 
 // ------------------------------------------------------- narrator & mission
@@ -141,6 +161,8 @@ function log(text: string, good = false): void {
 let started = false;
 /** The inspection-panel hint is spoken once, on first look. */
 let saidInspectionHint = false;
+/** The roll-out prompt is spoken once, when the stack first completes. */
+let saidRolloutPrompt = false;
 
 const KIND_LABEL: Record<PartDefinition['kind'], string> = {
   booster: 'First stage',
@@ -186,16 +208,59 @@ function refreshReadout(): void {
     el.verdict.className = `verdict ${a.verdictLevel}`;
   }
 
-  // Next-action prompt.
+  updatePrompt();
+}
+
+/**
+ * The action prompt, driven by where the player is standing.
+ *
+ * Runs every frame rather than only on state change, because it depends on
+ * position. Fades in as the player approaches the stand so the control
+ * teaches itself through movement.
+ */
+function updatePrompt(): void {
+  if (!el.prompt || !el.promptText) return;
+  if (mission.hasFailed || rolledOut) {
+    el.prompt.style.opacity = '0';
+    return;
+  }
+
+  const opacity = promptOpacity(player.position);
+  el.prompt.style.opacity = String(opacity);
+  if (opacity === 0) return;
+
+  const inZone = isInWorkZone(player.position);
   const next = assembly.nextExpected();
-  if (el.prompt && el.promptText) {
-    if (next) {
-      el.promptText.textContent = `Fit the ${next.name}`;
-      el.prompt.classList.remove('hidden');
-    } else {
-      el.promptText.textContent = 'Stack complete — roll out to the pad';
-      el.prompt.classList.remove('hidden');
-    }
+
+  if (!inZone) {
+    el.promptText.textContent = next
+      ? `Walk to the stand to fit the ${next.name}`
+      : 'Walk to the stand';
+    el.prompt.classList.add('prompt-far');
+    return;
+  }
+
+  el.prompt.classList.remove('prompt-far');
+
+  if (next) {
+    el.promptText.textContent = `Fit the ${next.name}`;
+    if (el.promptKey) el.promptKey.textContent = 'E';
+    return;
+  }
+
+  // Stack is complete: the action is now roll out, and the board decides
+  // whether it is allowed.
+  const ready = assembly.analyze().canReachOrbit;
+  if (el.promptKey) el.promptKey.textContent = 'F';
+  el.promptText.textContent = ready
+    ? 'Roll out to the pad'
+    : 'Vehicle cannot reach orbit — change the design';
+
+  if (ready && !saidRolloutPrompt) {
+    saidRolloutPrompt = true;
+    window.setTimeout(() => {
+      if (!mission.hasFailed && !rolledOut) say(script.ROLLOUT_PROMPT);
+    }, 2600);
   }
 }
 
@@ -350,8 +415,21 @@ mission.onWarning = (text) => {
   narrator.say(text, 'urgent');
 };
 
+/**
+ * Refuse a build action and say why, when the player is not at the stand.
+ * Returns true when the action was blocked.
+ */
+function blockedByDistance(): boolean {
+  if (isInWorkZone(player.position)) return false;
+  const away = distanceToStand(player.position) - WORK_ZONE_RADIUS;
+  log(`OUT OF REACH  ${away.toFixed(0)} m from the stand`);
+  say('You are not at the stand, engineer. Walk into the painted circle.');
+  return true;
+}
+
 function attachNextPart(): void {
   if (mission.hasFailed) return;
+  if (blockedByDistance()) return;
 
   const part = assembly.nextExpected();
   if (!part) {
@@ -383,6 +461,7 @@ let removeLineIndex = 0;
 
 function detachTopPart(): void {
   if (mission.hasFailed) return;
+  if (blockedByDistance()) return;
 
   const part = assembly.detachTop();
   if (!part) {
@@ -399,6 +478,7 @@ function detachTopPart(): void {
 
 function clearStand(): void {
   if (mission.hasFailed) return;
+  if (blockedByDistance()) return;
   if (assembly.parts.length === 0) {
     say('The stand is already empty.');
     return;
@@ -413,6 +493,79 @@ function clearStand(): void {
   say(script.ON_CLEAR);
 }
 
+/** True once the vehicle has left the building, so actions stop. */
+let rolledOut = false;
+
+/**
+ * Roll the finished vehicle out to the pad.
+ *
+ * Gated on the engineering analysis: a vehicle the board says cannot reach
+ * orbit never gets to try. That turns the delta-v readout from a number the
+ * player can ignore into a gate they have to satisfy.
+ */
+function rollOut(): void {
+  if (mission.hasFailed || rolledOut) return;
+  if (blockedByDistance()) return;
+
+  if (!assembly.isComplete()) {
+    say('The stack is not finished. Fit the remaining parts first.');
+    return;
+  }
+
+  const analysis = assembly.analyze();
+  if (!analysis.canReachOrbit) {
+    log('ROLL OUT REFUSED');
+    say(script.ROLLOUT_REFUSED, true);
+    return;
+  }
+
+  rolledOut = true;
+  const status = mission.status;
+  player.releaseLock();
+  setHelp(false);
+  log('ROLL OUT APPROVED', true);
+
+  const margin = analysis.totalDeltaV - LEO_DELTA_V_REQUIRED;
+
+  if (el.winText) {
+    el.winText.textContent =
+      `Your vehicle is ${assembly.stackHeight().toFixed(1)} metres tall, masses ` +
+      `${(analysis.liftoffMass / 1000).toFixed(0)} tonnes on the pad, and carries ` +
+      `${margin.toFixed(0)} m/s of delta-v above what low Earth orbit costs. ` +
+      `That margin is the difference between a mission that survives a mistake ` +
+      `and one that does not.`;
+  }
+
+  if (el.winStats) {
+    el.winStats.innerHTML = '';
+    const stats: Array<[string, string, boolean]> = [
+      ['Budget left', `$${status.budget.toFixed(0)}M`, status.budget > 60],
+      ['Days to spare', `${status.daysRemaining}`, status.daysRemaining > 8],
+      ['Confidence', `${status.confidence.toFixed(0)}%`, status.confidence >= 70],
+    ];
+    for (const [label, value, good] of stats) {
+      const cell = document.createElement('div');
+      cell.className = good ? 'fail-stat good' : 'fail-stat';
+      const span = document.createElement('span');
+      span.textContent = label;
+      const b = document.createElement('b');
+      b.textContent = value;
+      cell.append(span, b);
+      el.winStats.appendChild(cell);
+    }
+  }
+
+  if (el.winNote) {
+    el.winNote.textContent =
+      'Next phase, in development: fly this vehicle by hand. Throttle, pitch ' +
+      'and staging against real drag and gravity — the ascent physics is ' +
+      'already verified, and a clean gravity turn reaches about 100 by 280 km.';
+  }
+
+  el.success?.classList.remove('hidden');
+  for (const line of script.ROLLOUT_ACCEPTED) narrator.say(line);
+}
+
 window.addEventListener('keydown', (e) => {
   // Build actions work whenever the game is showing, not only under pointer
   // lock — pointer lock can be refused, and the game must still be playable.
@@ -423,6 +576,7 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyR') clearStand();
   if (e.code === 'KeyH' || e.code === 'Slash') toggleHelp();
   if (e.code === 'KeyV') narrator.toggle();
+  if (e.code === 'KeyF') rollOut();
 });
 
 // --------------------------------------------------------------- start up
@@ -484,6 +638,24 @@ if (!narrator.available) {
   el.voiceButton?.classList.add('hidden');
 }
 
+function restartMission(): void {
+  assembly.clear();
+  mission.reset();
+  removeLineIndex = 0;
+  rolledOut = false;
+  spokenIntro = false;
+  saidInspectionHint = false;
+  saidRolloutPrompt = false;
+  el.failure?.classList.add('hidden');
+  el.success?.classList.add('hidden');
+  refreshReadout();
+  refreshResources(mission.status);
+  player.requestLock(canvas);
+  runIntro();
+}
+
+el.winAgain?.addEventListener('click', () => restartMission());
+
 el.failRetry?.addEventListener('click', () => {
   assembly.clear();
   mission.reset();
@@ -539,6 +711,7 @@ function frame(): void {
   if (inspectorTimer > 1 / 12) {
     inspectorTimer = 0;
     updateInspector();
+    updatePrompt();
   }
 
   renderer.render(env.scene, camera);

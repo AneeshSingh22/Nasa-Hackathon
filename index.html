@@ -100,8 +100,8 @@
         </section>
 
         <!-- Next-action prompt -->
-        <div id="prompt" class="prompt">
-          <kbd>E</kbd><span id="prompt-text">Fit the core booster</span>
+        <div id="prompt" class="prompt" data-key="E">
+          <kbd id="prompt-key">E</kbd><span id="prompt-text">Fit the core booster</span>
         </div>
 
         <!-- CAPCOM dialogue -->
@@ -153,6 +153,8 @@
               <dd>Remove the top part</dd>
               <dt><kbd>R</kbd></dt>
               <dd>Clear the stand and start over</dd>
+              <dt><kbd>F</kbd></dt>
+              <dd>Roll out to the pad, once the vehicle can reach orbit</dd>
               <dt><kbd>H</kbd></dt>
               <dd>Show or hide this panel</dd>
               <dt><kbd>V</kbd></dt>
@@ -174,6 +176,20 @@
             </p>
           </div>
         </section>
+      </div>
+
+      <!-- Roll out approved: mission phase complete -->
+      <div id="success" class="overlay hidden">
+        <div class="win-card">
+          <p class="win-eyebrow">Roll out approved</p>
+          <h1>Vehicle on the pad</h1>
+          <p class="win-text" id="win-text">—</p>
+          <div class="fail-stats" id="win-stats"></div>
+          <p class="win-note" id="win-note">—</p>
+          <div class="win-buttons">
+            <button id="win-again">Build another</button>
+          </div>
+        </div>
       </div>
 
       <!-- Mission failed: the review board -->

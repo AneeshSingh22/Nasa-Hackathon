@@ -14,7 +14,8 @@
 export const INTRO = [
   'Morning, engineer. Welcome to the assembly building.',
   'That stand in front of you is empty, and we have a launch window in twenty four days. Your job is to put a vehicle on it that can actually reach orbit.',
-  'Walk up to the stand and press E to fit the first stage. Take a look at the parts while you are down there. Every one of them is a decision.',
+  'Walk into the painted circle on the floor. You can only work on the vehicle from inside it, same as any real assembly bay. Once you are there, press E to fit the first stage.',
+  'And look at the parts while you are down there. Every one of them is a decision you are making with the programme’s money.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */
@@ -72,8 +73,20 @@ export const FAILURE_LESSON: Record<string, string> = {
     'Lesson: engineering credibility is a resource like any other. Every decision you reverse spends some of it, and you need it when you have to argue for something unpopular.',
 };
 
-/** Warning lines when a resource gets tight, spoken with urgency. */
-export const ON_WARNING_PREFIX = '';
+/** Said when the player tries to roll out a vehicle that cannot make orbit. */
+export const ROLLOUT_REFUSED =
+  'I am not rolling that to the pad. The board says it cannot reach orbit, and I will not spend a launch window finding out you were right. Fix the vehicle.';
+
+/** Said when the player rolls out a flight-ready vehicle. */
+export const ROLLOUT_ACCEPTED = [
+  'Roll out approved. Crawler is under the stand and we are moving to the pad.',
+  'Vehicle is on the pad. Good work, engineer.',
+  'That is as far as this build takes us for now. The ascent is the next thing we will fly, and your margin is what you will be glad of when we do.',
+];
+
+/** Said when the stack is complete and the player is standing at the stand. */
+export const ROLLOUT_PROMPT =
+  'Stack is complete. Press F to roll out to the pad when you are satisfied with it.';
 
 /** Pick a line from a rotating set so repeats do not feel scripted. */
 export function rotate(lines: readonly string[], index: number): string {

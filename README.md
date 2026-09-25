@@ -26,9 +26,14 @@ the assembly bay floor.
 | `E` | Fit the next stage |
 | `Q` | Remove the top stage |
 | `R` | Clear the stand |
+| `F` | Roll out to the pad |
 | `H` | Show or hide the controls panel |
 | `V` | Mute or unmute the flight director |
 | `Esc` | Release the cursor — click the view to take it back |
+
+You can only work on the vehicle from inside the painted circle on the floor,
+the same way a real assembly bay restricts access. The action prompt fades in
+as you approach, so the control teaches itself through movement.
 
 Look directly at any part of the rocket to read its engineering briefing. The
 in-game **Controls** button, bottom centre, lists every key at any time.
@@ -52,6 +57,17 @@ and the readout shows 13 873 m/s of Δv. Add the eight-tonne telescope and it
 drops to 10 924. Add the fairing and it falls again to 10 501. That is
 Tsiolkovsky's rocket equation doing its work, and no tooltip is needed to
 explain it.
+
+## How a run ends
+
+Build a vehicle that can reach orbit and roll it out with `F`, and the phase
+completes: a summary screen reports your remaining budget, schedule and
+confidence, so a careless winner and a careful one get visibly different
+results.
+
+Roll-out is gated on the engineering analysis. A vehicle the board says cannot
+reach orbit is refused, which turns the Δv readout from a number you can ignore
+into a gate you have to satisfy.
 
 ## How you lose
 

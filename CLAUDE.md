@@ -55,7 +55,8 @@ src/
   vab/         Lane B — assembly building: player controller, parts, stacking.
   flight/      Lane B — ascent and orbital flight (not yet built).
   render/      Lane D — shared rendering helpers, effects, camera rigs.
-  game/        Lane B — mission constraints, resources, lose conditions.
+  game/        Lane B — mission constraints, resources, lose conditions,
+               work-zone proximity rules.
   ui/          Lane C — HUD panels, overlays, the narrator.
   content/     Lane E — part specs, mission scripts, dialogue, citations.
   main.ts      Integration point. Changes here get reviewed by whoever is producing.
@@ -149,6 +150,16 @@ with margin on all three, two telescope swaps bankrupt the programme, and cheap
 swaps run the schedule out instead. Retune those numbers only with the tests in
 front of you.
 
+**Proximity-gated interaction.** `game/workzone.ts` restricts assembly to the
+painted circle around the stand, and the action prompt fades in as the player
+approaches. The hint radius is deliberately wider than the spawn distance: if
+the prompt were invisible at spawn, the opening move of the game would be
+hidden. `workzone.test.ts` pins that.
+
+**Roll-out.** Pressing `F` on a flight-ready stack ends the phase with a
+summary of what the build cost. It is gated on `analysis.canReachOrbit`, so the
+delta-v board is a gate rather than decoration.
+
 **The narrator.** `ui/Narrator.ts` speaks the flight director's lines through
 the Web Speech API and mirrors every one into the dialogue panel, so spoken and
 written text cannot drift apart. Speech is always optional: it degrades to
@@ -158,9 +169,10 @@ sentences, no parentheses, no figures that only parse on the page.
 
 ## What comes next, in order
 
-1. **Roll out to the pad** — transition from the VAB to the launch pad, with the
-   camera moving to a launch view. Gate it on `analysis.canReachOrbit` so a
-   vehicle that cannot make orbit never gets to try.
+1. **Flyable ascent** — throttle, pitch, staging, max-Q, with the HUD showing
+   live apoapsis. The ascent physics is already verified by headless
+   simulation, so this is wiring rather than discovery. Roll-out already gates
+   on `analysis.canReachOrbit`; the pad scene picks up from there.
 2. **Flyable ascent** — throttle, pitch, staging, max-Q, with the HUD showing
    live apoapsis. The ascent physics is already verified by headless simulation.
 3. **Orbital map view** — switch from first-person to a map with manoeuvre

@@ -9,10 +9,14 @@ import * as THREE from 'three';
  * enter pointer lock, so the game opens on a click-to-start overlay.
  */
 
-const WALK_SPEED = 4.2;
-const RUN_SPEED = 8.0;
-const ACCELERATION = 26;
-const DAMPING = 11;
+// A real person walks about 1.4 m/s, but the assembly bay is 46 metres across
+// and crossing it at walking pace is tedious. These are game speeds, not
+// physical ones — the simulation is honest where it teaches something, and
+// generous where realism would only cost the player time.
+const WALK_SPEED = 7.4;
+const RUN_SPEED = 13.5;
+const ACCELERATION = 34;
+const DAMPING = 14;
 const EYE_HEIGHT = 1.72;
 const LOOK_SENSITIVITY = 0.0022;
 const MAX_PITCH = Math.PI / 2 - 0.02;
