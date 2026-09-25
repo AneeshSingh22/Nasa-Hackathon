@@ -384,10 +384,7 @@ function refreshOptions(): void {
   const station = stationNear(player.position.x, player.position.z);
 
   // Only while standing in the bay that holds the parts for this slot.
-  const inRelevantBay =
-    station !== null &&
-    slot !== null &&
-    PART_LIBRARY.find((p) => p.id === station.partId)?.kind === slot;
+  const inRelevantBay = station !== null && slot !== null && station.kind === slot;
 
   if (!inRelevantBay || carried || mission.hasFailed || rolledOut) {
     el.options.classList.add('hidden');
@@ -410,7 +407,8 @@ function refreshOptions(): void {
   }
 
   // Which one the player has selected, defaulting to the bench they stand at.
-  const selectedId = selectedForSlot.get(slot) ?? station.partId;
+  const options0 = PART_LIBRARY.filter((p) => p.kind === slot);
+  const selectedId = selectedForSlot.get(slot) ?? options0[0]?.id;
   el.optionsGrid.innerHTML = '';
 
   for (const option of options) {
@@ -488,11 +486,8 @@ function cycleSelection(direction: 1 | -1): void {
   if (options.length < 2) return;
 
   const station = stationNear(player.position.x, player.position.z);
-  const currentId =
-    selectedForSlot.get(slot) ??
-    (station && PART_LIBRARY.find((p) => p.id === station.partId)?.kind === slot
-      ? station.partId
-      : options[0]?.id);
+  void station;
+  const currentId = selectedForSlot.get(slot) ?? options[0]?.id;
 
   const at = options.findIndex((p) => p.id === currentId);
   const next = options[(Math.max(0, at) + direction + options.length) % options.length];
@@ -540,8 +535,9 @@ function updatePrompt(): void {
     y: player.feetHeight,
   };
 
-  // Inside the car the only control that matters is the button.
-  if (env.elevator.contains(player.position.x, player.position.z)) {
+  // At the control panel the button is the action. Out on the work deck it is
+  // not, or there would be no way to place a part from up there.
+  if (env.elevator.atControls(player.position.x, player.position.z)) {
     const state = env.elevator.state;
     el.prompt.style.opacity = '1';
     el.prompt.classList.remove('prompt-far');
@@ -564,9 +560,9 @@ function updatePrompt(): void {
     if (partDef && canWorkOn(partDef.kind, position)) {
       el.prompt.classList.remove('prompt-far');
       el.promptText.textContent = `Place the ${partDef.name}`;
-    } else if (station && station.partId === carried.partId) {
+    } else if (station && partDef && station.kind === partDef.kind) {
       el.prompt.classList.remove('prompt-far');
-      el.promptText.textContent = `Put the ${partDef?.name ?? 'part'} back`;
+      el.promptText.textContent = `Put the ${partDef.name} back`;
     } else {
       el.prompt.classList.add('prompt-far');
       el.promptText.textContent =
@@ -579,8 +575,10 @@ function updatePrompt(): void {
 
   // Empty handed at a station: offer the part.
   if (station) {
-    const partDef = PART_LIBRARY.find((p) => p.id === station.partId);
-    const wanted = slot === partDef?.kind;
+    const choices = PART_LIBRARY.filter((p) => p.kind === station.kind);
+    const selId = slot ? selectedForSlot.get(slot) : undefined;
+    const partDef = choices.find((p) => p.id === selId) ?? choices[0];
+    const wanted = slot === station.kind;
     el.prompt.style.opacity = '1';
     if (el.promptKey) el.promptKey.textContent = 'E';
     el.prompt.classList.toggle('prompt-far', !wanted);
@@ -649,7 +647,10 @@ function updateInspector(): void {
   if (!part) {
     const station = stationNear(player.position.x, player.position.z);
     if (station) {
-      part = PART_LIBRARY.find((p) => p.id === station.partId) ?? null;
+      const slotNow = assembly.nextSlot();
+      const choices = PART_LIBRARY.filter((p) => p.kind === station.kind);
+      const selId = slotNow ? selectedForSlot.get(slotNow) : undefined;
+      part = choices.find((p) => p.id === selId) ?? choices[0] ?? null;
     }
   }
 
@@ -912,7 +913,7 @@ function swapPayload(): void {
  * teleported the player.
  */
 function tryElevator(): boolean {
-  const aboard = env.elevator.contains(player.position.x, player.position.z);
+  const aboard = env.elevator.atControls(player.position.x, player.position.z);
   const atLanding =
     !aboard &&
     Math.hypot(player.position.x - ELEVATOR_X, player.position.z - ELEVATOR_Z) < 4.2;
@@ -981,7 +982,7 @@ function interact(): void {
   const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
   if (!partDef) return;
 
-  if (station && station.partId === carried.partId) {
+  if (station && station.kind === partDef.kind) {
     putBack();
     return;
   }
@@ -1080,10 +1081,12 @@ function pickUp(station: StationDefinition): void {
   const slot = assembly.nextSlot();
 
   // Honour the panel selection, so Tab and walking to a bench both work.
+  // The station issues a kind; which specific part comes from the selection,
+  // defaulting to the first option.
+  const choices = PART_LIBRARY.filter((p) => p.kind === station.kind);
   const selectedId = slot ? selectedForSlot.get(slot) : undefined;
   const partDef =
-    PART_LIBRARY.find((p) => p.id === (selectedId ?? station.partId)) ??
-    PART_LIBRARY.find((p) => p.id === station.partId);
+    choices.find((p) => p.id === selectedId) ?? choices[0];
   if (!partDef) return;
 
   if (slot !== partDef.kind) {

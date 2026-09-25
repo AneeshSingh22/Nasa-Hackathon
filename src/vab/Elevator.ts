@@ -69,8 +69,10 @@ export interface ElevatorRig {
    * no longer strands it.
    */
   press: (playerFeetY: number, aboard: boolean) => 'travelling' | 'calling' | 'busy';
-  /** True when the given floor position is inside the car. */
+  /** True when the given floor position is on the car or its work deck. */
   contains: (x: number, z: number) => boolean;
+  /** True when the player is at the control panel, inside the car itself. */
+  atControls: (x: number, z: number) => boolean;
   /** True when the car is level with this height and safe to board. */
   isLevelWith: (feetY: number) => boolean;
   /** Human-readable state for the HUD. */
@@ -191,13 +193,17 @@ export function createElevator(): ElevatorRig {
     car.add(toe);
   }
 
-  // Tread plate pattern on the deck, so the floor is not a blank square.
+  // Tread strips on the deck.
+  //
+  // These sat with their underside at y = -0.01 against a deck whose top
+  // surface is at y = 0.00, so the two coplanar faces z-fought and the floor
+  // flickered grey and white as the camera moved. They now sit clear of it.
   for (let i = -1; i <= 1; i++) {
     const tread = new THREE.Mesh(
-      new THREE.BoxGeometry(CAR_HALF * 1.9, 0.02, 0.1),
+      new THREE.BoxGeometry(CAR_HALF * 1.9, 0.03, 0.12),
       frameMat,
     );
-    tread.position.set(0, 0.02, i * 0.9);
+    tread.position.set(0, 0.025, i * 0.9);
     car.add(tread);
   }
 
@@ -345,13 +351,26 @@ export function createElevator(): ElevatorRig {
     },
 
     contains(x: number, z: number) {
-      // Includes the cantilevered work deck, so standing on the bridge still
-      // counts as being on the car and is supported by it.
+      // Includes the cantilevered work deck, so standing on the bridge is
+      // still supported by the car and rides with it.
       const withinZ = Math.abs(z - ELEVATOR_Z) <= CAR_HALF - 0.2;
       const withinX =
         x <= ELEVATOR_X + CAR_HALF - 0.2 &&
         x >= ELEVATOR_X - CAR_HALF - DECK_REACH + 0.2;
       return withinZ && withinX;
+    },
+
+    atControls(x: number, z: number) {
+      // Only the car itself, not the work deck.
+      //
+      // `contains` covers the whole platform because the player must ride with
+      // it, but the button used to be offered anywhere on that platform — so
+      // walking out to the work end still showed "ride back down" and there
+      // was no way to place the part. The controls are in the car.
+      return (
+        Math.abs(x - ELEVATOR_X) <= CAR_HALF - 0.2 &&
+        Math.abs(z - ELEVATOR_Z) <= CAR_HALF - 0.2
+      );
     },
 
     isLevelWith(feetY: number) {

@@ -112,6 +112,27 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
   position changed — `PlayerController.test.ts` has them.
+- **A bezel drawn in front of a screen hides the screen.** The blueprint
+  display rendered as a plain black rectangle for two rounds. The drawing code
+  was correct; a 0.35 m deep frame box centred at z = 0 put its front face at
+  z = +0.175, ahead of the display plane at z = +0.09, and the board faces the
+  player. Check depth ordering on any panel the player looks at head-on, and
+  keep frames strictly behind the surface they frame.
+- **Canvas UI needs a test even though jsdom has no canvas.** `tests/blueprint.test.ts`
+  records drawing calls against a stub 2D context, which asserts *what* was
+  drawn rather than that pixels changed. Without it there was no way to tell
+  whether a black screen was a drawing bug or a scene-graph bug. The native
+  `canvas` package does not build on this machine, so do not reach for it.
+- **Coplanar surfaces flicker.** The elevator deck's top face sat at y = 0.00
+  with tread strips spanning -0.01 to +0.03, so the two interpenetrated and
+  z-fought as the camera moved — the grey-and-white shimmer on the floor. Floor
+  decals now sit on separated layers: grid 0.02, safety ring 0.06, walkways
+  0.10, step patches 0.14.
+- **A trigger volume used for two purposes serves neither.** The elevator's
+  `contains` covers the car *and* its work deck, because the player must ride
+  with both. Offering the call button anywhere in that volume meant walking out
+  to the work end still showed "ride back down" and there was no way to place a
+  part. `atControls` is now a separate, smaller volume.
 - **The building must be taller than the rocket.** For several commits the
   ceiling was 58 m and the tallest stack 75.9 m, so the vehicle poked ten metres
   through the roof, the crane hoisted to 71 m and flew the load out through it,

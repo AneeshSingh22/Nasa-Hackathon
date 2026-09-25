@@ -24,6 +24,9 @@ export default defineConfig({
     // Physics tests are pure functions and run fastest in Node. Anything under
     // src/vab drives real keyboard and pointer events, so it needs a DOM.
     environment: 'node',
-    environmentMatchGlobs: [['src/vab/**', 'jsdom']],
+    environmentMatchGlobs: [
+      ['src/vab/**', 'jsdom'],
+      ['tests/**', 'jsdom'],
+    ],
   },
 });

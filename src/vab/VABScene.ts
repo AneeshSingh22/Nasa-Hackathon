@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { createMaterials, type Materials } from './parts';
 import { STATIONS } from './stations';
-import { placardFor } from './placards';
+import { placardForStation } from './placards';
 import { createElevator, type ElevatorRig } from './Elevator';
 import { createBlueprintBoard, type BlueprintState } from './blueprint';
 
@@ -117,12 +117,15 @@ export function createVABScene(): VABEnvironment {
   const ringGeo = new THREE.RingGeometry(7.4, 8.0, 48);
   const ring = new THREE.Mesh(ringGeo, paint);
   ring.rotation.x = -Math.PI / 2;
-  ring.position.y = 0.01;
+  ring.position.y = 0.06;
   scene.add(ring);
 
   // Floor grid lines, cheap and they sell the industrial scale.
   const grid = new THREE.GridHelper(VAB_WIDTH, 23, 0x2c313c, 0x23272f);
-  grid.position.y = 0.005;
+  // Floor decal layers, well separated. Coplanar surfaces within a few
+  // millimetres of each other z-fight and flicker as the camera moves, which
+  // is what made the elevator deck and the floor markings shimmer.
+  grid.position.y = 0.02;
   scene.add(grid);
 
   // ---- walls ----
@@ -310,8 +313,8 @@ export function createVABScene(): VABEnvironment {
     // Angled placard carrying the part's name, a schematic and its numbers.
     // Blank white boards left the bay unreadable: identical grey benches with
     // no way to tell which held what without walking up to every one.
-    const texture = placardFor(
-      station.partId,
+    const texture = placardForStation(
+      station.kind,
       station.label,
       station.bay,
       station.step,
@@ -368,19 +371,13 @@ export function createVABScene(): VABEnvironment {
       }),
     );
     floorMark.rotation.x = -Math.PI / 2;
-    floorMark.position.set(station.x, 0.014, station.z + Math.cos(station.rotation) * 3.2);
-    // Rotate the patch to sit in front of the bench whichever way it faces.
-    if (Math.abs(station.rotation) > 0.1) {
-      floorMark.position.set(
-        station.x + Math.sin(station.rotation) * 3.2,
-        0.014,
-        station.z,
-      );
-    }
+    // All four stations face the room from the back wall, so the patch always
+    // goes on the +Z side.
+    floorMark.position.set(station.x, 0.14, station.z + 4.2);
     scene.add(floorMark);
 
     // Benches are solid, so the player walks round them.
-    stationObstacles.push({ x: station.x, z: station.z, radius: 2.6, top: 1.1 });
+    stationObstacles.push({ x: station.x, z: station.z, radius: 2.9, top: 1.1 });
   }
 
   // ---- service elevator ----
@@ -598,13 +595,13 @@ export function createVABScene(): VABEnvironment {
   for (const z of [-11, 11]) {
     const lane = new THREE.Mesh(new THREE.PlaneGeometry(VAB_WIDTH - 6, 0.22), floorPaint);
     lane.rotation.x = -Math.PI / 2;
-    lane.position.set(0, 0.012, z);
+    lane.position.set(0, 0.10, z);
     scene.add(lane);
   }
   for (const x of [-13.5, 13.5]) {
     const lane = new THREE.Mesh(new THREE.PlaneGeometry(0.22, VAB_DEPTH - 6), floorPaint);
     lane.rotation.x = -Math.PI / 2;
-    lane.position.set(x, 0.012, 0);
+    lane.position.set(x, 0.10, 0);
     scene.add(lane);
   }
 

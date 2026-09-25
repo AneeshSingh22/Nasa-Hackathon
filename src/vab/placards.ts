@@ -297,3 +297,85 @@ export function placardFor(
   if (!part) return null;
   return createPlacardTexture({ part, label, bay, step, marginHint });
 }
+
+/**
+ * Placard for a whole step's station.
+ *
+ * Shows which section of the rocket this station issues, drawn large, plus how
+ * many options it holds. The player picks between them at the station, so the
+ * sign identifies the *step* rather than one specific part — every placard
+ * looking the same was what made the bay unreadable.
+ */
+export function placardForStation(
+  kind: PartDefinition['kind'],
+  label: string,
+  bay: 'stages' | 'payloads' | 'structure',
+  step: number,
+): THREE.CanvasTexture | null {
+  const options = PART_LIBRARY.filter((p) => p.kind === kind);
+  const exemplar = options[0];
+  if (!exemplar) return null;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = TEX_WIDTH;
+  canvas.height = TEX_HEIGHT;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return null;
+
+  const accent = BAY_COLOUR[bay] ?? '#2e9fc4';
+
+  ctx.fillStyle = '#f7f9fb';
+  ctx.fillRect(0, 0, TEX_WIDTH, TEX_HEIGHT);
+  ctx.fillStyle = accent;
+  ctx.fillRect(0, 0, 30, TEX_HEIGHT);
+
+  // Enormous step number.
+  ctx.fillStyle = accent;
+  ctx.font = '700 210px Arial, Helvetica, sans-serif';
+  ctx.fillText(String(step), 58, 268);
+  ctx.fillStyle = DIM;
+  ctx.font = '600 28px "Courier New", monospace';
+  ctx.fillText('STEP', 74, 312);
+
+  // Section name.
+  ctx.fillStyle = INK;
+  ctx.font = '700 66px Arial, Helvetica, sans-serif';
+  const heading = label.split('·').pop()?.trim() ?? label;
+  ctx.fillText(heading.toUpperCase(), 300, 132);
+
+  ctx.strokeStyle = RULE;
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(300, 166);
+  ctx.lineTo(TEX_WIDTH - 44, 166);
+  ctx.stroke();
+
+  ctx.fillStyle = accent;
+  ctx.font = '600 40px "Courier New", monospace';
+  ctx.fillText(
+    `${options.length} option${options.length === 1 ? '' : 's'} — press TAB to compare`,
+    300,
+    232,
+  );
+
+  ctx.fillStyle = DIM;
+  ctx.font = '500 30px "Courier New", monospace';
+  ctx.fillText('Press E to collect the selected part', 300, 288);
+
+  // Big diagram of this section on the right.
+  const boxX = TEX_WIDTH - 420;
+  const boxY = 72;
+  const boxW = 360;
+  const boxH = 380;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(boxX, boxY, boxW, boxH);
+  ctx.strokeStyle = RULE;
+  ctx.lineWidth = 3;
+  ctx.strokeRect(boxX, boxY, boxW, boxH);
+  drawPictogram(ctx, exemplar, boxX, boxY, boxW, boxH, accent);
+
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.colorSpace = THREE.SRGBColorSpace;
+  texture.anisotropy = 8;
+  return texture;
+}

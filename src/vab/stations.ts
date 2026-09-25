@@ -1,19 +1,21 @@
 /**
- * Part stations: the benches around the floor where components are stored.
+ * Part stations: one bench per build step.
  *
- * The layout follows the build sequence. Step 1 and step 2 run down the left
- * wall, step 3's four payloads sit side by side across the back, and step 4 is
- * on the right — so the player walks one continuous route from the first part
- * to the last instead of crossing the bay between sequential steps.
+ * There used to be one bench per *part*, ten in all, which was confusing for
+ * two reasons: walking to a different bench was a second way of doing what the
+ * Tab panel already does, and ten benches with the same layout were
+ * indistinguishable at a glance.
  *
- * Each step's options stay adjacent, which is what makes them read as
- * alternatives rather than as unrelated benches.
+ * Now there is a single station per step, laid out left to right in build
+ * order. The options for that step are chosen at the station with Tab.
  */
 
 export interface StationDefinition {
   id: string;
-  /** The part this station holds. */
-  partId: string;
+  /** Build step, 1-4. The options for it come from the part library. */
+  step: number;
+  /** The kind of part this station issues. */
+  kind: 'booster' | 'upper' | 'payload' | 'fairing';
   /** Floor position. */
   x: number;
   z: number;
@@ -21,124 +23,61 @@ export interface StationDefinition {
   rotation: number;
   /** Heading shown on the placard. */
   label: string;
-  /** Which group of stations this belongs to, for signage and colour. */
+  /** Colour group for signage. */
   bay: 'stages' | 'payloads' | 'structure';
-  /** Build step, 1-4, shown large on the placard and painted on the floor. */
-  step: number;
 }
 
+/**
+ * The four stations, in a row along the back of the bay.
+ *
+ * Left to right in build order, so the player walks a straight line from the
+ * first part to the last and can see all four from one position.
+ */
 export const STATIONS: StationDefinition[] = [
-  // ---- step 1: first stage, three options down the left wall ----
   {
-    id: 'st-core',
-    partId: 'core-booster',
-    x: -24,
-    z: 12,
-    rotation: Math.PI / 2,
-    label: 'Step 1 · Option A',
-    bay: 'stages',
+    id: 'st-step1',
     step: 1,
+    kind: 'booster',
+    x: -16.5,
+    z: -19,
+    rotation: 0,
+    label: 'Step 1 · First stage',
+    bay: 'stages',
   },
   {
-    id: 'st-solid',
-    partId: 'solid-booster',
-    x: -24,
-    z: 5,
-    rotation: Math.PI / 2,
-    label: 'Step 1 · Option B',
-    bay: 'stages',
-    step: 1,
-  },
-  {
-    id: 'st-extended',
-    partId: 'extended-booster',
-    x: -24,
-    z: -2,
-    rotation: Math.PI / 2,
-    label: 'Step 1 · Option C',
-    bay: 'stages',
-    step: 1,
-  },
-
-  // ---- step 2: second stage, continuing down the same wall ----
-  {
-    id: 'st-hydrolox',
-    partId: 'upper-stage',
-    x: -24,
-    z: -10,
-    rotation: Math.PI / 2,
-    label: 'Step 2 · Option A',
-    bay: 'stages',
+    id: 'st-step2',
     step: 2,
-  },
-  {
-    id: 'st-kerolox',
-    partId: 'kerolox-upper',
-    x: -24,
-    z: -17,
-    rotation: Math.PI / 2,
-    label: 'Step 2 · Option B',
+    kind: 'upper',
+    x: -5.5,
+    z: -19,
+    rotation: 0,
+    label: 'Step 2 · Second stage',
     bay: 'stages',
-    step: 2,
   },
-
-  // ---- step 3: payloads, four side by side across the back wall ----
   {
-    id: 'st-comms',
-    partId: 'comms-probe',
-    x: -13,
-    z: -19.5,
-    rotation: 0,
-    label: 'Step 3 · Option A',
-    bay: 'payloads',
+    id: 'st-step3',
     step: 3,
-  },
-  {
-    id: 'st-telescope',
-    partId: 'telescope',
-    x: -7,
-    z: -19.5,
+    kind: 'payload',
+    x: 5.5,
+    z: -19,
     rotation: 0,
-    label: 'Step 3 · Option B',
+    label: 'Step 3 · Payload',
     bay: 'payloads',
-    step: 3,
   },
   {
-    id: 'st-crew',
-    partId: 'crew-capsule',
-    x: -1,
-    z: -19.5,
+    id: 'st-step4',
+    step: 4,
+    kind: 'fairing',
+    x: 16.5,
+    z: -19,
     rotation: 0,
-    label: 'Step 3 · Option C',
-    bay: 'payloads',
-    step: 3,
-  },
-  {
-    id: 'st-lab',
-    partId: 'science-lab',
-    x: 5,
-    z: -19.5,
-    rotation: 0,
-    label: 'Step 3 · Option D',
-    bay: 'payloads',
-    step: 3,
-  },
-
-  // ---- step 4: fairing, right wall ----
-  {
-    id: 'st-fairing',
-    partId: 'fairing',
-    x: 24,
-    z: -12,
-    rotation: -Math.PI / 2,
     label: 'Step 4 · Fairing',
     bay: 'structure',
-    step: 4,
   },
 ];
 
-/** How close the player must be to pick a part off a station. Metres. */
-export const STATION_REACH = 3.6;
+/** How close the player must be to work at a station. Metres. */
+export const STATION_REACH = 4.2;
 
 export function stationNear(x: number, z: number): StationDefinition | null {
   let best: StationDefinition | null = null;
@@ -153,16 +92,14 @@ export function stationNear(x: number, z: number): StationDefinition | null {
   return best;
 }
 
-export function stationFor(partId: string): StationDefinition | null {
-  return STATIONS.find((s) => s.partId === partId) ?? null;
+/** The station that issues a given kind of part. */
+export function stationForKind(
+  kind: StationDefinition['kind'],
+): StationDefinition | null {
+  return STATIONS.find((s) => s.kind === kind) ?? null;
 }
 
-/** All stations in one bay, for signage above the group. */
-export function stationsInBay(bay: StationDefinition['bay']): StationDefinition[] {
-  return STATIONS.filter((s) => s.bay === bay);
-}
-
-/** All stations for one build step, in the order they are laid out. */
-export function stationsForStep(step: number): StationDefinition[] {
-  return STATIONS.filter((s) => s.step === step);
+/** The station for a build step. */
+export function stationForStep(step: number): StationDefinition | null {
+  return STATIONS.find((s) => s.step === step) ?? null;
 }
