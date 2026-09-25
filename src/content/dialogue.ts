@@ -11,49 +11,50 @@
  * vehicle and lets you draw the conclusion.
  */
 
+/**
+ * The opening briefing. Two short lines.
+ *
+ * An earlier version spoke four paragraphs and then narrated every part, every
+ * removal and every payload the player tabbed past. It was exhausting, and it
+ * talked over the panels that already say the same thing in less time. The
+ * narrator now states the objective and stops; anything more is requested
+ * through the advice button.
+ */
 export const INTRO = [
-  'Morning, engineer. Welcome to the assembly building.',
-  'Read the contract on your right before you touch anything. The Science Directorate wants an instrument package in orbit above two hundred kilometres, returning at least a hundred units of science. How you do that is up to you.',
-  'Walk into the painted circle on the floor. You can only work on the vehicle from inside it, same as any real assembly bay. Once you are there, press E to fit the first stage.',
-  'And I will warn you now: the payload is your decision, not mine. The cheap one will not satisfy the contract and the heavy one will barely make orbit. Choose carefully, because the rocket equation does not care what you were hoping for.',
+  'Morning, engineer. The contract is on your right — read it before you build.',
+  'Walk into the painted circle and press E to start. Press T any time you want my advice.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */
-export const FIRST_INSPECTION =
-  'That panel on your right tells you what you are looking at, and why it is built that way. Worth reading before you commit the budget.';
+export const FIRST_INSPECTION = '';
 
 /** Per-part lines, spoken as each is fitted. */
+/**
+ * Spoken when a part is fitted. Deliberately terse.
+ *
+ * The engineering explanation lives on the inspection panel, which the player
+ * reads when they choose to. Saying it aloud every time turned a fact into
+ * nagging.
+ */
 export const ON_FIT: Record<string, string> = {
-  'core-booster':
-    'Core booster is on the stand. Three hundred and ten tonnes of kerosene and oxygen, and only sixteen tonnes of structure. Almost the entire stage is fuel. That is not a design choice, that is the rocket equation forcing our hand.',
-  'upper-stage':
-    'Upper stage mated. Watch the delta-v figure jump. Hydrogen gives us better efficiency than the booster, and up there efficiency is worth more than raw thrust.',
-  telescope:
-    'Telescope is installed. Now look at what happened to your margin. Eight tonnes of payload just cost you about three thousand metres per second of delta-v. Every mission planner in the world makes that trade, and none of them enjoy it.',
-  'comms-probe':
-    'Relay is on. It flies beautifully and it does not satisfy the contract. Check the science requirement before you roll that out.',
-  'crew-capsule':
-    'Capsule is mated, and there are three people who will be sitting in it. More science than the telescope, less margin. I would want to fly a very clean ascent with that on top.',
-  'science-lab':
-    'Laboratory is on. That is the most science available and almost none of the delta-v margin. It satisfies the contract on paper. Whether it survives a real ascent depends entirely on how well you fly.',
-  fairing:
-    'Fairing closed out. That shell is dead weight we throw away at a hundred kilometres, but without it the payload would not survive the lower atmosphere. The stack is flight ready. Check the board.',
+  'core-booster': 'Core booster is on the stand.',
+  'upper-stage': 'Upper stage mated.',
+  'comms-probe': 'Relay fitted. Check the science requirement.',
+  telescope: 'Telescope fitted.',
+  'crew-capsule': 'Capsule mated. Three crew aboard.',
+  'science-lab': 'Laboratory fitted. Margin is thin.',
+  fairing: 'Fairing closed out. Check the contract.',
 };
 
 /** Said when the completed stack can reach orbit. */
-export const STACK_READY =
-  'Good vehicle, engineer. You have margin above the orbital requirement, and margin is what saves missions when the ascent does not go to plan. Stand by for roll out.';
+export const STACK_READY = 'Contract satisfied. Press F to roll out.';
 
 /** Said when the completed stack cannot reach orbit. */
 export const STACK_SHORT =
-  'That stack will not make orbit. Check the delta-v against the requirement on the board, and change something before we waste a launch window on it.';
+  'That does not satisfy the contract. Check the panel on your right.';
 
 /** Said on removing a part. */
-export const ON_REMOVE = [
-  'Part is off the stack. That cost us days and half the money, and the crew noticed.',
-  'Taking it apart again. Every teardown spends schedule and goodwill we do not have much of.',
-  'Removed. I will remind you that we refund less than half of what a part costs. Rebuilding is never free.',
-];
+export const ON_REMOVE = ['Part removed.', 'Off the stack.', 'Removed.'];
 
 /** Said on clearing the whole stand. */
 export const ON_CLEAR =
@@ -81,22 +82,17 @@ export const FAILURE_LESSON: Record<string, string> = {
 
 /** Said the first time the player reaches the payload slot. */
 export const PAYLOAD_CHOICE =
-  'Lower stages are on. Now the decision that matters. Press Tab to cycle the payloads and read what each one costs you, then climb the ladder on the gantry and fit it from the top platform. Fifty tonnes of rocket does not get built from the floor.';
+  'Payload is your call. Tab to compare, then climb the gantry ladder and fit it from the top.';
 
 /** Said when the player tries to roll out a vehicle that cannot make orbit. */
 export const ROLLOUT_REFUSED =
-  'I am not rolling that to the pad. The board says it cannot reach orbit, and I will not spend a launch window finding out you were right. Fix the vehicle.';
+  'Not rolling that out. The contract is not satisfied.';
 
 /** Said when the player rolls out a flight-ready vehicle. */
-export const ROLLOUT_ACCEPTED = [
-  'Roll out approved. Crawler is under the stand and we are moving to the pad.',
-  'Vehicle is on the pad. Good work, engineer.',
-  'That is as far as this build takes us for now. The ascent is the next thing we will fly, and your margin is what you will be glad of when we do.',
-];
+export const ROLLOUT_ACCEPTED = ['Roll out approved. Good work, engineer.'];
 
 /** Said when the stack is complete and the player is standing at the stand. */
-export const ROLLOUT_PROMPT =
-  'Stack is complete. Press F to roll out to the pad when you are satisfied with it.';
+export const ROLLOUT_PROMPT = 'Stack complete. Press F when you are ready.';
 
 /** Pick a line from a rotating set so repeats do not feel scripted. */
 export function rotate(lines: readonly string[], index: number): string {

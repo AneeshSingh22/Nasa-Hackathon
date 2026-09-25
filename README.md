@@ -26,8 +26,10 @@ the assembly bay floor.
 | `E` | Fit the next stage |
 | `Q` | Remove the top stage |
 | `R` | Clear the stand |
-| `Tab` | Cycle the payload choice |
+| `Tab` | Compare payloads (cycles the selection, fits nothing) |
+| `G` | Swap an already-fitted payload |
 | `F` | Roll out to the pad |
+| `T` | Ask the flight director for advice |
 | `H` | Show or hide the controls panel |
 | `V` | Mute or unmute the flight director |
 | `Esc` | Release the cursor — click the view to take it back |
@@ -118,11 +120,22 @@ rework, which is why design reviews happen on paper before hardware is cut.
 
 ## The flight director
 
-Elena Vásquez narrates the build aloud through the Web Speech API — no audio
-files, no bundle cost, and it degrades to silent text wherever speech is
-unavailable. She reacts to what you actually did: fitting the telescope gets a
-line about the delta-v you just spent, and a resource running low gets an
-urgent warning that cuts off whatever she was saying. Press `V` to mute.
+Elena Vásquez speaks through the Web Speech API — no audio files, no bundle
+cost, and it degrades to silent text wherever speech is unavailable.
+
+**She is quiet by default.** Two lines of briefing, a few words when a part goes
+on, and an urgent warning when a resource is about to end the run. That is all
+she volunteers. An earlier version narrated every part, every removal and every
+payload you tabbed past, and it talked over the panels that say the same thing
+faster.
+
+Help is on request instead: press `T` or the **Ask advice** button and she
+addresses the situation you are actually in — where to stand, what is failing
+the contract, how thin your margin is. She names the trade-off and never the
+answer, so asking for help does not delete the decision. A test asserts she
+never recommends a payload by name.
+
+Press `V` to mute her voice; the written line still appears.
 
 ## Verified physics
 

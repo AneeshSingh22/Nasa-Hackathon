@@ -27,8 +27,13 @@ export interface VABEnvironment {
    * floating, and to fall when the player walks off one.
    */
   supportHeightAt: (x: number, z: number, feetY: number) => number;
-  /** True when the player can climb at this position. */
-  isLadderAt: (x: number, z: number) => boolean;
+  /**
+   * The ladder at this position, or null.
+   *
+   * Returns the column's x and top so the controller can latch the player to
+   * it while climbing rather than letting them drift off.
+   */
+  ladderAt: (x: number, z: number) => { x: number; top: number } | null;
 }
 
 export function createVABScene(): VABEnvironment {
@@ -300,14 +305,17 @@ export function createVABScene(): VABEnvironment {
   for (let i = 0; i < levels; i++) platformHeights.push(4 + i * 5.2);
 
   const LADDER_X = 10.4;
+  const LADDER_TOP = 45.6;
 
   return {
     scene,
     materials: mats,
     assemblyRoot,
 
-    isLadderAt(x: number, z: number) {
-      return Math.abs(x - LADDER_X) < 0.9 && Math.abs(z) < 0.9;
+    ladderAt(x: number, z: number) {
+      // Generous radius: a climber fumbling for the ladder should find it.
+      const near = Math.abs(x - LADDER_X) < 1.5 && Math.abs(z) < 1.5;
+      return near ? { x: LADDER_X, top: LADDER_TOP } : null;
     },
 
     supportHeightAt(x: number, z: number, feetY: number) {

@@ -228,3 +228,204 @@ describe('PlayerController', () => {
     expect(diagonal).toBeLessThanOrEqual(straight * 1.05);
   });
 });
+
+describe('climbing', () => {
+  let camera: THREE.PerspectiveCamera;
+  let player: PlayerController;
+  let detach: () => void;
+
+  beforeEach(() => {
+    camera = new THREE.PerspectiveCamera(72, 1.6, 0.1, 400);
+    player = new PlayerController(camera, BOUNDS);
+    detach = player.attach(document.createElement('canvas'));
+    return () => {
+      detach();
+      release('ArrowUp', 'ArrowDown', 'KeyW', 'KeyS');
+    };
+  });
+
+  /**
+   * Put the player on a ladder where they are standing.
+   *
+   * The scene only reports a ladder within 1.5 m of the player, so mounting
+   * one far away is not a situation the game can produce — and the latch would
+   * legitimately drag them to it.
+   */
+  function mountLadder(top = 45.6): void {
+    player.position.z = 0;
+    player.onLadder = true;
+    player.ladderX = player.position.x;
+    player.ladderTop = top;
+    player.supportHeight = 0;
+  }
+
+  it('climbs while up is held', () => {
+    mountLadder();
+    hold('ArrowUp');
+    simulate(player, 1);
+    release('ArrowUp');
+    // Should have gained real height, not a fraction of a metre.
+    expect(player.feetHeight).toBeGreaterThan(3);
+  });
+
+  it('keeps climbing past a platform instead of stopping at the first one', () => {
+    // The original bug: holding up also walked the player forward, carrying
+    // them off the ladder's detection radius within about a tenth of a second.
+    // It read as climbing being broken immediately.
+    mountLadder();
+    const columnX = player.position.x;
+    hold('ArrowUp');
+    for (let i = 0; i < 300; i++) {
+      // Re-assert the mount each frame, as the scene does.
+      player.onLadder = true;
+      player.ladderX = columnX;
+      player.update(1 / 60);
+    }
+    release('ArrowUp');
+    expect(player.feetHeight).toBeGreaterThan(20);
+  });
+
+  it('does not walk horizontally while climbing', () => {
+    mountLadder();
+    const startZ = player.position.z;
+    const startX = player.position.x;
+    hold('ArrowUp');
+    simulate(player, 1);
+    release('ArrowUp');
+    // Forward input is consumed by the climb, so the player must not travel
+    // horizontally at all while going up.
+    expect(Math.abs(player.position.z - startZ)).toBeLessThan(0.1);
+    expect(Math.abs(player.position.x - startX)).toBeLessThan(0.1);
+    expect(player.feetHeight).toBeGreaterThan(3);
+  });
+
+  it('stays latched to the ladder column', () => {
+    mountLadder();
+    // Nudge the player off the column, then climb.
+    player.ladderX = 0;
+    player.position.x = 1.2;
+    hold('ArrowUp');
+    simulate(player, 1);
+    release('ArrowUp');
+    // The latch should have pulled them back onto x = 0.
+    expect(Math.abs(player.position.x)).toBeLessThan(0.3);
+  });
+
+  it('descends while down is held', () => {
+    mountLadder();
+    hold('ArrowUp');
+    simulate(player, 1.5);
+    release('ArrowUp');
+    const high = player.feetHeight;
+
+    hold('ArrowDown');
+    simulate(player, 0.5);
+    release('ArrowDown');
+    expect(player.feetHeight).toBeLessThan(high);
+  });
+
+  it('cannot climb past the top of the ladder', () => {
+    mountLadder(12);
+    hold('ArrowUp');
+    simulate(player, 10);
+    release('ArrowUp');
+    expect(player.feetHeight).toBeLessThanOrEqual(12.001);
+  });
+
+  it('cannot descend below the surface the ladder starts from', () => {
+    mountLadder();
+    hold('ArrowDown');
+    simulate(player, 3);
+    release('ArrowDown');
+    expect(player.feetHeight).toBeGreaterThanOrEqual(-0.001);
+  });
+
+  it('falls when it leaves the ladder in mid-air', () => {
+    mountLadder();
+    hold('ArrowUp');
+    simulate(player, 2);
+    release('ArrowUp');
+    const height = player.feetHeight;
+    expect(height).toBeGreaterThan(5);
+
+    // Step off: no ladder, and nothing underneath.
+    player.onLadder = false;
+    player.ladderX = null;
+    player.supportHeight = 0;
+    simulate(player, 0.5);
+    expect(player.feetHeight).toBeLessThan(height);
+  });
+
+  it('reports a fall worth reporting', () => {
+    let fell = 0;
+    player.onFall = (d) => {
+      fell = d;
+    };
+    mountLadder();
+    hold('ArrowUp');
+    simulate(player, 3);
+    release('ArrowUp');
+
+    player.onLadder = false;
+    player.ladderX = null;
+    player.supportHeight = 0;
+    simulate(player, 4);
+
+    expect(fell).toBeGreaterThan(3);
+    expect(player.feetHeight).toBeCloseTo(0, 1);
+  });
+});
+
+describe('solid obstacles', () => {
+  let player: PlayerController;
+  let detach: () => void;
+
+  beforeEach(() => {
+    player = new PlayerController(new THREE.PerspectiveCamera(), BOUNDS);
+    detach = player.attach(document.createElement('canvas'));
+    return () => {
+      detach();
+      release('ArrowUp');
+    };
+  });
+
+  it('stops the player walking through the rocket', () => {
+    // The rocket used to be a hologram: the meshes were there but nothing
+    // stopped the player strolling out through the middle of the booster.
+    player.obstacles = [{ x: 0, z: 0, radius: 3.4, top: 60 }];
+    hold('ArrowUp');
+    simulate(player, 4); // more than enough to cross the bay
+    release('ArrowUp');
+    // Never inside the hull, no matter how long the player pushes.
+
+    const distance = Math.hypot(player.position.x, player.position.z);
+    expect(distance).toBeGreaterThanOrEqual(3.39);
+  });
+
+  it('lets the player walk over the obstacle once above it', () => {
+    // An obstacle only blocks up to its top. Standing on a platform above it,
+    // the player should pass over freely.
+    player.obstacles = [{ x: 0, z: 0, radius: 3.4, top: 5 }];
+    player.supportHeight = 8;
+    // Start just outside the obstacle so a short walk crosses it.
+    player.position.z = 4;
+    player.update(1 / 60);
+    expect(player.feetHeight).toBeCloseTo(8, 1);
+
+    hold('ArrowUp');
+    simulate(player, 1);
+    release('ArrowUp');
+
+    // Above the obstacle's top it is not in the way at all.
+    const distance = Math.hypot(player.position.x, player.position.z);
+    expect(distance).toBeLessThan(3.4);
+  });
+
+  it('does not trap the player when there is no obstacle', () => {
+    player.obstacles = [];
+    hold('ArrowUp');
+    simulate(player, 1);
+    release('ArrowUp');
+    expect(player.position.z).toBeLessThan(13);
+  });
+});

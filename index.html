@@ -32,6 +32,7 @@
             <div><kbd>E</kbd><span>Attach next stage</span></div>
             <div><kbd>Q</kbd><span>Remove top stage</span></div>
             <div><kbd>R</kbd><span>Reset stack</span></div>
+            <div><kbd>T</kbd><span>Ask for advice</span></div>
             <div><kbd>H</kbd><span>Controls, any time</span></div>
           </div>
           <button id="start-button">Enter the building</button>
@@ -117,10 +118,14 @@
         <!-- Payload choice, shown only at the payload slot -->
         <section id="picker" class="hidden" aria-label="Payload selection">
           <header>
-            <span class="panel-title">Select payload</span>
-            <span class="pill"><kbd>Tab</kbd> cycle</span>
+            <span class="panel-title">Compare payloads</span>
+            <span class="pill"><kbd>Tab</kbd> cycle &middot; <kbd>E</kbd> fit from gantry</span>
           </header>
           <div id="picker-options"></div>
+          <p class="picker-foot" id="picker-foot">
+            Contract needs 100 science. Heavier payloads return more and leave
+            less &Delta;v margin.
+          </p>
         </section>
 
         <!-- Next-action prompt -->
@@ -143,6 +148,9 @@
         <div id="hud-buttons">
           <button id="help-button" type="button" aria-expanded="false" aria-controls="help">
             <kbd>H</kbd> Controls
+          </button>
+          <button id="advice-button" type="button">
+            <kbd>T</kbd> Ask advice
           </button>
           <button id="voice-button" type="button" aria-pressed="true">
             <span aria-hidden="true">&#9679;</span> <span id="voice-label">Voice on</span>
@@ -180,13 +188,19 @@
               <dt><kbd>R</kbd></dt>
               <dd>Clear the stand and start over</dd>
               <dt><kbd>Tab</kbd></dt>
-              <dd>Cycle the payload choice at the payload slot</dd>
+              <dd>Compare payloads &mdash; cycles the selection, fits nothing</dd>
+              <dt><kbd>E</kbd></dt>
+              <dd>Fit the selected payload, from the top gantry platform</dd>
+              <dt><kbd>G</kbd></dt>
+              <dd>Swap an already-fitted payload for another</dd>
               <dt><kbd>F</kbd></dt>
               <dd>Roll out to the pad, once the contract is satisfied</dd>
               <dt><kbd>H</kbd></dt>
               <dd>Show or hide this panel</dd>
+              <dt><kbd>T</kbd></dt>
+              <dd>Ask the flight director for advice about your situation</dd>
               <dt><kbd>V</kbd></dt>
-              <dd>Mute or unmute the flight director</dd>
+              <dd>Mute or unmute her voice</dd>
             </dl>
 
             <h3>What you are looking at</h3>

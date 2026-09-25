@@ -111,6 +111,19 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
   position changed — `PlayerController.test.ts` has them.
+- **A ladder must suppress forward walking.** Holding up both climbed and
+  walked, carrying the player off the ladder's detection radius within about a
+  tenth of a second. It looked exactly like climbing being broken. The
+  controller now zeroes forward input while `onLadder` and latches the player
+  to the ladder's column; `PlayerController.test.ts` covers it.
+- **The scene only reports a ladder within 1.5 m of the player.** A test that
+  mounts a ladder further away creates a situation the game cannot produce, and
+  the latch will correctly drag the player to it. Mount at the player's own
+  position.
+- **Meshes are not collision.** The rocket was a pass-through hologram for
+  several commits: the geometry existed and nothing stopped the player walking
+  through a 300-tonne booster. Solid objects are registered as cylinders on
+  `PlayerController.obstacles`.
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops the keys the player
   is already holding. Clear on `window` `blur` instead.
@@ -182,6 +195,19 @@ hidden. `workzone.test.ts` pins that.
 **Roll-out.** Pressing `F` on a flight-ready stack ends the phase with a
 summary of what the build cost. It is gated on `analysis.canReachOrbit`, so the
 delta-v board is a gate rather than decoration.
+
+**The narrator is quiet by default, and that is a hard rule.** She volunteers
+two intro lines, a few words per fitted part, and urgent resource warnings.
+Nothing else. Playtesting killed the previous version: narrating every part,
+every removal and every payload the player tabbed past was exhausting and it
+talked over panels that convey the same thing faster. Before adding a spoken
+line, ask whether a panel already says it.
+
+**Advice is on request.** `game/advice.ts` picks a line from actual game state
+when the player presses `T`. Its rule is to name the trade-off, never the
+answer — `advice.test.ts` asserts that no advice string mentions a payload by
+name, because an assistant that says "fit the telescope" deletes the decision
+the phase exists to create.
 
 **The narrator.** `ui/Narrator.ts` speaks the flight director's lines through
 the Web Speech API and mirrors every one into the dialogue panel, so spoken and

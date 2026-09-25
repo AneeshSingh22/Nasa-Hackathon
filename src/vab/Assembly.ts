@@ -127,6 +127,55 @@ export class Assembly {
     return part;
   }
 
+  /**
+   * Swap a fitted part for another candidate of the same kind.
+   *
+   * Without this, changing your mind about the payload meant tearing down
+   * everything above it. Real programmes do swap payloads on the stand, and
+   * making the player rebuild from scratch punished the wrong thing.
+   *
+   * Returns the part that was removed, or null if the swap is not possible.
+   */
+  swapPart(index: number, replacementId: string): { removed: PartDefinition; fitted: PartDefinition } | null {
+    const existing = this.stack[index];
+    if (!existing) return null;
+
+    const replacement = PART_LIBRARY.find(
+      (p) => p.id === replacementId && p.kind === existing.kind,
+    );
+    if (!replacement || replacement.id === existing.id) return null;
+
+    // Rebuild the meshes from this slot up, since heights shift.
+    const above = this.stack.slice(index + 1);
+    for (let i = this.stack.length - 1; i >= index; i--) {
+      const part = this.stack[i];
+      if (!part) continue;
+      const mesh = this.meshes.get(part.id);
+      if (mesh) {
+        this.root.remove(mesh);
+        disposeGroup(mesh);
+        this.meshes.delete(part.id);
+      }
+    }
+    this.stack.length = index;
+
+    for (const part of [replacement, ...above]) {
+      const mesh = buildPartMesh(part, this.mats);
+      mesh.position.y = this.stackHeight();
+      this.root.add(mesh);
+      this.meshes.set(part.id, mesh);
+      this.stack.push(part);
+    }
+
+    if (replacement.kind === 'payload') this.selectedPayloadId = replacement.id;
+    return { removed: existing, fitted: replacement };
+  }
+
+  /** Index of the fitted part of a given kind, or -1. */
+  indexOfKind(kind: PartDefinition['kind']): number {
+    return this.stack.findIndex((p) => p.kind === kind);
+  }
+
   /** Remove the topmost part. */
   detachTop(): PartDefinition | null {
     const part = this.stack.pop();

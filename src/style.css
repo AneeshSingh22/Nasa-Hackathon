@@ -1182,3 +1182,22 @@ kbd {
   font-variant-numeric: tabular-nums;
   transition: opacity 0.2s ease;
 }
+
+/* Footnote under the payload picker, naming the trade the player is making
+   without telling them which option to take. */
+.picker-foot {
+  margin: 0;
+  padding: 8px 13px 10px;
+  border-top: 1px solid var(--line);
+  background: var(--panel-solid);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  line-height: 1.55;
+  color: var(--faint);
+}
+
+/* Margin column in the picker, so the cost of mass is visible while choosing
+   rather than only after fitting. */
+.pick dd.good {
+  color: var(--green);
+}

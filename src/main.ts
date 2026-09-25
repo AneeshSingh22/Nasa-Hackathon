@@ -18,6 +18,8 @@ import {
   GANTRY_WORK_HEIGHT,
 } from './game/workzone';
 import { CONTRACT_FIRST_ORBIT, evaluate } from './game/contract';
+import { adviseOn } from './game/advice';
+import { deltaV } from './physics/rocket';
 
 const contract = CONTRACT_FIRST_ORBIT;
 
@@ -216,8 +218,6 @@ function log(text: string, good = false): void {
 
 /** True once the player has dismissed the start overlay. */
 let started = false;
-/** The inspection-panel hint is spoken once, on first look. */
-let saidInspectionHint = false;
 /** The roll-out prompt is spoken once, when the stack first completes. */
 let saidRolloutPrompt = false;
 /** The payload-choice briefing is spoken once, when that slot opens. */
@@ -291,6 +291,30 @@ function updateAltitude(): void {
     : `FEET ${feet.toFixed(1)} m`;
 }
 
+/**
+ * Delta-v margin this payload would leave, if fitted to the current stack.
+ *
+ * Shown in the picker so the cost of mass is visible while choosing rather
+ * than only after the money has been spent.
+ */
+function projectedMargin(payload: PartDefinition): number {
+  const booster = PART_LIBRARY.find((p) => p.id === 'core-booster');
+  const upper = PART_LIBRARY.find((p) => p.id === 'upper-stage');
+  const fairing = PART_LIBRARY.find((p) => p.id === 'fairing');
+  if (!booster || !upper || !fairing) return 0;
+
+  const dead = fairing.dryMass + payload.dryMass;
+  const s1Wet =
+    dead + booster.dryMass + booster.propellantMass + upper.dryMass + upper.propellantMass;
+  const s2Wet = dead + upper.dryMass + upper.propellantMass;
+
+  const total =
+    deltaV(s1Wet, s1Wet - booster.propellantMass, booster.isp) +
+    deltaV(s2Wet, s2Wet - upper.propellantMass, upper.isp);
+
+  return total - contract.deltaVRequired;
+}
+
 /** Paint the contract requirement checklist. */
 function refreshContract(): void {
   if (el.contractBrief) el.contractBrief.textContent = contract.brief;
@@ -354,14 +378,20 @@ function refreshPicker(): void {
 
     const dl = document.createElement('dl');
     const science = option.science ?? 0;
+    const margin = projectedMargin(option);
     const rows: Array<[string, string, string]> = [
       ['Mass', `${(option.dryMass / 1000).toFixed(0)} t`, ''],
       [
         'Science',
         String(science),
-        science >= contract.minScience ? '' : 'fail',
+        science >= contract.minScience ? 'good' : 'fail',
       ],
       ['Cost', `$${option.cost}M`, option.cost > mission.status.budget ? 'fail' : ''],
+      [
+        'Δv margin',
+        `${margin >= 0 ? '+' : ''}${margin.toFixed(0)}`,
+        margin < 0 ? 'fail' : margin < 200 ? 'tight' : 'good',
+      ],
     ];
     for (const [term, value, cls] of rows) {
       const dt = document.createElement('dt');
@@ -464,12 +494,6 @@ function updateInspector(): void {
   }
 
   el.inspector.classList.remove('hidden');
-  // Point the panel out the first time the player looks at something, then
-  // never mention it again.
-  if (!saidInspectionHint) {
-    saidInspectionHint = true;
-    window.setTimeout(() => say(script.FIRST_INSPECTION), 1400);
-  }
   if (el.inspKind) el.inspKind.textContent = KIND_LABEL[part.kind];
   if (el.inspName) el.inspName.textContent = part.name;
   if (el.inspFact) el.inspFact.textContent = part.keyFact;
@@ -638,12 +662,13 @@ function attachNextPart(): void {
   refreshReadout();
 
   // When the stack completes, the director passes judgement on it.
-  // The payload slot is the first real decision, so it gets its own briefing.
+  // The payload slot is the first real decision, so it gets one short line.
+  // Everything beyond this is on request only.
   if (assembly.hasChoice() && !saidPayloadChoice) {
     saidPayloadChoice = true;
     window.setTimeout(() => {
       if (!mission.hasFailed) say(script.PAYLOAD_CHOICE);
-    }, 2200);
+    }, 1200);
   }
 
   if (assembly.isComplete()) {
@@ -689,6 +714,86 @@ function clearStand(): void {
   refreshReadout();
   if (mission.hasFailed) return;
   say(script.ON_CLEAR);
+}
+
+/**
+ * Swap the fitted payload for the currently-selected one.
+ *
+ * Costs the difference in price plus a day, rather than the full teardown a
+ * removal would. Changing your mind about the payload is a normal thing to do
+ * on a real stand.
+ */
+function swapPayload(): void {
+  if (mission.hasFailed || rolledOut) return;
+
+  const index = assembly.indexOfKind('payload');
+  if (index === -1) {
+    say('There is no payload fitted yet.');
+    return;
+  }
+  if (blockedByDistance('payload')) return;
+
+  const options = PART_LIBRARY.filter((p) => p.kind === 'payload');
+  const current = assembly.parts[index];
+  if (!current) return;
+
+  // Pick the next option along, so G alone cycles through swaps.
+  const at = options.findIndex((p) => p.id === current.id);
+  const next = options[(at + 1) % options.length];
+  if (!next) return;
+
+  const result = assembly.swapPart(index, next.id);
+  if (!result) return;
+
+  const difference = result.fitted.cost - result.removed.cost;
+  mission.penalise({ days: 1, confidence: 2, reason: 'payload swap' });
+  if (difference > 0) mission.fitPart(difference);
+  else mission.removePart(-difference * 2);
+
+  log(`SWAPPED  ${result.fitted.name}`, true);
+  refreshReadout();
+  if (!mission.hasFailed) {
+    say(`${result.fitted.name} fitted in place of the ${result.removed.name}.`);
+  }
+}
+
+/**
+ * Give advice about the situation the player is actually in.
+ *
+ * Bound to a key and a button, never volunteered. Points at the trade-off
+ * rather than naming the answer, so asking for help does not remove the
+ * decision.
+ */
+function requestAdvice(): void {
+  if (mission.hasFailed || rolledOut) return;
+
+  const nextKind = assembly.nextSlot();
+  const position = {
+    x: player.position.x,
+    z: player.position.z,
+    y: player.feetHeight,
+  };
+  const evaluation = contractStatus();
+  const analysis = assembly.analyze();
+  const status = mission.status;
+
+  const advice = adviseOn({
+    fittedCount: assembly.parts.length,
+    nextKind,
+    inPosition: nextKind ? canWorkOn(nextKind, position) : true,
+    onGantry: isOnGantry(position),
+    contractSatisfied: evaluation.satisfied,
+    failingChecks: evaluation.checks.filter((c) => !c.met).map((c) => c.label),
+    deltaVMargin: analysis.totalDeltaV - contract.deltaVRequired,
+    science: assembly.scienceValue(),
+    scienceRequired: contract.minScience,
+    budget: status.budget,
+    days: status.daysRemaining,
+    hasPayload: assembly.parts.some((p) => p.kind === 'payload'),
+  });
+
+  // Advice is always spoken if voice is on, and always written.
+  narrator.say(advice, 'urgent');
 }
 
 /** True once the vehicle has left the building, so actions stop. */
@@ -777,18 +882,15 @@ window.addEventListener('keydown', (e) => {
   if (e.code === 'KeyH' || e.code === 'Slash') toggleHelp();
   if (e.code === 'KeyV') narrator.toggle();
   if (e.code === 'KeyF') rollOut();
+  if (e.code === 'KeyG') swapPayload();
+  if (e.code === 'KeyT') requestAdvice();
   if (e.code === 'Tab') {
-    // Cycle the payload choice. Only meaningful at the payload slot, and the
-    // assembly refuses when there is nothing to choose between.
+    // Cycling is silent. Narrating every option was the single most annoying
+    // thing in the build: the player is reading a comparison table, not
+    // asking to be read to.
     e.preventDefault();
     const picked = assembly.cyclePayload(e.shiftKey ? -1 : 1);
-    if (picked) {
-      log(`SELECTED  ${picked.name}  $${picked.cost}M`);
-      say(
-        `${picked.name}. ${picked.science ?? 0} units of science, ${(picked.dryMass / 1000).toFixed(0)} tonnes, ${picked.cost} million.`,
-      );
-      refreshReadout();
-    }
+    if (picked) refreshReadout();
   }
 });
 
@@ -845,6 +947,13 @@ window.addEventListener('keydown', (e) => {
 
 el.voiceButton?.addEventListener('click', () => narrator.toggle());
 
+document.querySelector<HTMLButtonElement>('#advice-button')
+  ?.addEventListener('click', () => {
+    requestAdvice();
+    // Hand the cursor back so the player can keep playing straight away.
+    if (started && !player.isLocked) player.requestLock(canvas);
+  });
+
 // Hide the voice control entirely where speech synthesis is unavailable,
 // rather than offering a button that cannot do anything.
 if (!narrator.available) {
@@ -857,7 +966,6 @@ function restartMission(): void {
   removeLineIndex = 0;
   rolledOut = false;
   spokenIntro = false;
-  saidInspectionHint = false;
   saidRolloutPrompt = false;
   saidPayloadChoice = false;
   el.failure?.classList.add('hidden');
@@ -875,7 +983,6 @@ el.failRetry?.addEventListener('click', () => {
   mission.reset();
   removeLineIndex = 0;
   spokenIntro = false;
-  saidInspectionHint = false;
   el.failure?.classList.add('hidden');
   refreshReadout();
   refreshResources(mission.status);
@@ -919,8 +1026,16 @@ function frame(): void {
   // Tell the controller what it is standing on before it moves, so climbing
   // and falling use this frame's geometry.
   const pos = player.position;
-  player.onLadder = env.isLadderAt(pos.x, pos.z);
+  const ladder = env.ladderAt(pos.x, pos.z);
+  player.onLadder = ladder !== null;
+  player.ladderX = ladder?.x ?? null;
+  player.ladderTop = ladder?.top ?? Infinity;
   player.supportHeight = env.supportHeightAt(pos.x, pos.z, player.feetHeight);
+
+  // The rocket is solid, and it grows as it is built.
+  player.obstacles = assembly.parts.length > 0
+    ? [{ x: 0, z: 0, radius: 3.4, top: assembly.topWorldY() }]
+    : [];
 
   player.update(dt);
   env.update(elapsed);

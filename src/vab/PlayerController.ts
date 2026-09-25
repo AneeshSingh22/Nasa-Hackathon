@@ -55,6 +55,18 @@ export class PlayerController {
   private groundHeight = 0;
   /** Set by the scene each frame: can the player climb where they stand? */
   onLadder = false;
+  /** X of the ladder the player is on, so climbing stays latched to it. */
+  ladderX: number | null = null;
+  /** Top of the ladder, so the player cannot climb into the roof. */
+  ladderTop = Infinity;
+  /**
+   * Solid obstacles the player cannot walk through, as vertical cylinders.
+   *
+   * The rocket was a pass-through hologram: the meshes existed but nothing
+   * stopped the player, so you could stroll out through the middle of a
+   * 300-tonne booster.
+   */
+  obstacles: Array<{ x: number; z: number; radius: number; top: number }> = [];
   /** Set by the scene each frame: the surface height under the player. */
   supportHeight = 0;
   /** True while falling, so the HUD and narrator can react. */
@@ -200,6 +212,14 @@ export class PlayerController {
     if (this.held(PlayerController.RIGHT)) strafe += 1;
     if (this.held(PlayerController.LEFT)) strafe -= 1;
 
+    // On a ladder the up and down keys climb, so they must not also walk:
+    // holding UP used to move the player forward off the ladder's detection
+    // radius within a fraction of a second, which read as climbing being
+    // broken after about a tenth of a second.
+    if (this.onLadder) {
+      forward = 0;
+    }
+
     const wish = new THREE.Vector3(strafe, 0, -forward);
     if (wish.lengthSq() > 0) {
       wish.normalize().applyAxisAngle(new THREE.Vector3(0, 1, 0), this.yaw);
@@ -227,16 +247,30 @@ export class PlayerController {
     const feet = p.y - EYE_HEIGHT;
 
     if (this.onLadder) {
-      // On a ladder the up and down keys climb instead of walking.
       let climb = 0;
       if (this.held(PlayerController.FORWARD)) climb += 1;
       if (this.held(PlayerController.BACK)) climb -= 1;
       this.verticalSpeed = 0;
       this.falling = false;
+
+      // Hold the player on the ladder column. Small strafe drift would
+      // otherwise carry them out of the detection radius mid-climb and drop
+      // them.
+      if (this.ladderX !== null) {
+        p.x += (this.ladderX - p.x) * Math.min(1, 12 * dt);
+        p.z += (0 - p.z) * Math.min(1, 12 * dt);
+      }
+
       p.y += climb * CLIMB_SPEED * dt;
-      // A ladder never lets you go below the floor it starts from.
-      if (p.y - EYE_HEIGHT < this.groundHeight) {
-        p.y = this.groundHeight + EYE_HEIGHT;
+
+      // Never descend below the surface the ladder starts from.
+      const floorHere = this.groundHeight;
+      if (p.y - EYE_HEIGHT < floorHere) {
+        p.y = floorHere + EYE_HEIGHT;
+      }
+      // Do not climb past the top of the ladder.
+      if (p.y - EYE_HEIGHT > this.ladderTop) {
+        p.y = this.ladderTop + EYE_HEIGHT;
       }
     } else if (feet > this.groundHeight + 0.05) {
       // Unsupported: fall.
