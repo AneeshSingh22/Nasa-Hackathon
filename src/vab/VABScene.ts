@@ -53,6 +53,14 @@ export interface VABEnvironment {
   elevator: ElevatorRig;
   /** Redraw the blueprint board after a part is fitted. */
   refreshBlueprint: (state: BlueprintState) => void;
+  /**
+   * Redraw a station's placard for a specific part.
+   *
+   * The sign shows the selected variant, so Tab changes the drawing on the
+   * bench as well as the panel — otherwise the three boosters still look the
+   * same where the player is standing.
+   */
+  refreshPlacard: (stationId: string, partId: string) => void;
 }
 
 export function createVABScene(): VABEnvironment {
@@ -286,6 +294,11 @@ export function createVABScene(): VABEnvironment {
   // Each component sits on its own bench with a placard, so choosing a payload
   // means walking to a different station rather than cycling a menu.
   const stationObstacles: Array<{ x: number; z: number; radius: number; top: number }> = [];
+  /** Placard faces, so a station's sign can be redrawn on selection. */
+  const placardFaces = new Map<
+    string,
+    { mesh: THREE.Mesh; kind: string }
+  >();
 
   for (const station of STATIONS) {
     const bench = new THREE.Group();
@@ -365,6 +378,7 @@ export function createVABScene(): VABEnvironment {
     bench.add(stripe);
 
     scene.add(bench);
+    placardFaces.set(station.id, { mesh: placard, kind: station.kind });
 
     // Painted step number on the floor in front of the bench, which is how a
     // real facility marks out work areas.
@@ -415,9 +429,9 @@ export function createVABScene(): VABEnvironment {
   scene.add(blueprint.group);
 
   // ---- wayfinding sign ----
-  // A hanging sign by the entrance pointing at the elevator. The player spawns
-  // at +Z and the elevator is off to the right, so without a sign there is
-  // nothing telling them the route to the high work platform exists.
+  // Mounted on the shaft above the car door. The player spawns at +Z and the
+  // elevator is off to the right, so without signage there is nothing telling
+  // them the route to the high work platform exists.
   const signCanvas = document.createElement('canvas');
   signCanvas.width = 1024;
   signCanvas.height = 256;
@@ -453,32 +467,25 @@ export function createVABScene(): VABEnvironment {
 
   const signTexture = new THREE.CanvasTexture(signCanvas);
   signTexture.colorSpace = THREE.SRGBColorSpace;
-  const wayfind = new THREE.Mesh(
-    new THREE.PlaneGeometry(9, 2.25),
-    new THREE.MeshBasicMaterial({ map: signTexture }),
-  );
-  wayfind.position.set(6, 7.2, 14.5);
-  wayfind.rotation.y = Math.PI;
-  scene.add(wayfind);
 
-  // Hanging rods up to the roof trusses.
-  for (const rx of [-3.6, 3.6]) {
-    const rod = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.05, 0.05, 6, 6),
-      steel,
-    );
-    rod.position.set(6 + rx, 11.3, 14.5);
-    scene.add(rod);
-  }
-
-  // A second sign at the shaft itself, so the door is unmistakable.
+  // One sign, bolted to the shaft above the car door. An earlier version also
+  // hung a second one from the roof out over the floor, which read as a bug
+  // rather than as signage.
   const doorSign = new THREE.Mesh(
-    new THREE.PlaneGeometry(4.2, 1.1),
+    new THREE.PlaneGeometry(5.4, 1.35),
     new THREE.MeshBasicMaterial({ map: signTexture }),
   );
-  doorSign.position.set(12.5, 4.2, 3.0);
+  doorSign.position.set(12.5, 4.6, 2.35);
   doorSign.rotation.y = Math.PI;
   scene.add(doorSign);
+
+  // Backing plate, so it is mounted rather than floating.
+  const signPlate = new THREE.Mesh(
+    new THREE.BoxGeometry(5.7, 1.65, 0.12),
+    steel,
+  );
+  signPlate.position.set(12.5, 4.6, 2.45);
+  scene.add(signPlate);
 
   // ---- laboratory fittings ----
   // None of this is interactive. It exists because an assembly building with
@@ -802,6 +809,30 @@ export function createVABScene(): VABEnvironment {
     staticObstacles: structureObstacles,
     elevator,
     refreshBlueprint: blueprint.refresh,
+
+    refreshPlacard(stationId: string, partId: string) {
+      const entry = placardFaces.get(stationId);
+      if (!entry) return;
+      const station = STATIONS.find((st) => st.id === stationId);
+      if (!station) return;
+
+      const texture = placardForStation(
+        station.kind,
+        station.label,
+        station.bay,
+        station.step,
+        partId,
+      );
+      if (!texture) return;
+
+      // Index 4 is the front face of the box, which carries the sign.
+      const materials = entry.mesh.material as THREE.Material[];
+      const front = materials[4] as THREE.MeshStandardMaterial | undefined;
+      if (front) {
+        front.map = texture;
+        front.needsUpdate = true;
+      }
+    },
 
     isAtPlatformLevel(feetY: number) {
       return platformHeights.some((h) => Math.abs(h - feetY) < 0.6);

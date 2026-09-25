@@ -1,4 +1,12 @@
 import * as THREE from 'three';
+import {
+  buildSolidBooster,
+  buildExtendedBooster,
+  buildKeroloxUpper,
+  buildCommsProbe,
+  buildCrewCapsule,
+  buildScienceLab,
+} from './variants';
 
 /**
  * Procedural geometry for the rocket parts.
@@ -248,19 +256,42 @@ export function buildPartMesh(part: PartDefinition, mats: Materials): THREE.Grou
   const group = new THREE.Group();
   group.name = part.id;
 
-  switch (part.kind) {
-    case 'booster':
+  // Dispatch on the specific part, not merely its kind. All three boosters
+  // used one builder and all four payloads another, so the options were
+  // visually identical — which defeats the point of offering a choice.
+  switch (part.id) {
+    case 'core-booster':
       buildBooster(group, part, mats);
       break;
-    case 'upper':
+    case 'solid-booster':
+      buildSolidBooster(group, part, mats);
+      break;
+    case 'extended-booster':
+      buildExtendedBooster(group, part, mats);
+      break;
+    case 'upper-stage':
       buildUpperStage(group, part, mats);
       break;
-    case 'payload':
+    case 'kerolox-upper':
+      buildKeroloxUpper(group, part, mats);
+      break;
+    case 'comms-probe':
+      buildCommsProbe(group, part, mats);
+      break;
+    case 'telescope':
       buildTelescope(group, part, mats);
+      break;
+    case 'crew-capsule':
+      buildCrewCapsule(group, part, mats);
+      break;
+    case 'science-lab':
+      buildScienceLab(group, part, mats);
       break;
     case 'fairing':
       buildFairing(group, part, mats);
       break;
+    default:
+      buildBooster(group, part, mats);
   }
 
   return group;

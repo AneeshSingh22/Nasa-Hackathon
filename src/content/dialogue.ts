@@ -37,13 +37,12 @@ export const FIRST_INSPECTION = '';
  * nagging.
  */
 export const ON_FIT: Record<string, string> = {
-  'core-booster': 'Core booster is on the stand.',
-  'upper-stage': 'Upper stage mated.',
-  'comms-probe': 'Relay fitted. Check the science requirement.',
-  telescope: 'Telescope fitted.',
-  'crew-capsule': 'Capsule mated. Three crew aboard.',
-  'science-lab': 'Laboratory fitted. Margin is thin.',
-  fairing: 'Fairing closed out. Check the contract.',
+  // Only lines that tell the player something they cannot read off the HUD.
+  // "Core booster is on the stand" is commentary; the blueprint already ticks
+  // green and the analysis board already updates.
+  'comms-probe': 'That one does not meet the science requirement. Check the contract.',
+  'science-lab': 'That leaves you almost no delta-v margin. It will reach orbit only if you fly it cleanly.',
+  'crew-capsule': 'Three people will be sitting in that. Worth flying carefully.',
 };
 
 /** Said when the completed stack can reach orbit. */

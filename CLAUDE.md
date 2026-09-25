@@ -112,6 +112,16 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
   position changed — `PlayerController.test.ts` has them.
+- **Never narrate the player's own actions.** Elena crept back into
+  commentary — "Going up", "Back on the bench", "Core booster is on the stand" —
+  every one of which the HUD already showed. She now speaks only for errors,
+  refusals, resource warnings, contract verdicts, and on request via `T`. Before
+  adding a spoken line, check whether a panel or the log already says it.
+- **Variants must differ in the mesh, not only in the numbers.** All three
+  boosters shared one builder and all four payloads another, so the options were
+  visually identical and the choice looked pointless. `vab/variants.ts` gives
+  each its own silhouette, and `tests/variants.test.ts` fingerprints the
+  geometry so a future part added without a builder fails the suite.
 - **Two systems that must agree need a test that drives both.** The elevator
   stop and the work zone's height window disagreed twice. The first time the
   elevator was fixed at 45.6 m while the payload attached at 57.1, so the

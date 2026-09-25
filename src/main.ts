@@ -113,7 +113,7 @@ player.onFall = (distance) => {
   // the elevator was a formality.
   if (distance < 5) {
     log(`STUMBLE  ${distance.toFixed(0)} m drop`);
-    say('Watch your footing.');
+    // A short drop needs no comment; the log line is enough.
     return;
   }
 
@@ -495,6 +495,15 @@ function cycleSelection(direction: 1 | -1): void {
 
   selectedForSlot.set(slot, next.id);
   if (slot === 'payload') assembly.selectPayload(next.id);
+
+  // Redraw the sign on the bench so the drawing follows the selection. Without
+  // this, Tab changed the panel but the three boosters still looked identical
+  // where the player was standing.
+  const here = stationNear(player.position.x, player.position.z);
+  if (here && here.kind === slot) {
+    env.refreshPlacard(here.id, next.id);
+  }
+
   refreshReadout();
 }
 
@@ -884,7 +893,9 @@ function detachTopPart(): void {
   log(`REMOVED  ${part.name}  +$${(part.cost * 0.5).toFixed(0)}M`);
   refreshReadout();
   if (mission.hasFailed) return;
-  say(script.rotate(script.ON_REMOVE, removeLineIndex++));
+  // Removals are logged and the resource bars move visibly. Only speak up if
+  // the teardown pushed a resource into a warning band, which Mission handles.
+  void removeLineIndex;
 }
 
 function clearStand(): void {
@@ -941,7 +952,7 @@ function swapPayload(): void {
   log(`SWAPPED  ${result.fitted.name}`, true);
   refreshReadout();
   if (!mission.hasFailed) {
-    say(`${result.fitted.name} fitted in place of the ${result.removed.name}.`);
+    // The blueprint and the analysis board both update; no narration needed.
   }
 }
 
@@ -962,31 +973,25 @@ function tryElevator(): boolean {
   if (!aboard && !atLanding) return false;
 
   // Boarding is only safe when the car is actually at your level.
+  // Nothing here is spoken. The prompt already says what the button does and
+  // the car visibly moves; narrating it was the flight director commenting on
+  // the player's own actions, which is what made her exhausting.
   if (atLanding && !env.elevator.isLevelWith(player.feetHeight)) {
     const result = env.elevator.press(player.feetHeight, false);
-    if (result === 'busy') {
-      say('The car is already moving. Wait for it.');
-    } else {
-      log('ELEVATOR  called');
-      say('Calling the car. Stand clear of the doors.');
-    }
+    log(result === 'busy' ? 'ELEVATOR  in transit' : 'ELEVATOR  called');
     return true;
   }
 
   if (!aboard) {
-    // Car is here and open — tell the player to step in rather than silently
-    // doing nothing.
-    say('Car is here. Step inside, then press E again.');
+    // Car is here and open. The prompt tells them to step in.
     return true;
   }
 
   const result = env.elevator.press(player.feetHeight, true);
-  if (result === 'busy') {
-    say('Already moving.');
-    return true;
-  }
-  log(env.elevator.state === 'rising' ? 'ELEVATOR  ascending' : 'ELEVATOR  descending');
-  say(env.elevator.state === 'rising' ? 'Going up.' : 'Going down.');
+  if (result === 'busy') return true;
+  log(
+    env.elevator.state === 'rising' ? 'ELEVATOR  ascending' : 'ELEVATOR  descending',
+  );
   return true;
 }
 
@@ -1050,7 +1055,10 @@ function placeCarried(partDef: PartDefinition): void {
   if (!fitted) return;
 
   log(`FITTED  ${fitted.name}  −$${fitted.cost}M`, true);
-  say(script.ON_FIT[fitted.id] ?? `${fitted.name} fitted.`);
+  // Only the lines that teach something are spoken. A bare "X fitted" is
+  // commentary the HUD already provides.
+  const line = script.ON_FIT[fitted.id];
+  if (line) say(line);
   refreshReadout();
   afterFit();
 }
@@ -1152,7 +1160,8 @@ function pickUp(station: StationDefinition): void {
 
   carried = { partId: partDef.id, mass, stationId: station.id };
   log(`STOWED  ${partDef.name}  ${(mass / 1000).toFixed(1)} t`);
-  say(`${partDef.name} stowed. Take it to the stand.`);
+  // The backpack panel shows what was picked up and where it goes, so this
+  // needs no narration.
 }
 
 /**
@@ -1226,7 +1235,7 @@ function startCraneLift(part: PartDefinition, fromX: number, fromZ: number): voi
   };
 
   log(`CRANE  lifting ${part.name}`);
-  say(`Crane has the ${part.name}. Stand clear.`);
+  // The crane lift is six seconds of visible motion. It speaks for itself.
 }
 
 /** Advance the crane, and fit the part when it touches down. */
@@ -1284,7 +1293,8 @@ function updateCrane(dt: number): void {
     const fitted = assembly.attachNextSpecific(part.id);
     if (fitted) {
       log(`FITTED  ${fitted.name}  −$${fitted.cost}M`, true);
-      say(script.ON_FIT[fitted.id] ?? `${fitted.name} fitted.`);
+      const craneLine = script.ON_FIT[fitted.id];
+      if (craneLine) say(craneLine);
       refreshReadout();
       afterFit();
     }
@@ -1297,7 +1307,7 @@ function putBack(): void {
   const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
   releaseCarried();
   log(`RETURNED  ${partDef?.name ?? 'part'}`);
-  say('Back on the bench.');
+  // Logged, not spoken.
 }
 
 function releaseCarried(): void {

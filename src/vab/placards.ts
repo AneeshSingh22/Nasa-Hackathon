@@ -64,7 +64,220 @@ export function drawPictogram(
 
   const cx = w / 2;
 
-  if (part.kind === 'booster' || part.kind === 'upper') {
+  if (part.id === 'solid-booster') {
+    // Segmented casing and one big nozzle: a solid motor, not a liquid core.
+    const bodyW = w * 0.4;
+    const top = h * 0.1;
+    const bodyH = h * 0.66;
+    ctx.fillStyle = '#eef2f7';
+    ctx.beginPath();
+    ctx.rect(cx - bodyW / 2, top, bodyW, bodyH);
+    ctx.fill();
+    ctx.stroke();
+
+    // Segment joints.
+    for (let i = 1; i < 5; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx - bodyW / 2, top + (bodyH / 5) * i);
+      ctx.lineTo(cx + bodyW / 2, top + (bodyH / 5) * i);
+      ctx.stroke();
+    }
+
+    // Nose cap.
+    ctx.fillStyle = accent;
+    ctx.beginPath();
+    ctx.moveTo(cx, top - h * 0.08);
+    ctx.lineTo(cx - bodyW / 2, top);
+    ctx.lineTo(cx + bodyW / 2, top);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Single large nozzle.
+    ctx.fillStyle = '#d3dae4';
+    ctx.beginPath();
+    ctx.moveTo(cx - bodyW * 0.3, top + bodyH);
+    ctx.lineTo(cx - bodyW * 0.62, h * 0.94);
+    ctx.lineTo(cx + bodyW * 0.62, h * 0.94);
+    ctx.lineTo(cx + bodyW * 0.3, top + bodyH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (part.id === 'extended-booster') {
+    // Stretched core, flared base, four engines.
+    const bodyW = w * 0.46;
+    const top = h * 0.06;
+    const bodyH = h * 0.72;
+    ctx.fillStyle = '#eef2f7';
+    ctx.beginPath();
+    ctx.moveTo(cx - bodyW / 2, top);
+    ctx.lineTo(cx - bodyW * 0.55, top + bodyH);
+    ctx.lineTo(cx + bodyW * 0.55, top + bodyH);
+    ctx.lineTo(cx + bodyW / 2, top);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Two insulation bands, marking the extra tank sections.
+    ctx.fillStyle = '#e8c96a';
+    for (const frac of [0.3, 0.56]) {
+      ctx.beginPath();
+      ctx.rect(cx - bodyW / 2, top + bodyH * frac, bodyW, h * 0.045);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Four engines.
+    ctx.fillStyle = '#d3dae4';
+    for (let i = 0; i < 4; i++) {
+      const dx = (i - 1.5) * (bodyW / 4);
+      ctx.beginPath();
+      ctx.moveTo(cx + dx - bodyW * 0.1, top + bodyH);
+      ctx.lineTo(cx + dx - bodyW * 0.14, h * 0.94);
+      ctx.lineTo(cx + dx + bodyW * 0.14, h * 0.94);
+      ctx.lineTo(cx + dx + bodyW * 0.1, top + bodyH);
+      ctx.closePath();
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else if (part.id === 'kerolox-upper') {
+    // Bare ribbed tank, short nozzle, no insulation blanket.
+    const bodyW = w * 0.4;
+    const top = h * 0.16;
+    const bodyH = h * 0.56;
+    ctx.fillStyle = '#eef2f7';
+    ctx.beginPath();
+    ctx.rect(cx - bodyW / 2, top, bodyW, bodyH);
+    ctx.fill();
+    ctx.stroke();
+
+    for (let i = 1; i < 4; i++) {
+      ctx.beginPath();
+      ctx.moveTo(cx - bodyW / 2, top + (bodyH / 4) * i);
+      ctx.lineTo(cx + bodyW / 2, top + (bodyH / 4) * i);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = '#d3dae4';
+    ctx.beginPath();
+    ctx.moveTo(cx - bodyW * 0.22, top + bodyH);
+    ctx.lineTo(cx - bodyW * 0.4, h * 0.88);
+    ctx.lineTo(cx + bodyW * 0.4, h * 0.88);
+    ctx.lineTo(cx + bodyW * 0.22, top + bodyH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+  } else if (part.id === 'comms-probe') {
+    // Small bus dominated by a dish.
+    const busW = w * 0.26;
+    const top = h * 0.44;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.rect(cx - busW / 2, top, busW, h * 0.34);
+    ctx.fill();
+    ctx.stroke();
+
+    // Big dish above.
+    ctx.beginPath();
+    ctx.arc(cx, top, w * 0.2, Math.PI, 0);
+    ctx.fillStyle = '#eef2f7';
+    ctx.fill();
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(cx, top - w * 0.2);
+    ctx.lineTo(cx, top);
+    ctx.stroke();
+
+    // Small stowed arrays.
+    ctx.fillStyle = '#2c3f6b';
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.rect(
+        side < 0 ? cx - busW / 2 - w * 0.06 : cx + busW / 2,
+        top + h * 0.06,
+        w * 0.06,
+        h * 0.2,
+      );
+      ctx.fill();
+      ctx.stroke();
+    }
+  } else if (part.id === 'crew-capsule') {
+    // Blunt cone with a heat shield and a docking ring.
+    const topW = w * 0.2;
+    const baseW = w * 0.38;
+    const top = h * 0.3;
+    const bodyH = h * 0.36;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.moveTo(cx - topW / 2, top);
+    ctx.lineTo(cx - baseW / 2, top + bodyH);
+    ctx.lineTo(cx + baseW / 2, top + bodyH);
+    ctx.lineTo(cx + topW / 2, top);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Heat shield.
+    ctx.fillStyle = '#5a6472';
+    ctx.beginPath();
+    ctx.moveTo(cx - baseW / 2, top + bodyH);
+    ctx.quadraticCurveTo(cx, top + bodyH + h * 0.12, cx + baseW / 2, top + bodyH);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    // Docking ring.
+    ctx.beginPath();
+    ctx.ellipse(cx, top, topW * 0.55, h * 0.022, 0, 0, Math.PI * 2);
+    ctx.stroke();
+
+    // Windows.
+    ctx.fillStyle = accent;
+    for (const dx of [-0.09, 0.09]) {
+      ctx.beginPath();
+      ctx.arc(cx + w * dx, top + bodyH * 0.42, w * 0.022, 0, Math.PI * 2);
+      ctx.fill();
+    }
+  } else if (part.id === 'science-lab') {
+    // Long pressurised module with big arrays.
+    const modW = w * 0.3;
+    const top = h * 0.34;
+    const bodyH = h * 0.3;
+    ctx.fillStyle = '#e2e8f0';
+    ctx.beginPath();
+    ctx.rect(cx - modW / 2, top, modW, bodyH);
+    ctx.fill();
+    ctx.stroke();
+
+    // End domes.
+    for (const [y, start, end] of [
+      [top, Math.PI, 0],
+      [top + bodyH, 0, Math.PI],
+    ] as Array<[number, number, number]>) {
+      ctx.beginPath();
+      ctx.arc(cx, y, modW / 2, start, end);
+      ctx.fill();
+      ctx.stroke();
+    }
+
+    // Large arrays, the visual signature of the power-hungry payload.
+    ctx.fillStyle = '#2c3f6b';
+    for (const side of [-1, 1]) {
+      ctx.beginPath();
+      ctx.rect(
+        side < 0 ? cx - modW / 2 - w * 0.26 : cx + modW / 2 + w * 0.06,
+        top + bodyH * 0.16,
+        w * 0.2,
+        bodyH * 0.6,
+      );
+      ctx.fill();
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + side * (modW / 2), top + bodyH * 0.46);
+      ctx.lineTo(cx + side * (modW / 2 + w * 0.06), top + bodyH * 0.46);
+      ctx.stroke();
+    }
+  } else if (part.kind === 'booster' || part.kind === 'upper') {
     // Body.
     const bodyW = w * 0.42;
     const bodyH = h * 0.62;
@@ -311,9 +524,11 @@ export function placardForStation(
   label: string,
   bay: 'stages' | 'payloads' | 'structure',
   step: number,
+  selectedId?: string,
 ): THREE.CanvasTexture | null {
   const options = PART_LIBRARY.filter((p) => p.kind === kind);
-  const exemplar = options[0];
+  // Draw the selected variant, so the sign on the bench follows Tab.
+  const exemplar = options.find((p) => p.id === selectedId) ?? options[0];
   if (!exemplar) return null;
 
   const canvas = document.createElement('canvas');
@@ -358,9 +573,18 @@ export function placardForStation(
     232,
   );
 
+  ctx.fillStyle = INK;
+  ctx.font = '600 34px Arial, Helvetica, sans-serif';
+  ctx.fillText(exemplar.name, 300, 292);
+
   ctx.fillStyle = DIM;
-  ctx.font = '500 30px "Courier New", monospace';
-  ctx.fillText('Press E to collect the selected part', 300, 288);
+  ctx.font = '500 26px "Courier New", monospace';
+  const exMass = (exemplar.dryMass + exemplar.propellantMass) / 1000;
+  ctx.fillText(
+    `${exMass.toFixed(1)} t  ·  $${exemplar.cost}M  ·  press E to collect`,
+    300,
+    336,
+  );
 
   // Big diagram of this section on the right.
   const boxX = TEX_WIDTH - 420;
