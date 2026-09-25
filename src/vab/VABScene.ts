@@ -1,6 +1,8 @@
 import * as THREE from 'three';
 import { createMaterials, type Materials } from './parts';
 import { STATIONS } from './stations';
+import { placardFor } from './placards';
+import { createElevator, type ElevatorRig } from './Elevator';
 
 /**
  * The Vehicle Assembly Building.
@@ -28,13 +30,6 @@ export interface VABEnvironment {
    * floating, and to fall when the player walks off one.
    */
   supportHeightAt: (x: number, z: number, feetY: number) => number;
-  /**
-   * The ladder at this position, or null.
-   *
-   * Returns the column's x and top so the controller can latch the player to
-   * it while climbing rather than letting them drift off.
-   */
-  ladderAt: (x: number, z: number) => { x: number; top: number } | null;
   /** True when this height is level with a platform the player can step onto. */
   isAtPlatformLevel: (feetY: number) => boolean;
   /**
@@ -44,25 +39,27 @@ export interface VABEnvironment {
    * itself is added by the caller, since it grows as it is built.
    */
   staticObstacles: Array<{ x: number; z: number; radius: number; top: number }>;
+  /** The service elevator, which the caller drives and rides. */
+  elevator: ElevatorRig;
 }
 
 export function createVABScene(): VABEnvironment {
   const scene = new THREE.Scene();
   // A real high bay is painted white and lit hard. The first version was a
   // dark warehouse, which looked atmospheric and read as unfinished.
-  scene.background = new THREE.Color(0x1b2434);
-  scene.fog = new THREE.Fog(0x1b2434, 80, 210);
+  scene.background = new THREE.Color(0x141c29);
+  scene.fog = new THREE.Fog(0x18212f, 70, 190);
 
   const mats = createMaterials();
 
   const concrete = new THREE.MeshStandardMaterial({
-    color: 0x8d949f,
-    roughness: 0.86,
+    color: 0x6f7885,
+    roughness: 0.88,
     metalness: 0.02,
   });
   const wallMat = new THREE.MeshStandardMaterial({
-    color: 0xd6dae0,
-    roughness: 0.76,
+    color: 0xa8b0bd,
+    roughness: 0.8,
     metalness: 0.04,
   });
   /** Painted floor, for the bay markings. */
@@ -207,29 +204,6 @@ export function createVABScene(): VABEnvironment {
       }
     }
   }
-  // Ladder up the outboard side of the gantry. The payload is fitted from the
-  // top platform, so this is the route the player has to take.
-  // Inside the platform footprint (7.2 +/- 3.5) so a climber lands on one.
-  const ladderX = 10.4;
-  const ladderTop = 47.5;
-  for (const side of [-0.42, 0.42]) {
-    const rail = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.07, 0.07, ladderTop, 8),
-      paint,
-    );
-    rail.position.set(ladderX, ladderTop / 2, side);
-    gantry.add(rail);
-  }
-  for (let y = 0.4; y < ladderTop; y += 0.42) {
-    const rung = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.035, 0.035, 0.9, 6),
-      paint,
-    );
-    rung.rotation.x = Math.PI / 2;
-    rung.position.set(ladderX, y, 0);
-    gantry.add(rung);
-  }
-
   // Gantry legs.
   for (const dz of [-2, 2]) {
     const leg = new THREE.Mesh(
@@ -294,12 +268,26 @@ export function createVABScene(): VABEnvironment {
       }
     }
 
-    // Angled placard at the back of the bench, facing the room.
-    const placard = new THREE.Mesh(new THREE.BoxGeometry(4.2, 1.5, 0.08), placardMat);
-    placard.position.set(0, 1.85, -1.1);
-    placard.rotation.x = -0.22;
+    // Angled placard carrying the part's name, a schematic and its numbers.
+    // Blank white boards left the bay unreadable: identical grey benches with
+    // no way to tell which held what without walking up to every one.
+    const texture = placardFor(station.partId, station.label, station.bay);
+    const faceMat = texture
+      ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.82, metalness: 0.0 })
+      : placardMat;
+
+    const placard = new THREE.Mesh(new THREE.BoxGeometry(4.2, 2.1, 0.08), [
+      placardMat, placardMat, placardMat, placardMat, faceMat, placardMat,
+    ]);
+    placard.position.set(0, 2.05, -0.95);
+    placard.rotation.x = -0.26;
     placard.castShadow = true;
     bench.add(placard);
+
+    // A small stand light over the sign, so it is legible from a distance.
+    const signLight = new THREE.PointLight(0xfff6e6, 3.4, 9, 2);
+    signLight.position.set(0, 3.3, 0.6);
+    bench.add(signLight);
 
     // Coloured stripe along the front edge, keyed to the bay, so the three
     // groups of stations read as groups from across the room.
@@ -323,6 +311,200 @@ export function createVABScene(): VABEnvironment {
     stationObstacles.push({ x: station.x, z: station.z, radius: 2.6, top: 1.1 });
   }
 
+  // ---- service elevator ----
+  // Replaces the gantry ladder, which could not be made to work: climbing
+  // fought walking, the latch fought stepping off, and arriving at the top
+  // holding a part was a dead end.
+  const elevator = createElevator();
+  scene.add(elevator.group);
+
+  // ---- laboratory fittings ----
+  // None of this is interactive. It exists because an assembly building with
+  // nothing but benches in it reads as an empty grey box, and a real facility
+  // is full of equipment, signage and clutter.
+  const decorMat = new THREE.MeshStandardMaterial({
+    color: 0x7f8794,
+    metalness: 0.45,
+    roughness: 0.55,
+  });
+  const screenMat = new THREE.MeshStandardMaterial({
+    color: 0x0e2233,
+    emissive: 0x1d5f86,
+    emissiveIntensity: 0.9,
+    roughness: 0.3,
+  });
+  const crateMat = new THREE.MeshStandardMaterial({
+    color: 0x3f4a58,
+    metalness: 0.2,
+    roughness: 0.82,
+  });
+  const cabinetMat = new THREE.MeshStandardMaterial({
+    color: 0xb9c0cb,
+    metalness: 0.3,
+    roughness: 0.62,
+  });
+
+  // A bank of mission-control consoles along the front wall, facing the
+  // vehicle, each with a lit screen.
+  for (let i = 0; i < 6; i++) {
+    const consoleGroup = new THREE.Group();
+    const x = -13 + i * 5.2;
+
+    const desk = new THREE.Mesh(new THREE.BoxGeometry(4.2, 0.12, 1.8), decorMat);
+    desk.position.y = 0.85;
+    desk.castShadow = true;
+    consoleGroup.add(desk);
+
+    for (const lx of [-1.8, 1.8]) {
+      const leg = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.85, 1.6), decorMat);
+      leg.position.set(lx, 0.425, 0);
+      consoleGroup.add(leg);
+    }
+
+    // Two monitors per station, angled toward the operator.
+    for (const mx of [-1.0, 1.0]) {
+      const monitor = new THREE.Mesh(new THREE.BoxGeometry(1.7, 1.0, 0.07), screenMat);
+      monitor.position.set(mx, 1.52, -0.45);
+      monitor.rotation.x = 0.16;
+      consoleGroup.add(monitor);
+
+      const stalk = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.05, 0.05, 0.35, 8),
+        decorMat,
+      );
+      stalk.position.set(mx, 1.08, -0.45);
+      consoleGroup.add(stalk);
+    }
+
+    // Operator chair, so the consoles read as staffed.
+    const seat = new THREE.Mesh(new THREE.CylinderGeometry(0.38, 0.34, 0.12, 14), crateMat);
+    seat.position.set(0, 0.52, 1.5);
+    consoleGroup.add(seat);
+    const back = new THREE.Mesh(new THREE.BoxGeometry(0.72, 0.62, 0.1), crateMat);
+    back.position.set(0, 0.86, 1.82);
+    consoleGroup.add(back);
+    const stem = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.5, 8), decorMat);
+    stem.position.set(0, 0.27, 1.5);
+    consoleGroup.add(stem);
+
+    consoleGroup.position.set(x, 0, 19.5);
+    consoleGroup.rotation.y = Math.PI;
+    scene.add(consoleGroup);
+  }
+
+  // Tall equipment cabinets and instrument racks against the walls.
+  const rackPositions: Array<[number, number, number]> = [
+    [-28, 17, Math.PI / 2],
+    [-28, -17, Math.PI / 2],
+    [28, 14, -Math.PI / 2],
+    [28, -1, -Math.PI / 2],
+    [28, 8, -Math.PI / 2],
+  ];
+  for (const [x, z, ry] of rackPositions) {
+    const rack = new THREE.Group();
+    const body = new THREE.Mesh(new THREE.BoxGeometry(2.0, 2.4, 0.9), cabinetMat);
+    body.position.y = 1.2;
+    body.castShadow = true;
+    rack.add(body);
+
+    // Rack units, as horizontal bands.
+    for (let u = 0; u < 5; u++) {
+      const unit = new THREE.Mesh(new THREE.BoxGeometry(1.8, 0.28, 0.06), screenMat);
+      unit.position.set(0, 0.5 + u * 0.42, 0.48);
+      rack.add(unit);
+    }
+
+    rack.position.set(x, 0, z);
+    rack.rotation.y = ry;
+    scene.add(rack);
+  }
+
+  // Shipping crates and tool chests scattered where they would actually be:
+  // near the benches and out of the crane's path.
+  const cratePositions: Array<[number, number, number, number]> = [
+    [-17, 15, 2.2, 1.6],
+    [-9, 15, 1.6, 1.2],
+    [19, 4, 2.6, 1.8],
+    [21, -17, 1.8, 1.4],
+    [-19, -19, 2.0, 1.5],
+    [11, 15, 1.4, 1.1],
+  ];
+  for (const [x, z, w, h] of cratePositions) {
+    const crate = new THREE.Mesh(new THREE.BoxGeometry(w, h, w * 0.8), crateMat);
+    crate.position.set(x, h / 2, z);
+    crate.rotation.y = (x * 0.7 + z) % 1.2;
+    crate.castShadow = true;
+    crate.receiveShadow = true;
+    scene.add(crate);
+
+    // Hazard stripe on the lid, which is what makes a box read as equipment.
+    const lid = new THREE.Mesh(
+      new THREE.BoxGeometry(w * 1.01, 0.06, w * 0.81),
+      paint,
+    );
+    lid.position.set(x, h + 0.03, z);
+    lid.rotation.y = crate.rotation.y;
+    scene.add(lid);
+  }
+
+  // Gas cylinder banks, strapped together as they always are.
+  for (const [bx, bz] of [[-27, 6], [27, -12]] as Array<[number, number]>) {
+    for (let i = 0; i < 4; i++) {
+      const cyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(0.28, 0.28, 1.9, 14),
+        i % 2 === 0
+          ? new THREE.MeshStandardMaterial({ color: 0x2f7f52, metalness: 0.6, roughness: 0.4 })
+          : new THREE.MeshStandardMaterial({ color: 0x8a5a2b, metalness: 0.6, roughness: 0.4 }),
+      );
+      cyl.position.set(bx + (i % 2) * 0.62, 0.95, bz + Math.floor(i / 2) * 0.62);
+      cyl.castShadow = true;
+      scene.add(cyl);
+    }
+  }
+
+  // Overhead crane bridge, spanning the bay. The single most recognisable
+  // thing in a vehicle assembly building.
+  const craneBridge = new THREE.Group();
+  const girder = new THREE.Mesh(
+    new THREE.BoxGeometry(VAB_WIDTH - 4, 1.3, 1.6),
+    decorMat,
+  );
+  girder.position.y = VAB_HEIGHT - 8;
+  craneBridge.add(girder);
+  const hoist = new THREE.Mesh(new THREE.BoxGeometry(2.4, 1.6, 2.4), paint);
+  hoist.position.set(-2, VAB_HEIGHT - 9.4, 0);
+  craneBridge.add(hoist);
+  // Hook block on a cable.
+  const cable = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.05, 0.05, 14, 6),
+    decorMat,
+  );
+  cable.position.set(-2, VAB_HEIGHT - 17.2, 0);
+  craneBridge.add(cable);
+  const hook = new THREE.Mesh(new THREE.BoxGeometry(1.1, 0.8, 1.1), decorMat);
+  hook.position.set(-2, VAB_HEIGHT - 24.5, 0);
+  craneBridge.add(hook);
+  craneBridge.position.z = 6;
+  scene.add(craneBridge);
+
+  // Wall signage: large bay letters, which is how these buildings are actually
+  // marked up.
+  const signMat = new THREE.MeshStandardMaterial({
+    color: 0xf2f5f9,
+    emissive: 0x9fb4cc,
+    emissiveIntensity: 0.25,
+    roughness: 0.85,
+  });
+  for (const [sx, sz, sry] of [
+    [-29.4, 0, Math.PI / 2],
+    [29.4, 0, -Math.PI / 2],
+  ] as Array<[number, number, number]>) {
+    const board = new THREE.Mesh(new THREE.BoxGeometry(14, 2.6, 0.1), signMat);
+    board.position.set(sx, 9, sz);
+    board.rotation.y = sry;
+    scene.add(board);
+  }
+
   // ---- floor markings ----
   // Painted walkways between the bays, which is how a real high bay routes
   // people around the hardware.
@@ -343,13 +525,16 @@ export function createVABScene(): VABEnvironment {
   // A working high bay is bright and evenly lit. The original scene used a
   // dim ambient and five point lights, which left most of the room in shadow
   // and made a finished build look like a prototype.
-  scene.add(new THREE.AmbientLight(0xdfe7f2, 2.4));
+  // Calibrated between the two previous extremes: the first pass was a dark
+  // warehouse, the second was flat white glare with no shadow contrast. A real
+  // high bay is bright but still has direction and shading.
+  scene.add(new THREE.AmbientLight(0xc2ccdb, 0.85));
 
-  const hemi = new THREE.HemisphereLight(0xeaf2ff, 0x6b7280, 1.9);
+  const hemi = new THREE.HemisphereLight(0xd4e2f5, 0x4a5364, 0.75);
   scene.add(hemi);
 
   // Key light, casting the shadow that gives the vehicle its sense of mass.
-  const key = new THREE.DirectionalLight(0xfff6e8, 2.6);
+  const key = new THREE.DirectionalLight(0xfff4e4, 1.55);
   key.position.set(22, 52, 18);
   key.castShadow = true;
   key.shadow.mapSize.set(2048, 2048);
@@ -364,7 +549,7 @@ export function createVABScene(): VABEnvironment {
   scene.add(key);
 
   // Fill from the opposite side so nothing reads as a silhouette.
-  const fill = new THREE.DirectionalLight(0xcfe0ff, 1.25);
+  const fill = new THREE.DirectionalLight(0xbfd4f0, 0.55);
   fill.position.set(-26, 34, -20);
   scene.add(fill);
 
@@ -372,7 +557,7 @@ export function createVABScene(): VABEnvironment {
   const fixtureMat = new THREE.MeshStandardMaterial({
     color: 0xffffff,
     emissive: 0xfff8ec,
-    emissiveIntensity: 2.8,
+    emissiveIntensity: 1.6,
   });
   const flickerLights: THREE.PointLight[] = [];
   for (let gx = -2; gx <= 2; gx++) {
@@ -387,7 +572,7 @@ export function createVABScene(): VABEnvironment {
       housing.position.set(x, VAB_HEIGHT - 3.0, z);
       scene.add(housing);
 
-      const lamp = new THREE.PointLight(0xfff4e2, 42, 62, 2);
+      const lamp = new THREE.PointLight(0xfff4e2, 16, 46, 2);
       lamp.position.set(x, VAB_HEIGHT - 4.2, z);
       scene.add(lamp);
       flickerLights.push(lamp);
@@ -397,7 +582,7 @@ export function createVABScene(): VABEnvironment {
   // Work lights low down around the stand, so the base of the vehicle and the
   // player's own hands are lit.
   for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
-    const work = new THREE.PointLight(0xffffff, 26, 30, 2);
+    const work = new THREE.PointLight(0xfff2dd, 10, 26, 2);
     work.position.set(Math.cos(angle) * 11, 6.5, Math.sin(angle) * 11);
     scene.add(work);
   }
@@ -408,13 +593,32 @@ export function createVABScene(): VABEnvironment {
   const platformHeights: number[] = [];
   for (let i = 0; i < levels; i++) platformHeights.push(4 + i * 5.2);
 
-  const LADDER_X = 10.4;
-  const LADDER_TOP = 45.6;
 
-  // Structural columns and gantry legs are solid too — walking through a
-  // support column reads as badly as walking through the rocket.
+  // Everything with a physical presence is solid. Walking through a console
+  // or a gas cylinder reads as badly as walking through the rocket.
+  const decorObstacles: Array<{ x: number; z: number; radius: number; top: number }> = [];
+  for (let i = 0; i < 6; i++) {
+    decorObstacles.push({ x: -13 + i * 5.2, z: 19.5, radius: 2.3, top: 1.7 });
+  }
+  for (const [x, z] of [
+    [-28, 17], [-28, -17], [28, 14], [28, -1], [28, 8],
+  ] as Array<[number, number]>) {
+    decorObstacles.push({ x, z, radius: 1.2, top: 2.4 });
+  }
+  for (const [x, z, w, h] of [
+    [-17, 15, 2.2, 1.6], [-9, 15, 1.6, 1.2], [19, 4, 2.6, 1.8],
+    [21, -17, 1.8, 1.4], [-19, -19, 2.0, 1.5], [11, 15, 1.4, 1.1],
+  ] as Array<[number, number, number, number]>) {
+    decorObstacles.push({ x, z, radius: w * 0.72, top: h });
+  }
+  for (const [bx, bz] of [[-27, 6], [27, -12]] as Array<[number, number]>) {
+    decorObstacles.push({ x: bx + 0.3, z: bz + 0.3, radius: 1.0, top: 1.9 });
+  }
+
+  // Structural columns and gantry legs are solid too.
   const structureObstacles = [
     ...stationObstacles,
+    ...decorObstacles,
     { x: 10.4, z: 2.0, radius: 0.7, top: VAB_HEIGHT * 0.85 },
     { x: 10.4, z: -2.0, radius: 0.7, top: VAB_HEIGHT * 0.85 },
   ];
@@ -434,26 +638,21 @@ export function createVABScene(): VABEnvironment {
     materials: mats,
     assemblyRoot,
     staticObstacles: structureObstacles,
+    elevator,
 
     isAtPlatformLevel(feetY: number) {
       return platformHeights.some((h) => Math.abs(h - feetY) < 0.6);
     },
 
-    ladderAt(x: number, z: number) {
-      // Generous radius: a climber fumbling for the ladder should find it.
-      const near = Math.abs(x - LADDER_X) < 1.5 && Math.abs(z) < 1.5;
-      return near ? { x: LADDER_X, top: LADDER_TOP } : null;
-    },
-
     supportHeightAt(x: number, z: number, feetY: number) {
-      // Off the gantry footprint there is only the bay floor.
+      // Off the gantry footprint there is only the bay floor. The elevator
+      // provides its own support while the player is aboard, handled by the
+      // caller.
       const onPlatformX = Math.abs(x - 7.2) <= 3.5;
       const onPlatformZ = Math.abs(z) <= 2.2;
-      const onLadderColumn = Math.abs(x - LADDER_X) < 1.1 && Math.abs(z) < 1.1;
-      if (!((onPlatformX && onPlatformZ) || onLadderColumn)) return 0;
+      if (!(onPlatformX && onPlatformZ)) return 0;
 
-      // Standing on the highest platform at or just below the feet, so
-      // climbing past one lands the player on it rather than on the floor.
+      // Standing on the highest platform at or just below the feet.
       let best = 0;
       for (const h of platformHeights) {
         if (h <= feetY + 0.35 && h > best) best = h;

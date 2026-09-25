@@ -18,6 +18,13 @@ const RUN_SPEED = 13.5;
 const ACCELERATION = 34;
 const DAMPING = 14;
 const EYE_HEIGHT = 1.72;
+/**
+ * The player's body radius.
+ *
+ * Without this the player was a point and could stand with the camera inside a
+ * tank wall, which read as the hardware not being solid at all.
+ */
+const BODY_RADIUS = 0.42;
 /** Climb rate on a ladder. Slower than walking, as climbing is. */
 const CLIMB_SPEED = 4.6;
 /** Gravity applied when the player walks off an edge. m/s^2 */
@@ -40,7 +47,8 @@ export class PlayerController {
 
   private pitch = 0;
   private yaw = 0;
-  private velocity = new THREE.Vector3();
+  /** Horizontal velocity. Exposed so tests can drive the player directly. */
+  readonly velocity = new THREE.Vector3();
   private keys = new Set<string>();
   private locked = false;
   private dragging = false;
@@ -255,6 +263,8 @@ export class PlayerController {
     }
 
     const p = this.yawObject.position;
+    const previousX = p.x;
+    const previousZ = p.z;
     p.x += this.velocity.x * dt;
     p.z += this.velocity.z * dt;
 
@@ -320,6 +330,50 @@ export class PlayerController {
       p.y = this.groundHeight + EYE_HEIGHT;
       this.verticalSpeed = 0;
       this.falling = false;
+    }
+
+    // ---- solid obstacles ----
+    // Runs after the vertical step, because an obstacle only blocks while the
+    // player's body overlaps its height — and the player is a cylinder of
+    // BODY_RADIUS rather than a point, so they cannot stand half inside a
+    // tank wall.
+    //
+    // Two passes, so being pushed out of one obstacle into another still
+    // resolves. That happens in the corner between a bench and a wall.
+    const bodyFeet = p.y - EYE_HEIGHT;
+    for (let pass = 0; pass < 2; pass++) {
+      for (const o of this.obstacles) {
+        if (bodyFeet >= o.top - 0.05) continue;
+        const dx = p.x - o.x;
+        const dz = p.z - o.z;
+        const d = Math.hypot(dx, dz);
+        const minimum = o.radius + BODY_RADIUS;
+        if (d >= minimum) continue;
+
+        if (d < 1e-4) {
+          // Dead centre: eject back the way we came rather than at random.
+          const backX = previousX - o.x;
+          const backZ = previousZ - o.z;
+          const backLength = Math.hypot(backX, backZ) || 1;
+          p.x = o.x + (backX / backLength) * minimum;
+          p.z = o.z + (backZ / backLength) * minimum;
+          this.velocity.x = 0;
+          this.velocity.z = 0;
+          continue;
+        }
+
+        const push = minimum / d;
+        p.x = o.x + dx * push;
+        p.z = o.z + dz * push;
+
+        const nx = dx / d;
+        const nz = dz / d;
+        const into = this.velocity.x * nx + this.velocity.z * nz;
+        if (into < 0) {
+          this.velocity.x -= into * nx;
+          this.velocity.z -= into * nz;
+        }
+      }
     }
 
     // Keep the player inside the building.

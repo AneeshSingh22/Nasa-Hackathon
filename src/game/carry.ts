@@ -38,21 +38,3 @@ export function carrySpeedFactor(mass: number): number {
 export function needsCrane(mass: number): boolean {
   return mass >= CRANE_THRESHOLD;
 }
-
-/**
- * How the carried part is held in view.
- *
- * Offset in front of and below the camera, so it reads as being carried in
- * both hands without filling the screen. Bigger parts sit further away.
- */
-export function holdOffset(mass: number): { forward: number; down: number; scale: number } {
-  const tonnes = mass / 1000;
-  return {
-    forward: 2.4 + tonnes * 0.08,
-    down: 0.75 + tonnes * 0.015,
-    // Scaled down heavily: a real upper stage is 13 m long and would fill the
-    // view entirely. This is a held representation, and the placard on the
-    // station carries the real dimensions.
-    scale: Math.max(0.05, 0.22 - tonnes * 0.006),
-  };
-}

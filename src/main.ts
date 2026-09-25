@@ -22,7 +22,6 @@ import { stationNear, type StationDefinition } from './vab/stations';
 import {
   carrySpeedFactor,
   needsCrane,
-  holdOffset,
   type CarriedPart,
 } from './game/carry';
 import { deltaV } from './physics/rocket';
@@ -394,6 +393,21 @@ function updatePrompt(): void {
     y: player.feetHeight,
   };
 
+  // Inside the car the only control that matters is the button.
+  if (env.elevator.contains(player.position.x, player.position.z)) {
+    const state = env.elevator.state;
+    el.prompt.style.opacity = '1';
+    el.prompt.classList.remove('prompt-far');
+    if (el.promptKey) el.promptKey.textContent = 'E';
+    el.promptText.textContent =
+      state === 'atBottom'
+        ? 'Press the button — ride up to the work platform'
+        : state === 'atTop'
+          ? 'Press the button — ride back down'
+          : `Ascending — ${env.elevator.height.toFixed(0)} m`;
+    return;
+  }
+
   // Carrying something: the job is to get it to the right place.
   if (carried) {
     const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
@@ -410,8 +424,8 @@ function updatePrompt(): void {
       el.prompt.classList.add('prompt-far');
       el.promptText.textContent =
         partDef && stationFor(partDef.kind) === 'gantry'
-          ? `Carry it up the gantry ladder`
-          : `Carry it to the assembly stand`;
+          ? 'Take the elevator to the top platform'
+          : 'Carry it to the assembly stand';
     }
     return;
   }
@@ -750,6 +764,26 @@ function swapPayload(): void {
 function interact(): void {
   if (mission.hasFailed || rolledOut) return;
 
+  // Inside the car, the action is the elevator button — whatever else is going
+  // on. Being carried 45 metres is the most important thing in reach.
+  if (env.elevator.contains(player.position.x, player.position.z)) {
+    const state = env.elevator.state;
+    if (state === 'atBottom') {
+      env.elevator.call();
+      log('ELEVATOR  ascending');
+      say('Going up. Hold on.');
+      return;
+    }
+    if (state === 'atTop') {
+      env.elevator.call();
+      log('ELEVATOR  descending');
+      say('Taking you back down.');
+      return;
+    }
+    say('The car is already moving.');
+    return;
+  }
+
   const station = stationNear(player.position.x, player.position.z);
 
   if (!carried) {
@@ -856,10 +890,15 @@ function requestAdvice(): void {
 
 // ------------------------------------------------------------ carrying
 
-/** What the player is holding, if anything. */
+/**
+ * What the player has in the backpack, if anything.
+ *
+ * An earlier version parented a scaled mesh to the camera every frame. It
+ * clipped through geometry, blocked the view, fought the elevator and never
+ * went away — so the part is now carried as inventory and shown on a HUD card
+ * instead of in the world.
+ */
 let carried: CarriedPart | null = null;
-/** The mesh shown in the player's hands. */
-let carriedMesh: THREE.Group | null = null;
 
 /**
  * Pick a part up off the station the player is standing at.
@@ -899,13 +938,8 @@ function pickUp(station: StationDefinition): void {
   }
 
   carried = { partId: partDef.id, mass, stationId: station.id };
-  const mesh = buildPartMesh(partDef, env.materials);
-  mesh.scale.setScalar(holdOffset(mass).scale);
-  env.scene.add(mesh);
-  carriedMesh = mesh;
-
-  log(`PICKED UP  ${partDef.name}  ${(mass / 1000).toFixed(1)} t`);
-  say(`${partDef.name}. ${(mass / 1000).toFixed(0)} tonnes — take it to the stand.`);
+  log(`STOWED  ${partDef.name}  ${(mass / 1000).toFixed(1)} t`);
+  say(`${partDef.name} stowed. Take it to the stand.`);
 }
 
 /** Put the carried part back where it came from. */
@@ -918,25 +952,77 @@ function putBack(): void {
 }
 
 function releaseCarried(): void {
-  if (carriedMesh) {
-    env.scene.remove(carriedMesh);
-    carriedMesh = null;
-  }
   carried = null;
 }
 
-/** Keep the held part positioned in front of the camera. */
-function updateCarriedMesh(): void {
-  if (!carriedMesh || !carried) return;
-  const offset = holdOffset(carried.mass);
-  const direction = player.lookDirection();
-  const p = camera.position;
-  carriedMesh.position.set(
-    p.x + direction.x * offset.forward,
-    p.y + direction.y * offset.forward - offset.down,
-    p.z + direction.z * offset.forward,
-  );
-  carriedMesh.rotation.y = camera.rotation.y;
+/**
+ * Ghost preview of where the carried part will attach.
+ *
+ * You chose auto-snap with confirm, so the player needs to see the snap target
+ * before committing: a translucent copy of the part at the exact height it
+ * will occupy on the stack.
+ */
+let ghost: THREE.Group | null = null;
+
+function clearGhost(): void {
+  if (!ghost) return;
+  env.scene.remove(ghost);
+  ghost.traverse((child) => {
+    if (child instanceof THREE.Mesh) child.geometry.dispose();
+  });
+  ghost = null;
+}
+
+function updateGhost(): void {
+  if (mission.hasFailed || rolledOut || !carried) {
+    clearGhost();
+    return;
+  }
+
+  const partDef = PART_LIBRARY.find((p) => p.id === carried!.partId);
+  if (!partDef || partDef.kind !== assembly.nextSlot()) {
+    clearGhost();
+    return;
+  }
+
+  const position = {
+    x: player.position.x,
+    z: player.position.z,
+    y: player.feetHeight,
+  };
+  if (!canWorkOn(partDef.kind, position)) {
+    clearGhost();
+    return;
+  }
+
+  // Rebuild only when the part changes, not every frame.
+  if (!ghost || ghost.userData.partId !== partDef.id) {
+    clearGhost();
+    const mesh = buildPartMesh(partDef, env.materials);
+    mesh.userData.partId = partDef.id;
+    mesh.traverse((child) => {
+      if (child instanceof THREE.Mesh) {
+        const material = (
+          Array.isArray(child.material) ? child.material[0] : child.material
+        ) as THREE.Material;
+        const preview = material.clone() as THREE.MeshStandardMaterial;
+        preview.transparent = true;
+        preview.opacity = 0.42;
+        preview.depthWrite = false;
+        if ('emissive' in preview) {
+          preview.emissive = new THREE.Color(0x52d9ec);
+          preview.emissiveIntensity = 0.45;
+        }
+        child.material = preview;
+        child.castShadow = false;
+      }
+    });
+    env.scene.add(mesh);
+    ghost = mesh;
+  }
+
+  // Sit it exactly where attachNext would put it.
+  ghost.position.set(0, env.assemblyRoot.position.y + assembly.stackHeight(), 0);
 }
 
 /** True once the vehicle has left the building, so actions stop. */
@@ -1169,15 +1255,26 @@ function frame(): void {
   // Tell the controller what it is standing on before it moves, so climbing
   // and falling use this frame's geometry.
   const pos = player.position;
-  const ladder = env.ladderAt(pos.x, pos.z);
-  player.onLadder = ladder !== null;
-  player.ladderX = ladder?.x ?? null;
-  player.ladderTop = ladder?.top ?? Infinity;
-  // Level with a platform: let the player walk off rather than pinning them
-  // to the ladder.
-  player.atLadderRest =
-    ladder !== null && env.isAtPlatformLevel(player.feetHeight);
-  player.supportHeight = env.supportHeightAt(pos.x, pos.z, player.feetHeight);
+  // The elevator carries the player. Its deck is their support while aboard,
+  // and the car's own motion moves them with it.
+  const aboard = env.elevator.contains(pos.x, pos.z);
+  const wasMoving = env.elevator.state === 'rising' || env.elevator.state === 'descending';
+  const previousCarHeight = env.elevator.height;
+  env.elevator.update(dt);
+  const carDelta = env.elevator.height - previousCarHeight;
+
+  if (aboard) {
+    // Move with the car, then stand on its deck.
+    player.position.y += carDelta;
+    player.supportHeight = env.elevator.height;
+    // No ladder while riding — the elevator is the way up now.
+    player.onLadder = false;
+    player.ladderX = null;
+    player.atLadderRest = false;
+  } else {
+    player.supportHeight = env.supportHeightAt(pos.x, pos.z, player.feetHeight);
+  }
+  void wasMoving;
 
   // Everything solid: the room's fixed structure plus the vehicle, which grows
   // as it is built. Below the gantry platforms the player must walk round the
@@ -1194,7 +1291,6 @@ function frame(): void {
 
   player.update(dt);
   env.update(elapsed);
-  updateCarriedMesh();
 
   // Raycasting every frame is wasteful for a static stack; 12 Hz is plenty
   // for a panel the player reads.
@@ -1204,6 +1300,7 @@ function frame(): void {
     updateInspector();
     updatePrompt();
     updateAltitude();
+    updateGhost();
   }
 
   renderer.render(env.scene, camera);

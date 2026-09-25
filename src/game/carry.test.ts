@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { carrySpeedFactor, needsCrane, holdOffset, CRANE_THRESHOLD } from './carry';
+import { carrySpeedFactor, needsCrane, CRANE_THRESHOLD } from './carry';
 
 /**
  * Carrying is where the cost of mass is felt rather than read. These tests keep
@@ -48,12 +48,4 @@ describe('carrying parts', () => {
     expect(CRANE_THRESHOLD).toBeGreaterThan(14_000);
   });
 
-  it('holds bigger parts further away and smaller', () => {
-    const light = holdOffset(1_900);
-    const heavy = holdOffset(14_000);
-
-    expect(heavy.forward).toBeGreaterThan(light.forward);
-    expect(heavy.scale).toBeLessThan(light.scale);
-    expect(heavy.scale).toBeGreaterThan(0);
-  });
 });

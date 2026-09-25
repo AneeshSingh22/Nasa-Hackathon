@@ -68,15 +68,27 @@ wall, the four **payload** options across the back, the **fairing** on the
 right. Each bench has a placard, and looking at one shows what the part is,
 what it costs, and — for payloads — the Δv margin that choice would leave you.
 
+Every bench carries a printed placard with the part's name, a schematic of the
+component and the numbers that matter — mass, thrust, specific impulse, cost,
+and for payloads the Δv margin that choice would leave you.
+
 Walk to a station, press `E` to collect the part, carry it to the assembly
-stand, and press `E` again to fit it. **Heavy parts slow you down**, which puts
-the cost of mass in your legs rather than on a readout. The two stages are
-crane lifts rather than hand carries.
+stand, and press `E` again to fit it. A translucent preview shows exactly where
+it will attach. **Heavy parts slow you down**, which puts the cost of mass in
+your legs rather than on a readout, and the first stages are crane lifts rather
+than hand carries.
 
 The payload and fairing go on top of a 55-metre stack, so those are fitted from
-the top gantry platform: climb the ladder, walk onto the platform, then place
-the part. Your payload choice is simply which bench you walked to — there is no
-menu.
+the top work platform: step into the **service elevator** on the right of the
+bay and press `E` to ride up. The trip takes about ten seconds and you watch
+the whole bay drop away beneath you.
+
+There are **three first stages, two upper stages and four payloads** — 24
+combinations, of which 10 can actually fly the contract. The cheap solid
+booster leaves the pad at nearly twice the thrust-to-weight but only lifts the
+lightest valid payload; the extended core buys the most Δv and costs too much
+to pair with the heaviest one. Only one combination flies the 180-science
+laboratory.
 
 ## The decision the phase is built on
 

@@ -112,6 +112,21 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
   position changed — `PlayerController.test.ts` has them.
+- **A test that cannot fail is worse than no test.** The collision test walked
+  the player for four seconds at 7.4 m/s from a spawn 14 m away, then asserted
+  `distance >= 3.39`. The player passed clean through the obstacle and out the
+  far side, and the assertion passed on the overshoot. That false positive let
+  the entire collision loop go missing for several commits while the suite
+  stayed green, and the player reported walking through the rocket three times.
+  Collision tests now sample every frame and assert the *closest* approach.
+- **The ladder was replaced by an elevator, not fixed.** Three attempts failed:
+  climbing fought the walk input, the latch fought stepping off, and arriving at
+  a platform holding a part was a dead end. An elevator has none of those
+  failure modes — board, press, ride. When a mechanic needs a third fix, replace
+  the mechanic.
+- **Never parent a carried mesh to the camera.** It clipped through geometry,
+  blocked the view and never went away. Carried parts are inventory shown on a
+  HUD card, with a translucent ghost in the world at the snap target.
 - **A ladder must suppress forward walking only while climbing.** The first fix
   zeroed forward input whenever the player was *near* a ladder, and latched them
   to its column. That trapped them at the top: they could not step onto the

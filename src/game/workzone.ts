@@ -109,8 +109,9 @@ export function stationFor(kind: string): WorkStation {
 
 /** True when the player is standing on the high gantry platform. */
 export function isOnGantry(position: Point3D): boolean {
-  // Wide enough to include the ladder column at x = 10.4.
-  const nearX = Math.abs(position.x - GANTRY_X) <= 4.2;
+  // The high work station is the elevator car parked at the top, plus the
+  // gantry platform beside it. Both are at GANTRY_WORK_HEIGHT.
+  const nearX = position.x >= GANTRY_X - 4.2 && position.x <= 15.0;
   const nearZ = Math.abs(position.z) <= GANTRY_HALF_DEPTH + 0.6;
   const atHeight =
     Math.abs(position.y - GANTRY_WORK_HEIGHT) <= GANTRY_HEIGHT_TOLERANCE;

@@ -390,16 +390,66 @@ describe('solid obstacles', () => {
   });
 
   it('stops the player walking through the rocket', () => {
-    // The rocket used to be a hologram: the meshes were there but nothing
-    // stopped the player strolling out through the middle of the booster.
+    // The original version of this test walked for four seconds at 7.4 m/s
+    // from a spawn 14 m away: the player passed clean through the obstacle and
+    // out the far side, and `distance >= 3.39` passed on the overshoot. It
+    // could never fail, which is exactly why a missing collision loop shipped.
+    //
+    // This version samples every frame, so passing through is caught even
+    // momentarily.
     player.obstacles = [{ x: 0, z: 0, radius: 3.4, top: 60 }];
     hold('ArrowUp');
-    simulate(player, 4); // more than enough to cross the bay
-    release('ArrowUp');
-    // Never inside the hull, no matter how long the player pushes.
 
-    const distance = Math.hypot(player.position.x, player.position.z);
-    expect(distance).toBeGreaterThanOrEqual(3.39);
+    let closest = Infinity;
+    for (let i = 0; i < 300; i++) {
+      player.update(1 / 60);
+      closest = Math.min(
+        closest,
+        Math.hypot(player.position.x, player.position.z),
+      );
+    }
+    release('ArrowUp');
+
+    // Never closer than the hull plus the player's own body.
+    expect(closest).toBeGreaterThan(3.4);
+  });
+
+  it('stops the player walking through a station bench', () => {
+    // Benches were walk-through for several commits.
+    player.obstacles = [{ x: 0, z: 6, radius: 2.6, top: 1.1 }];
+    hold('ArrowUp');
+
+    let closest = Infinity;
+    for (let i = 0; i < 120; i++) {
+      player.update(1 / 60);
+      closest = Math.min(
+        closest,
+        Math.hypot(player.position.x, player.position.z - 6),
+      );
+    }
+    release('ArrowUp');
+
+    expect(closest).toBeGreaterThan(2.6);
+  });
+
+  it('never lets the camera end up inside an obstacle', () => {
+    // Approach from several angles and confirm the body radius holds.
+    for (const angle of [0, Math.PI / 3, Math.PI, -Math.PI / 2]) {
+      const fresh = new PlayerController(new THREE.PerspectiveCamera(), BOUNDS);
+      const d = fresh.attach(document.createElement('canvas'));
+      fresh.obstacles = [{ x: 0, z: 0, radius: 3.4, top: 60 }];
+      fresh.position.set(Math.cos(angle) * 10, 1.72, Math.sin(angle) * 10);
+
+      // Drive straight at the obstacle centre by pointing velocity inward.
+      for (let i = 0; i < 240; i++) {
+        fresh.velocity.set(-Math.cos(angle) * 8, 0, -Math.sin(angle) * 8);
+        fresh.update(1 / 60);
+      }
+      d();
+
+      const distance = Math.hypot(fresh.position.x, fresh.position.z);
+      expect(distance, `from angle ${angle}`).toBeGreaterThan(3.4);
+    }
   });
 
   it('lets the player walk over the obstacle once above it', () => {
