@@ -2,7 +2,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import * as THREE from 'three';
 import { Assembly } from '../vab/Assembly';
-import { PART_LIBRARY, createMaterials } from '../vab/parts';
+import { PART_LIBRARY, createMaterials, DISPLAY_SCALE } from '../vab/parts';
 import { OrbitCamera } from '../render/OrbitCamera';
 import { RocketBuilder } from './rocketBuilder';
 import { optionsFor } from './catalog';
@@ -183,5 +183,42 @@ describe('changing your mind', () => {
     click('core-booster');
     expect(budget).toBe(before);
     expect(assembly.parts).toHaveLength(1);
+  });
+});
+
+describe('framing', () => {
+  it('keeps the camera inside the building for every stack it can build', () => {
+    // The camera once had to back out through the wall to frame a full-size
+    // rocket, and the bay read as a doll's house around it. The vehicle is a
+    // scale mockup now, so every stack must be viewable from indoors.
+    const VAB_HALF_DEPTH = 23;
+    const camera = new THREE.PerspectiveCamera(72, 1.9, 0.1, 400);
+    const orbit = new OrbitCamera(camera);
+    const chrome2 = document.createElement('section');
+    const root2 = new THREE.Group();
+    root2.scale.setScalar(DISPLAY_SCALE);
+    const assembly2 = new Assembly(root2, createMaterials());
+    const builder2 = new RocketBuilder(assembly2, root2, camera, orbit, chrome2, {
+      charge: () => true, refund: () => {}, spent: () => 0,
+      changed: () => {}, refuse: () => {},
+    });
+
+    // The tallest vehicle in the library.
+    for (const id of ['extended-booster', 'upper-stage', 'science-lab', 'fairing']) {
+      builder2.fit(PART_LIBRARY.find(part => part.id === id)!);
+    }
+    const box = new THREE.Box3().setFromObject(root2);
+    const size = box.getSize(new THREE.Vector3());
+    // A mockup, not a 67 m rocket.
+    expect(size.y).toBeLessThan(30);
+
+    orbit.update();
+    expect(Math.abs(camera.position.z)).toBeLessThan(VAB_HALF_DEPTH);
+    expect(Math.abs(camera.position.x)).toBeLessThan(VAB_HALF_DEPTH);
+    // And the whole vehicle is actually in shot.
+    for (const corner of [box.min, box.max]) {
+      const projected = corner.clone().project(camera);
+      expect(Math.abs(projected.y)).toBeLessThan(1);
+    }
   });
 });

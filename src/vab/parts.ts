@@ -44,6 +44,30 @@ export interface PartDefinition {
   science?: number;
 }
 
+/**
+ * Display scale for the vehicle.
+ *
+ * The parts are specified at full size — a 42 m core booster is the real
+ * height of the thing it represents, and the briefings quote real figures.
+ * A 67.5 m stack needs about 72 m of camera standoff to frame, but the bay is
+ * only 46 m deep, so the Workshop camera had to back out through the wall and
+ * the building read as a doll's house around a giant rocket.
+ *
+ * The vehicle is therefore built as a scale mockup. The scale is applied once
+ * to `assemblyRoot` in the scene, so geometry *and* stacking positions shrink
+ * together and every builder keeps authoring at real size. Scaling the
+ * `height` and `radius` fields instead left roughly fifteen hard-coded
+ * dimensions — engine bells, fins, solar arrays — at full size, which made the
+ * telescope's arrays the bulkiest thing in the bay.
+ *
+ * Physics is untouched. Mass, thrust, isp and cost never depended on geometry,
+ * and `height` is used only for stacking, which scales with the root.
+ *
+ * At 0.35 the tallest stack is 23.6 m and frames from about 19 m, comfortably
+ * inside the 46 m bay with the building left at full size for a sense of scale.
+ */
+export const DISPLAY_SCALE = 0.35;
+
 export const PART_LIBRARY: PartDefinition[] = [
   {
     id: 'core-booster',
@@ -202,6 +226,7 @@ export const PART_LIBRARY: PartDefinition[] = [
     cost: 24,
   },
 ];
+
 
 /** Materials, created once and shared. */
 export function createMaterials() {
@@ -399,7 +424,8 @@ function buildTelescope(group: THREE.Group, part: PartDefinition, mats: Material
   mirror.position.y = height - 0.05;
   group.add(mirror);
 
-  // Two solar arrays.
+  // Two solar arrays. Authored at real size like everything else; the display
+  // scale is applied to assemblyRoot.
   for (const side of [-1, 1]) {
     const panel = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.08, 1.5), mats.solar);
     panel.position.set(side * (radius + 1.8), height * 0.55, 0);

@@ -386,6 +386,24 @@ product.
   price difference. Going cheaper refunds half, like every other reversal in the
   programme, so experimenting still costs something.
 
+- **Scale the root, not the data.** A full-size 67.5 m rocket needs about 72 m
+  of camera standoff and the bay is 46 m deep, so the camera had to back out
+  through the wall and the building read as a doll's house. The vehicle is now
+  a mockup at `DISPLAY_SCALE = 0.35`, applied once to `assemblyRoot`. The first
+  attempt scaled `height` and `radius` in the part library instead, which left
+  roughly fifteen hard-coded dimensions — engine bells, fins, the telescope's
+  3.4 m solar arrays — at full size; `tests/variants.test.ts` caught it by
+  reporting the telescope as the bulkiest payload. Scaling the root shrinks
+  geometry and stacking positions together, and builders keep authoring at real
+  size. Physics is unaffected: geometry never fed mass, thrust or isp.
+- **A bounding sphere is the wrong thing to frame a rocket with.** Its radius
+  is the box *diagonal*, half again the half-height of a tall thin stack, so
+  framing it pushed the camera out of the building. `OrbitCamera.frame` now
+  takes box half-extents. The multiplier is derived rather than guessed: the
+  camera looks down from an elevation, so the top of the stack subtends a wider
+  angle than its half-height implies — 20 m rather than 16.3 m for a 23.6 m
+  vehicle. Two rounds of guessing multipliers failed before computing it.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

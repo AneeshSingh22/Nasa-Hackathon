@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { createMaterials, type Materials } from './parts';
+import { createMaterials, DISPLAY_SCALE, type Materials } from './parts';
 import { createElevator, type ElevatorRig } from './Elevator';
 import type { BlueprintState } from './blueprint';
 
@@ -274,6 +274,10 @@ export function createVABScene(): VABEnvironment {
   // Where the rocket gets parented. Sits on top of the stand.
   const assemblyRoot = new THREE.Object3D();
   assemblyRoot.position.set(0, 1.6, 0);
+  // The vehicle is a scale mockup on the stand. Scaling the root rather than
+  // the part data keeps every builder authoring at real size and shrinks
+  // stacking positions by the same factor, so details cannot be left behind.
+  assemblyRoot.scale.setScalar(DISPLAY_SCALE);
   scene.add(assemblyRoot);
 
   // Part benches, placards and floor step marks are retired. Workshop is

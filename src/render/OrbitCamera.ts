@@ -3,34 +3,28 @@ import * as THREE from 'three';
 /**
  * Limits in metres/radians, sized for a launch vehicle.
  *
- * These were tuned for a 2.8 m stub pod: maxDistance was 18 m, which is closer
- * than the *radius* of a finished rocket. The tallest stack here is a 47 m
- * core, a 13.5 m upper stage and a 7 m payload — 67.5 m — and framing it needs
- * about 63 m of standoff, so the camera simply could not pull back far enough
- * to show the top of the vehicle. Any change to part heights needs checking
- * against maxDistance as well as VAB_HEIGHT.
+ * Sized against the vehicle at `DISPLAY_SCALE`. The tallest stack is 23.6 m
+ * and needs roughly 19 m of standoff to frame, so 34 m leaves room to pull
+ * back and still stay inside a 46 m-deep bay. Framing the parts at full size
+ * needed 72 m, which put the camera outside the building looking in through
+ * the wall — the bay then read as a doll's house. Any change to part heights
+ * or to DISPLAY_SCALE needs re-checking here.
  *
- * Vertical pan is generous because the player has to inspect a payload 60 m up
- * and the engines at the bottom. Horizontal pan is not: sliding sideways as
- * well as orbiting mostly loses the vehicle.
- *
- * Note the camera is deliberately allowed *outside* the 46 m-deep bay. Framing
- * a 67.5 m vehicle needs roughly 63 m of standoff, which simply does not fit
- * indoors, and an assembly view that cannot show the whole vehicle is useless.
- * The walls are drawn from the inside, so backing through one reads as a
- * cutaway rather than an error.
+ * Vertical pan covers the height of the vehicle so the player can inspect the
+ * payload on top and the engines underneath. Horizontal pan is tighter:
+ * sliding sideways as well as orbiting mostly just loses the vehicle.
  */
 export const ORBIT_LIMITS = {
-  minDistance: 5, maxDistance: 110,
+  minDistance: 3, maxDistance: 34,
   minElevation: 0.06, maxElevation: Math.PI / 2 - 0.06,
-  panHorizontal: 18, panVertical: 48,
+  panHorizontal: 9, panVertical: 16,
 } as const;
 
 /** Lowest the eye may sit, metres above the bay floor. */
 export const FLOOR_CLEARANCE = 1.2;
 
 /** Standoff on entering the Workshop: enough to see a whole launch vehicle. */
-export const RESET_RADIUS = 70;
+export const RESET_RADIUS = 21;
 
 /** Owns the shared camera only during Workshop. No simulation state lives here. */
 export class OrbitCamera {
@@ -52,13 +46,30 @@ export class OrbitCamera {
     this.update();
   }
 
-  /** Reframe after assembly changes, preserving the viewing angle. */
-  frame(target: THREE.Vector3, boundingRadius: number): void {
+  /**
+   * Reframe after assembly changes, preserving the viewing angle.
+   *
+   * Takes the box half-extents rather than a bounding sphere. A launch vehicle
+   * is tall and thin, and its bounding sphere has the radius of the *diagonal*
+   * — roughly half again its half-height — so framing the sphere pushed the
+   * camera far enough back to leave the building.
+   */
+  frame(target: THREE.Vector3, halfHeight: number, halfWidth = halfHeight): void {
     this.anchor.copy(target);
     this.target.copy(target);
     const vertical = THREE.MathUtils.degToRad(this.camera.fov / 2);
-    const halfAngle = Math.min(vertical, Math.atan(Math.tan(vertical) * this.camera.aspect));
-    this.radius = THREE.MathUtils.clamp(Math.max(18, boundingRadius / Math.sin(halfAngle) * 1.25),
+    const horizontal = Math.atan(Math.tan(vertical) * this.camera.aspect);
+    // Whichever axis binds first decides the distance.
+    const needed = Math.max(
+      halfHeight / Math.tan(vertical),
+      halfWidth / Math.tan(horizontal),
+    );
+    // The camera looks down from an elevation rather than square on, so the
+    // top of a tall stack subtends a wider angle than its true half-height
+    // implies. Derived rather than guessed: at the default elevation the
+    // 23.6 m stack needs about 20 m before its top falls inside the 36-degree
+    // vertical half-angle, against 16.3 m looking square on.
+    this.radius = THREE.MathUtils.clamp(Math.max(9, needed * 1.29),
       ORBIT_LIMITS.minDistance, ORBIT_LIMITS.maxDistance);
     this.update();
   }

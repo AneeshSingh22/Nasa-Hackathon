@@ -145,11 +145,19 @@ export class RocketBuilder {
    * camera loses the top of it within two parts.
    */
   private frame(): void {
+    // An empty stand has no bounds worth framing, and a near-zero bounding
+    // sphere drives the camera to its minimum distance staring at the floor.
+    // Sit at the default standoff until there is something to look at.
+    if (this.assembly.parts.length === 0) {
+      this.orbit.reset(this.root.getWorldPosition(new THREE.Vector3()));
+      return;
+    }
     const box = new THREE.Box3().setFromObject(this.root);
     if (box.isEmpty()) return;
-    const sphere = box.getBoundingSphere(new THREE.Sphere());
+    const size = box.getSize(new THREE.Vector3());
+    const centre = box.getCenter(new THREE.Vector3());
     this.camera.updateProjectionMatrix();
-    this.orbit.frame(sphere.center, sphere.radius);
+    this.orbit.frame(centre, size.y / 2, Math.max(size.x, size.z) / 2);
   }
 
   dispose(): void {
