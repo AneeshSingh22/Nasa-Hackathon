@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Workshop browser smoke test</title>
+<style>
+body { margin: 0; background: #101725; color: #e9eef6; font: 13px system-ui; }
+nav { padding: 8px; display: flex; gap: 12px; align-items: center; }
+button { padding: 6px 12px; }
+iframe { border: 0; display: block; width: 100vw; height: calc(100vh - 48px); }
+</style>
+<nav aria-label="Test controls">
+  <span>Local smoke test — start the game below, then:</span>
+  <button id="walk">Walk forward 0.6 s</button>
+  <button id="interact">Interact (E)</button>
+  <button id="escape">Escape</button>
+</nav>
+<iframe src="/" title="Game under test" allow="pointer-lock"></iframe>
+<script type="module">
+// Test-only driver for browsers whose automation API cannot hold a key.
+// It drives the real window input listeners; no game state or camera shortcuts.
+const game = document.querySelector('iframe');
+function key(type, code) {
+  const win = game.contentWindow;
+  win.dispatchEvent(new win.KeyboardEvent(type, { code, cancelable: true }));
+}
+document.querySelector('#walk').onclick = () => {
+  key('keydown', 'KeyW');
+  window.setTimeout(() => key('keyup', 'KeyW'), 600);
+};
+for (const [id, code] of [['interact', 'KeyE'], ['escape', 'Escape']]) {
+  document.getElementById(id).onclick = () => { key('keydown', code); key('keyup', code); };
+}
+</script>
+</html>

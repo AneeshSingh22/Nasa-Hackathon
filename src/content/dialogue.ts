@@ -21,8 +21,8 @@
  * through the advice button.
  */
 export const INTRO = [
-  'Morning, engineer. The big screen ahead of you shows the build sequence and what is still open.',
-  'Four numbered stations along the back wall. The service elevator is on your right — signposted — and that is how you get up to fit the payload. Press T any time you want my advice.',
+  'Morning, engineer. Explore the bay, then enter the workshop at the cyan marker to build.',
+  'Build downward from your Command Pod: tanks first, then an engine. Green attachment points show a valid connection. Press T if you need help.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */

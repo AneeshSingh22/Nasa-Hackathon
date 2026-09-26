@@ -52,6 +52,7 @@ export class PlayerController {
   private keys = new Set<string>();
   private locked = false;
   private dragging = false;
+  private enabled = true;
   private bounds: PlayerBounds;
 
   /**
@@ -125,8 +126,15 @@ export class PlayerController {
     return this.yawObject.position.y - EYE_HEIGHT;
   }
 
+  setEnabled(enabled: boolean): void {
+    this.enabled = enabled;
+    this.dragging = false;
+    if (!enabled) this.velocity.set(0, 0, 0);
+  }
+
   attach(domElement: HTMLElement): () => void {
     const onKeyDown = (e: KeyboardEvent) => {
+      if (!this.enabled) return;
       this.keys.add(e.code);
       // Stop the page scrolling out from under the game.
       if (['Space', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'].includes(e.code)) {
@@ -147,6 +155,7 @@ export class PlayerController {
     };
 
     const onMouseMove = (e: MouseEvent) => {
+      if (!this.enabled) return;
       if (this.locked) {
         applyLook(e.movementX, e.movementY);
         return;
@@ -160,7 +169,7 @@ export class PlayerController {
     };
 
     const onMouseDown = (e: MouseEvent) => {
-      if (!this.locked && e.button === 0) this.dragging = true;
+      if (this.enabled && !this.locked && e.button === 0) this.dragging = true;
     };
     const onMouseUp = () => {
       this.dragging = false;
@@ -190,7 +199,9 @@ export class PlayerController {
   }
 
   requestLock(domElement: HTMLElement): void {
-    void domElement.requestPointerLock();
+    if (!this.enabled) return;
+    // Embedded browsers may refuse pointer lock; drag-to-look stays usable.
+    void domElement.requestPointerLock?.()?.catch(() => {});
   }
 
   releaseLock(): void {
@@ -221,6 +232,7 @@ export class PlayerController {
   }
 
   update(dt: number): void {
+    if (!this.enabled) return;
     // Build the desired direction in the player's own frame, then rotate it
     // into world space by yaw only — looking up must not make you fly.
     let forward = 0;

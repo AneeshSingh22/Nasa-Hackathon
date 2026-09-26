@@ -23,8 +23,13 @@ import { stationNear, type StationDefinition } from './vab/stations';
 import { drawPictogram } from './vab/placards';
 import { needsCrane, type CarriedPart } from './game/carry';
 import { deltaV } from './physics/rocket';
+import { WorkshopStation } from './vab/WorkshopStation';
+import { WorkshopSession } from './workshop/session';
 
 const contract = CONTRACT_FIRST_ORBIT;
+// Preserve the prototype handlers for migration, but no playable input or
+// station HUD may reach them. Assembly belongs exclusively in Workshop.
+const LEGACY_ASSEMBLY_ENABLED = false;
 
 /** Evaluate the current stack against the mission contract. */
 function contractStatus() {
@@ -97,6 +102,15 @@ const player = new PlayerController(camera, {
 env.scene.add(player.yawObject);
 
 const detachInput = player.attach(canvas);
+const workshopStation = new WorkshopStation();
+const workshopSign = workshopStation.createMesh();
+env.scene.add(workshopSign);
+const workshop = new WorkshopSession(player, env.assemblyRoot, canvas, hud,
+  required<HTMLElement>('#workshop'), () => {
+    setHelp(false);
+    clearGhost();
+    narrator.stop();
+  });
 
 /**
  * Falling off the gantry costs the programme.
@@ -222,6 +236,7 @@ narrator.onEnabledChange = (enabled) => {
 };
 
 function say(text: string, urgent = false): void {
+  if (workshop.mode === 'workshop') return;
   narrator.say(text, urgent ? 'urgent' : 'normal');
 }
 
@@ -378,6 +393,10 @@ function refreshContract(): void {
  * bay read as ten near-identical benches.
  */
 function refreshOptions(): void {
+  if (!LEGACY_ASSEMBLY_ENABLED) {
+    el.options?.classList.add('hidden');
+    return;
+  }
   if (!el.options || !el.optionsGrid) return;
 
   const slot = assembly.nextSlot();
@@ -572,8 +591,26 @@ let lastDrawnCarry: string | null = null;
  */
 function updatePrompt(): void {
   if (!el.prompt || !el.promptText) return;
+  if (!LEGACY_ASSEMBLY_ENABLED) {
+    const nearWorkshop = workshopStation.contains(player.position);
+    el.prompt.style.opacity = mission.hasFailed || rolledOut ? '0' : '1';
+    el.prompt.classList.toggle('prompt-far', !nearWorkshop);
+    if (el.promptKey) el.promptKey.textContent = 'E';
+    el.promptText.textContent = nearWorkshop
+      ? 'Enter the workshop to build'
+      : 'Walk to the cyan Workshop marker to build';
+    return;
+  }
   if (mission.hasFailed || rolledOut) {
     el.prompt.style.opacity = '0';
+    return;
+  }
+
+  if (workshopStation.contains(player.position)) {
+    el.prompt.style.opacity = '1';
+    el.prompt.classList.remove('prompt-far');
+    if (el.promptKey) el.promptKey.textContent = 'E';
+    el.promptText.textContent = 'Build rocket — enter Workshop';
     return;
   }
 
@@ -688,6 +725,10 @@ function partFromObject(obj: THREE.Object3D): PartDefinition | null {
 let inspected: PartDefinition | null = null;
 
 function updateInspector(): void {
+  if (!LEGACY_ASSEMBLY_ENABLED) {
+    el.inspector?.classList.add('hidden');
+    return;
+  }
   raycaster.setFromCamera(screenCentre, camera);
   const hits = raycaster.intersectObject(env.assemblyRoot, true);
   let part = hits.length > 0 && hits[0] ? partFromObject(hits[0].object) : null;
@@ -1003,7 +1044,14 @@ function tryElevator(): boolean {
  * keys the player has to remember.
  */
 function interact(): void {
-  if (mission.hasFailed || rolledOut) return;
+  if (workshop.mode !== 'explore' || mission.hasFailed || rolledOut) return;
+  if (workshopStation.contains(player.position)) {
+    workshop.enter([workshopSign, ...(craneLift ? [craneLift.mesh] : [])]);
+    return;
+  }
+
+  // The bay is for exploration; E has no pickup, fit, or elevator action.
+  if (!LEGACY_ASSEMBLY_ENABLED) return;
 
   // The elevator takes priority when the player is in it or beside its landing.
   if (tryElevator()) return;
@@ -1071,7 +1119,11 @@ function placeCarried(partDef: PartDefinition): void {
  * decision.
  */
 function requestAdvice(): void {
-  if (mission.hasFailed || rolledOut) return;
+  if (workshop.mode !== 'explore' || mission.hasFailed || rolledOut) return;
+  if (!LEGACY_ASSEMBLY_ENABLED) {
+    say('Enter the workshop at the cyan marker to build. Choose a tank, move it to the pod’s bottom attachment point and click when it turns green. Add an engine below the tank. Q removes the last part.', true);
+    return;
+  }
 
   const nextKind = assembly.nextSlot();
   const position = {
@@ -1463,16 +1515,17 @@ window.addEventListener('keydown', (e) => {
   // Build actions work whenever the game is showing, not only under pointer
   // lock — pointer lock can be refused, and the game must still be playable.
   if (!started) return;
+  if (workshop.handleKey(e)) return;
   if (e.repeat) return;
   if (e.code === 'KeyE') interact();
-  if (e.code === 'KeyQ') detachTopPart();
-  if (e.code === 'KeyR') clearStand();
+  if (LEGACY_ASSEMBLY_ENABLED && e.code === 'KeyQ') detachTopPart();
+  if (LEGACY_ASSEMBLY_ENABLED && e.code === 'KeyR') clearStand();
   if (e.code === 'KeyH' || e.code === 'Slash') toggleHelp();
   if (e.code === 'KeyV') narrator.toggle();
-  if (e.code === 'KeyF') rollOut();
-  if (e.code === 'KeyG') swapPayload();
+  if (LEGACY_ASSEMBLY_ENABLED && e.code === 'KeyF') rollOut();
+  if (LEGACY_ASSEMBLY_ENABLED && e.code === 'KeyG') swapPayload();
   if (e.code === 'KeyT') requestAdvice();
-  if (e.code === 'Tab') {
+  if (LEGACY_ASSEMBLY_ENABLED && e.code === 'Tab') {
     // Cycling is silent: the player is reading a comparison table, not asking
     // to be read to.
     e.preventDefault();
@@ -1496,7 +1549,7 @@ startButton.addEventListener('click', () => {
 // players expect. The start overlay deliberately does not come back: losing
 // the cursor should not throw away the stack you have built.
 canvas.addEventListener('click', () => {
-  if (started && !player.isLocked) player.requestLock(canvas);
+  if (started && workshop.mode === 'explore' && !player.isLocked) player.requestLock(canvas);
 });
 
 // ------------------------------------------------------------ help panel
@@ -1537,7 +1590,7 @@ document.querySelector<HTMLButtonElement>('#advice-button')
   ?.addEventListener('click', () => {
     requestAdvice();
     // Hand the cursor back so the player can keep playing straight away.
-    if (started && !player.isLocked) player.requestLock(canvas);
+    if (started && workshop.mode === 'explore' && !player.isLocked) player.requestLock(canvas);
   });
 
 // Hide the voice control entirely where speech synthesis is unavailable,
@@ -1609,6 +1662,16 @@ function frame(): void {
   const dt = Math.min(0.05, clock.getDelta());
   const elapsed = clock.elapsedTime;
 
+  // Mission costs are action-based. Pausing legacy actions, crane and player
+  // here keeps all resources and the Explore scene state intact in Workshop.
+  if (workshop.mode === 'workshop') {
+    workshop.update();
+    env.update(elapsed);
+    renderer.render(env.scene, camera);
+    requestAnimationFrame(frame);
+    return;
+  }
+
   // Tell the controller what it is standing on before it moves, so climbing
   // and falling use this frame's geometry.
   const pos = player.position;
@@ -1649,7 +1712,7 @@ function frame(): void {
 
   player.update(dt);
   env.update(elapsed);
-  updateCrane(dt);
+  if (LEGACY_ASSEMBLY_ENABLED) updateCrane(dt);
 
   // Raycasting every frame is wasteful for a static stack; 12 Hz is plenty
   // for a panel the player reads.
@@ -1675,6 +1738,7 @@ frame();
 // Vite HMR: drop the input listeners so reloads do not stack handlers.
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
+    workshop.dispose();
     detachInput();
     renderer.dispose();
   });

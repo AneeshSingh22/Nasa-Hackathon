@@ -1,14 +1,157 @@
 # Ad Astra Program — Engineering Conventions
 
-A first-person 3D spaceflight engineering game for the NASA Space Apps
-Challenge 2026. Read this file before writing code. It exists so that six
-people working in parallel produce one architecture instead of six.
+A 3D spaceflight engineering game for the NASA Space Apps Challenge 2026.
+Read this file before writing code. It exists so that people working in
+parallel produce one architecture instead of several.
 
 ## The pitch, in one line
 
-You are the flight engineer of a small space program. Walk the assembly
-building, learn what each part does, build a rocket, fly it by hand, and find
-out whether your napkin maths was right.
+You are the flight engineer of a small space programme. Explore the facility,
+enter the workshop, design a vehicle against a contract and a budget, then fly
+it by hand and find out whether your napkin maths was right.
+
+## Player modes — the product rule
+
+The game has two mechanical modes. Do not blend them.
+
+1. **Explore** — first-person walk around an open facility (space centre
+   campus). Look around, find stations, enter the workshop. Later: launch pad
+   and other buildings as places to visit, not as mini-games of their own.
+2. **Workshop** — third-person builder (Kerbal-style). Orbit, pan and zoom the
+   vehicle. Drag parts from a palette onto the stack. Each part has a cost. A
+   mission / contract panel stays visible. Leave when the stack is ready to
+   hand off to launch.
+
+**Assembly happens only in the workshop.** The campus does not carry-and-place
+parts, climb elevators to fit payloads, or gate attachment on work-zone height.
+Those mechanics were a prototype path; they are not the direction.
+
+### What the workshop must force the player to decide
+
+Every build should juggle at least three live levers:
+
+1. **Contract** — science floor, destination class, whatever the brief requires
+2. **Budget / grants** — part costs; overspend fails or burns margin
+3. **Performance** — Δv, mass, TWR from the real stack analysis
+
+If two of those are always green no matter what the player picks, the phase
+collapses into confirmation again. Fix the balance, not the UI chrome.
+
+### Workshop assembly — drag, drop, and attachment nodes
+
+Reference feel: Kerbal Space Program's Vehicle Assembly Building. The player
+picks a part from a palette, drags it into the 3D hangar, and snaps it onto
+the vehicle at visible attachment points.
+
+**Attachment nodes.** Every part exposes one or more nodes in local space
+(small spheres in the world). Nodes mark where another part can connect — not
+free-form placement in empty air.
+
+**Green / red feedback while dragging:**
+
+- **Green** — nearest node pair is compatible; release will attach
+- **Red** — near a node but incompatible (wrong kind, occupied, or illegal
+  order); release does nothing
+- Dim or hidden — nodes that are not candidates for the part in hand
+
+Compatibility is a function of rules, not vibes. The same logic that decides
+green/red must be what the workshop assembly graph uses to accept or reject
+the attach — no separate "display legality."
+
+**Command pod is the session root.** Every build session spawns a Command Pod
+(or probe core) fixed at the hangar centre. It is the vessel hierarchy root,
+the default camera focus, and the origin for mass / physics roll-up. The player
+does not place it from the palette; they build *onto* it.
+
+**v1 scope: axial stack only.** Ship a linear chain before a full attach graph.
+Typical bottom → top order once the modular catalog is live:
+
+| Role | Examples |
+| --- | --- |
+| Ground lock | Launch clamp (holds the stack until first stage fire) |
+| Propulsion | Liquid engine under fuel tank(s) |
+| Staging break | Stack / radial decoupler between stages |
+| Command | Command pod (already present as root; may sit above tanks) |
+| Aero / control | Fins low on the stack; reaction wheel (often in the pod) |
+| Mission | Environment sensor, antenna (science & utility) |
+
+Radial nodes, side boosters, symmetry mirrors, and fuel crossfeed are later.
+Do not block the workshop on full KSP generality.
+
+The legacy `PartKind` slots (`booster` → `upper` → `payload` → `fairing` in
+`vab/parts.ts`) remain the prototype library until the catalog below replaces
+them. New workshop work targets the five palette categories, not more
+carry-and-place slots.
+
+**Palette and progressive disclosure.** Categories + part thumbnails on one
+side; deep stats (thrust, Isp, mass, cost, blurb) on hover or select — a
+tooltip, not an always-on wall of numbers. Always-visible chrome stays thin:
+craft name, funds / budget, and a short live stack summary derived from the
+simulation. Mission / contract requirements stay available without drowning
+the 3D view.
+
+### Workshop part catalog (build-screen palette)
+
+Five categories on the build screen. Counts are the *types* the palette must
+expose for a playable vessel; variants (tank sizes, engine thrusts) live inside
+a type, not as extra categories.
+
+#### 1. Command (1 type) — session root
+
+| Part | Role |
+| --- | --- |
+| Command Pod / Probe Core | Brain of the vessel. Handles player input in flight, provides the camera focus, houses crew or computer, and is the origin for vessel mass and physics aggregation. **Spawns centred in every build session;** not dragged from the palette. |
+
+#### 2. Propulsion (2 types)
+
+| Part | Role |
+| --- | --- |
+| Liquid Fuel Tank | Holds propellant mass (SI kilograms). Capacity is a number the attached engine(s) draw from. Offer multiple sizes / dry masses as variants. |
+| Liquid Fuel Engine | Consumes propellant from connected tanks and applies thrust along the vessel axis in the flight sim (newtons). No tank in the feed path → no thrust. |
+
+#### 3. Structural & Coupling (2 types)
+
+| Part | Role |
+| --- | --- |
+| Radial / Stack Decoupler | Joins two stages. On stage activation, breaks the joint, runs vessel-split, and may impart a small separation impulse. Required for a real staging sequence. |
+| Launch Clamp | Anchors the rocket to the pad: holds the stack fixed (ignores gravity / tip-over) until the first stage fires. Optional in the abstract, strongly recommended so the pad is playable. |
+
+#### 4. Control & Aero (2 types)
+
+| Part | Role |
+| --- | --- |
+| Reaction Wheel | Applies pitch / yaw / roll torque from player input. May be a distinct part or built into the Command Pod; if built-in, the palette still needs a visible control story so players understand why the pod steers. |
+| Aerodynamic Fin | Passive stability in atmosphere: drag/lift that favours pointing forward. Place low on the stack. Without fins (or equivalent), atmospheric ascent flips easily. |
+
+#### 5. Science & Utility (2 types)
+
+| Part | Role |
+| --- | --- |
+| Environment Sensor (thermometer / barometer) | Does not change flight physics. Samples vessel state (altitude, speed, body) into a data packet the player can collect — the contract's science reason to fly. |
+| Antenna / Transmitter | Sends stored science packets to Mission Control (may consume electric charge later). Turns raw data into spendable science progress for the campaign. |
+
+#### Build-screen checklist (what the palette shows)
+
+1. **Command** — Command Pod (default centre spawn; palette may show it as equipped / locked)
+2. **Propulsion** — Fuel Tank (variants by size/weight), Liquid Engine
+3. **Structural & Coupling** — Decoupler, Launch Clamp
+4. **Control & Aero** — Reaction Wheel, Fin
+5. **Science & Utility** — Environment Sensor, Antenna
+
+Every part still carries cost (budget lever). Science parts are how the
+**contract** lever is met; propulsion and mass are how the **performance**
+lever is met. A craft with only a pod is not flight-ready.
+
+### Information design (hard rule)
+
+Playtesting: too much information hits at once. Prefer progressive disclosure —
+show the decision in front of the player now; detail on demand (inspect a part,
+hover tooltip, toggle a panel, ask for advice). Do not add a new always-on
+readout without removing or folding another. Full UX polish can wait; the rule
+cannot.
+
+The narrator stays quiet by default (see below). Spoken lines that restate a
+panel delete the reason the panel exists.
 
 ## Stack — frozen, do not revisit
 
@@ -52,16 +195,25 @@ to that person first.
 ```
 src/
   physics/     Lane A — simulation core. Pure functions, no Three.js, no DOM.
-  vab/         Lane B — assembly building: player controller, parts, stacking,
-               station floor plan.
+  vab/         Lane B — facility explore + workshop builder: cameras, parts,
+               stacking, stations. (Legacy first-person VAB still lives here
+               until the workshop replaces it.)
+  workshop/    Lane B — workshop session lifecycle (enter/exit, placeholder
+               root part). Created in Phase 1.
   flight/      Lane B — ascent and orbital flight (not yet built).
-  render/      Lane D — shared rendering helpers, effects, camera rigs.
+  render/      Lane D — shared rendering helpers, effects, camera rigs
+               (workshop OrbitCamera lands here in Phase 2; dir empty today).
   game/        Lane B — mission constraints, resources, lose conditions,
-               work-zone proximity rules.
-  ui/          Lane C — HUD panels, overlays, the narrator.
+               contract evaluation, GameMode. (Legacy work-zone / carry rules
+               stay until the workshop ships; do not extend them as product
+               features.)
+  ui/          Lane C — HUD panels, overlays, the narrator. Progressive
+               disclosure lives here.
   content/     Lane E — part specs, mission scripts, dialogue, citations.
   main.ts      Integration point. Changes here get reviewed by whoever is producing.
 ```
+
+Agent handoff for the current spike: `CODEX_PHASE_1_2.md`.
 
 `src/physics/` has one hard rule: **it never imports Three.js or touches the
 DOM.** It takes numbers and returns numbers. That is what makes it testable,
@@ -97,7 +249,10 @@ in between was tuned around it.
 
 ### Lessons already paid for
 
-Two bugs cost real time during prototyping. Do not reintroduce them.
+Bugs that cost real time. Do not reintroduce them. Lessons tied to the legacy
+elevator / carry-and-place loop are marked **historical** — keep them while
+that code exists; do not treat them as reasons to invest in that loop as the
+product.
 
 - **A single atmospheric scale height is wrong.** It overestimates density by
   roughly 3.4× at 52 km, which puts max-Q at the wrong altitude entirely and
@@ -111,7 +266,9 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   its starting yaw set to `Math.PI`, which faced the back wall two metres away.
   Walking forward worked perfectly and looked like a dead input. Any camera or
   heading work needs a test that asserts a *direction*, not just that the
-  position changed — `PlayerController.test.ts` has them.
+  position changed — `PlayerController.test.ts` has them. The same rule will
+  apply to the workshop orbit camera: assert framing, not only that the
+  transform changed.
 - **Never narrate the player's own actions.** Elena crept back into
   commentary — "Going up", "Back on the bench", "Core booster is on the stand" —
   every one of which the HUD already showed. She now speaks only for errors,
@@ -122,17 +279,10 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   visually identical and the choice looked pointless. `vab/variants.ts` gives
   each its own silhouette, and `tests/variants.test.ts` fingerprints the
   geometry so a future part added without a builder fails the suite.
-- **Two systems that must agree need a test that drives both.** The elevator
-  stop and the work zone's height window disagreed twice. The first time the
-  elevator was fixed at 45.6 m while the payload attached at 57.1, so the
-  preview rendered off-screen. The second time the elevator became derived from
-  the stack top and the work zone kept the constant, so the player could ride
-  to exactly the right place and be refused. The fix is `game/worksite.ts`,
-  extracted from `main.ts` precisely so the wiring is testable: a test that
-  calls `setWorkHeight` directly passes even when nothing calls it, which I
-  confirmed by breaking the wiring and watching the suite stay green.
-  `tests/workheight.test.ts` drives the real path across every booster, upper
-  stage and payload, and breaking the sync fails four of them.
+- **Two systems that must agree need a test that drives both.** (Historical —
+  elevator stop vs work-zone height.) The fix was `game/worksite.ts` and
+  `tests/workheight.test.ts`. When the workshop owns attach height, delete the
+  dual path rather than syncing it forever.
 - **A bezel drawn in front of a screen hides the screen.** The blueprint
   display rendered as a plain black rectangle for two rounds. The drawing code
   was correct; a 0.35 m deep frame box centred at z = 0 put its front face at
@@ -144,76 +294,44 @@ Two bugs cost real time during prototyping. Do not reintroduce them.
   drawn rather than that pixels changed. Without it there was no way to tell
   whether a black screen was a drawing bug or a scene-graph bug. The native
   `canvas` package does not build on this machine, so do not reach for it.
-- **Coplanar surfaces flicker.** The elevator deck's top face sat at y = 0.00
-  with tread strips spanning -0.01 to +0.03, so the two interpenetrated and
-  z-fought as the camera moved — the grey-and-white shimmer on the floor. Floor
-  decals now sit on separated layers: grid 0.02, safety ring 0.06, walkways
-  0.10, step patches 0.14.
-- **A trigger volume used for two purposes serves neither.** The elevator's
-  `contains` covers the car *and* its work deck, because the player must ride
-  with both. Offering the call button anywhere in that volume meant walking out
-  to the work end still showed "ride back down" and there was no way to place a
-  part. `atControls` is now a separate, smaller volume.
-- **The building must be taller than the rocket.** For several commits the
-  ceiling was 58 m and the tallest stack 75.9 m, so the vehicle poked ten metres
-  through the roof, the crane hoisted to 71 m and flew the load out through it,
-  and the player's head came out above the roof at the top of the lift. The
-  ceiling is now 96 m with an open roof slot, which the vehicle needs anyway to
-  leave the building. Any change to part heights needs re-checking against
-  `VAB_HEIGHT`.
-- **A fixed elevator stop cannot serve variable stack heights.** Booster heights
-  range from 38 to 47 m, so the attach point moves nine metres depending on
-  which the player chose. The car now takes its stop from the current stack top
-  via `setWorkingHeight`, called from `afterFit`.
+- **Coplanar surfaces flicker.** Floor decals must sit on separated layers or
+  they z-fight as the camera moves.
+- **A trigger volume used for two purposes serves neither.** (Historical —
+  elevator `contains` vs `atControls`.) Keep interaction volumes single-purpose
+  when adding campus stations (e.g. "enter workshop").
+- **The building must be taller than the rocket.** (Historical for the VAB
+  high bay; still true for any enclosed workshop mesh.) Part heights need
+  re-checking against the room height / roof slot.
+- **A fixed elevator stop cannot serve variable stack heights.** (Historical.)
+  Do not rebuild a height-commute mechanic for the workshop; the orbit camera
+  exists so the player never has to ride to the attach point.
 - **Do not build a scene with regex backreferences.** A `re.sub` over
   `stations.ts` injected literal control characters into the source and esbuild
   failed with `Expected identifier but found ""`. Vitest reported the file
-  as "no tests" rather than as an error, so it looked like the tests had been
-  skipped. Rewrite whole files instead.
-- **A feature can be correct and still invisible.** The placement preview
-  rendered exactly where it should — 9.8 m above the camera at 38 degrees,
-  outside the 36-degree half-FOV. The player reported it as missing for two
-  rounds. When someone says a feature is not there, check where it is on screen
-  before assuming the logic is wrong. `Elevator.test.ts` now asserts the car
-  stops where both high slots fall inside 34 degrees.
+  as "no tests" rather than as an error. Rewrite whole files instead.
+- **A feature can be correct and still invisible.** (Historical — placement
+  preview outside FOV.) When someone says a feature is missing, check where it
+  is on screen before assuming the logic is wrong. Workshop framing tests should
+  assert the stack is inside the view.
 - **A test that cannot fail is worse than no test.** The collision test walked
-  the player for four seconds at 7.4 m/s from a spawn 14 m away, then asserted
-  `distance >= 3.39`. The player passed clean through the obstacle and out the
-  far side, and the assertion passed on the overshoot. That false positive let
-  the entire collision loop go missing for several commits while the suite
-  stayed green, and the player reported walking through the rocket three times.
-  Collision tests now sample every frame and assert the *closest* approach.
-- **The ladder was replaced by an elevator, not fixed.** Three attempts failed:
-  climbing fought the walk input, the latch fought stepping off, and arriving at
-  a platform holding a part was a dead end. An elevator has none of those
-  failure modes — board, press, ride. When a mechanic needs a third fix, replace
-  the mechanic.
-- **Never parent a carried mesh to the camera.** It clipped through geometry,
-  blocked the view and never went away. Carried parts are inventory shown on a
-  HUD card, with a translucent ghost in the world at the snap target.
-- **A ladder must suppress forward walking only while climbing.** The first fix
-  zeroed forward input whenever the player was *near* a ladder, and latched them
-  to its column. That trapped them at the top: they could not step onto the
-  platform they had just climbed to, and the latch dragged them back every
-  frame. The controller now tracks `atLadderRest` — level with a platform — and
-  at rest the ladder branch does not run at all, so forward walks. See
-  `getting off a ladder` in `PlayerController.test.ts`.
-- **A ladder must suppress forward walking.** Holding up both climbed and
-  walked, carrying the player off the ladder's detection radius within about a
-  tenth of a second. It looked exactly like climbing being broken. The
-  controller now zeroes forward input while `onLadder` and latches the player
-  to the ladder's column; `PlayerController.test.ts` covers it.
-- **The scene only reports a ladder within 1.5 m of the player.** A test that
-  mounts a ladder further away creates a situation the game cannot produce, and
-  the latch will correctly drag the player to it. Mount at the player's own
-  position.
-- **Meshes are not collision.** The rocket was a pass-through hologram for
-  several commits: the geometry existed and nothing stopped the player walking
-  through a 300-tonne booster. Solid objects are registered as cylinders on
-  `PlayerController.obstacles`.
+  the player for four seconds then asserted an overshoot distance that passed
+  when collision was missing entirely. Sample every frame and assert the
+  *closest* approach — or whatever property would actually break.
+- **When a mechanic needs a third fix, replace the mechanic.** The ladder was
+  replaced by an elevator after three failed attempts. The elevator / carry
+  loop itself is now being replaced by the workshop for the same reason:
+  playtesting showed commute-and-confirm, not design.
+- **Never parent a carried mesh to the camera.** (Historical for carry mode.)
+  It clipped through geometry and blocked the view. Workshop ghosts / previews
+  belong in world space at the snap target, not on the camera.
+- **Meshes are not collision.** Solid objects need registered colliders
+  (cylinders on `PlayerController.obstacles` in explore mode). The rocket was a
+  pass-through hologram for several commits when only the mesh existed.
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
-  moves focus off the start button, so clearing there drops the keys the player
-  is already holding. Clear on `window` `blur` instead.
+  moves focus off the start button, so clearing there drops keys the player is
+  already holding. Clear on `window` `blur` instead. Workshop mode should
+  release pointer lock cleanly when entering the builder so mouse drag works
+  for orbit and part placement.
 
 ## Code style
 
@@ -236,99 +354,174 @@ npm run typecheck  # tsc --noEmit
 npm run build      # production bundle
 ```
 
-## What is built so far
+## What is built so far (legacy vertical slice)
 
-**Vertical slice: the Vehicle Assembly Building.** First-person walking at real
-spacecraft scale, four-part rocket assembly, and a live engineering readout
-driven by `physics/rocket.ts`. Press `E` to fit parts and watch the Δv figure
-drop as payload mass goes on.
+The repo still contains a first-person Vehicle Assembly Building: walk at real
+spacecraft scale, elevator to height, carry-and-place from benches, proximity
+work zones, and roll-out on `F` gated by `analysis.canReachOrbit`. That slice
+proved scale, part meshes, contract balance, mission resources, and a live
+engineering readout driven by `physics/rocket.ts`.
 
-**Mission constraints.** Budget, launch window and director confidence all run
-down, and any of them reaching zero ends the mission with a review-board
-screen. Balance is pinned by `game/Mission.test.ts`: a clean build finishes
-with margin on all three, two telescope swaps bankrupt the programme, and cheap
-swaps run the schedule out instead. Retune those numbers only with the tests in
-front of you.
+**Target feel overrides that loop.** New work moves toward campus explore +
+workshop builder. Do not invest in elevator reach, gantry ladders, carry-speed
+tuning, or work-zone height windows as product features. Reuse what still
+serves the new loop:
 
-**Assembly is carry-and-place, not a menu.** Parts live on stations
-(`vab/stations.ts`), the player collects one with `E`, carries it — slowed in
-proportion to its mass via `game/carry.ts` — and places it at the stand or from
-the gantry. Choosing a payload means walking to a different bench. An earlier
-version cycled a menu with Tab and auto-placed on `E`, which gave the player
-nothing to do and taught them nothing about the parts.
+- **Part library and variants** — `vab/parts.ts`, `vab/variants.ts`; silhouettes
+  must differ, not only numbers.
+- **Contract / mission resources** — `game/contract.ts`, `game/Mission.ts`.
+  Budget, window and confidence still matter; balance stays pinned by tests.
+  If a change makes one payload strictly best, fix the balance, not the test.
+- **Stack analysis** — Δv, mass, TWR from the simulation; the HUD derives from
+  it. This becomes the workshop's performance lever and the gate before launch.
+- **Quiet narrator + advice on request** — `ui/Narrator.ts`, `game/advice.ts`.
+  Advice names the trade-off, never the answer (`advice.test.ts` forbids naming
+  a payload).
 
-**The room is lit like a working high bay.** Bright ambient, a hemisphere fill,
-a grid of overhead fixtures and low work lights. The first version was a dark
-warehouse with five point lights: atmospheric, and it read as unfinished.
-
-**Everything solid is a cylinder on `PlayerController.obstacles`.** Benches,
-gantry legs, structural columns and the vehicle. `VABScene` exports
-`staticObstacles` for the fixed structure and `main.ts` appends the rocket,
-whose height grows as it is built.
-
-**The contract is what makes assembly a game.** `game/contract.ts` states a
-requirement and leaves the vehicle to the player. Before it existed, the build
-order was hardcoded and pressing `E` four times always produced the one correct
-vehicle. `contract.test.ts` pins the property that matters: at least three
-payloads satisfy the contract, they differ in science, margin and cost, the
-cheapest one fails the science floor, and the highest-paying one leaves under
-200 m/s of margin. If a change makes one payload strictly best, that test
-should start failing — fix the balance, not the test.
-
-**Working at height.** The payload and fairing are fitted from the top gantry
-platform, not the floor, so the player climbs. `workzone.test.ts` pins the
-gantry geometry against the platform heights `VABScene` actually builds: these
-constants live in two files and once disagreed badly enough that the payload
-was unreachable — the work height was 56 m when the top platform was 45.6, and
-the ladder ran up a column outside the platform footprint entirely. Change one
-and run the tests.
-
-**One source of truth for reach rules.** `canWorkOn` in `game/workzone.ts` is
-the only place that decides whether the player can fit a part. `main.ts` used
-to duplicate the check, which is how a bug shipped that let the core booster be
-fitted from 56 metres up: the gantry is 7 m from the stand horizontally, so it
-satisfied the floor work zone when height was ignored.
-
-**Proximity-gated interaction.** `game/workzone.ts` restricts assembly to the
-painted circle around the stand, and the action prompt fades in as the player
-approaches. The hint radius is deliberately wider than the spawn distance: if
-the prompt were invisible at spawn, the opening move of the game would be
-hidden. `workzone.test.ts` pins that.
-
-**Roll-out.** Pressing `F` on a flight-ready stack ends the phase with a
-summary of what the build cost. It is gated on `analysis.canReachOrbit`, so the
-delta-v board is a gate rather than decoration.
-
-**The narrator is quiet by default, and that is a hard rule.** She volunteers
-two intro lines, a few words per fitted part, and urgent resource warnings.
-Nothing else. Playtesting killed the previous version: narrating every part,
-every removal and every payload the player tabbed past was exhausting and it
-talked over panels that convey the same thing faster. Before adding a spoken
-line, ask whether a panel already says it.
-
-**Advice is on request.** `game/advice.ts` picks a line from actual game state
-when the player presses `T`. Its rule is to name the trade-off, never the
-answer — `advice.test.ts` asserts that no advice string mentions a payload by
-name, because an assistant that says "fit the telescope" deletes the decision
-the phase exists to create.
-
-**The narrator.** `ui/Narrator.ts` speaks the flight director's lines through
-the Web Speech API and mirrors every one into the dialogue panel, so spoken and
-written text cannot drift apart. Speech is always optional: it degrades to
-silent text where the API is missing and the player can mute it with `V`.
-Script lives in `content/dialogue.ts` and is written to be heard — short
-sentences, no parentheses, no figures that only parse on the page.
+Historical detail of the carry-and-place / elevator path (stations, crane
+hoist, `canWorkOn`, gantry geometry) remains in the codebase and its tests until
+the workshop replaces it. Treat that code as scaffolding, not as the design.
 
 ## What comes next, in order
 
-1. **Flyable ascent** — throttle, pitch, staging, max-Q, with the HUD showing
-   live apoapsis. The ascent physics is already verified by headless
-   simulation, so this is wiring rather than discovery. Roll-out already gates
-   on `analysis.canReachOrbit`; the pad scene picks up from there.
-2. **Flyable ascent** — throttle, pitch, staging, max-Q, with the HUD showing
-   live apoapsis. The ascent physics is already verified by headless simulation.
-3. **Orbital map view** — switch from first-person to a map with manoeuvre
-   planning.
-4. **The Moon** — patched conics, sphere-of-influence transitions, landing.
-5. **Campaign and review board** — mission progression, and the failure-analysis
+1. **Mode switch (Phase 1)** — Explore ↔ Workshop. See *Implementation:
+   Phase 1 & 2* below.
+2. **Workshop camera (Phase 2)** — third-person orbit / pan / zoom. Same
+   section.
+3. **Workshop assembly (Phase 3)** — axial snap spike first: see
+   `CODEX_PHASE_3.md`. Full five-category catalog, contract “Complete” gate,
+   and handoff to launch are Phase 3b / later.
+4. **Flyable ascent** — throttle, pitch, staging, max-Q, live apoapsis. Ascent
+   physics is already verified headless; this is wiring. Pad scene picks up
+   after workshop complete / roll-out.
+5. **Campus expansion** — other facilities as explore destinations (launch site
+   exterior, etc.). Flavour and wayfinding, not a second builder.
+6. **Orbital map view** — switch to a map with manoeuvre planning.
+7. **The Moon** — patched conics, sphere-of-influence transitions, landing.
+8. **Campaign and review board** — mission progression, and the failure-analysis
    scene that carries most of the educational payload.
+
+Cinematics, final art direction, and deep storyline are later passes. Nail the
+mode switch and workshop camera before assembly UI.
+
+## Implementation: Phase 1 & 2 (current focus)
+
+**Follow-up superseding the original legacy-loop requirements below:** Explore
+now routes assembly exclusively to Workshop. Back-wall part benches, placards,
+step paint and the old blueprint board are retired; pickup, fit, Tab selection
+and other legacy assembly shortcuts are disconnected. Keep their underlying
+modules for migration, but do not restore them as playable Explore mechanics.
+The Workshop Command Pod floats 10 m above `assemblyRoot` (11.6 m above the
+VAB floor), and the orbit target follows its world-space centre. Palette,
+drag-drop and snap nodes remain outside this iteration.
+
+Do **only** these two phases now. Do not implement drag-drop, attachment
+nodes, the five-category palette, staging, or ascent. Leave the legacy
+carry-and-place path runnable in Explore mode until Phase 3+ replaces it.
+
+For a paste-ready agent brief, see `CODEX_PHASE_1_2.md` at the repo root.
+
+### Shared constraints
+
+- Stack stays frozen: Vite, TypeScript `strict`, Three.js, Vitest, plain DOM
+  HUD, no React in the game loop, no state library.
+- SI units everywhere; convert only when writing DOM text.
+- `src/physics/` must not import Three.js or touch the DOM.
+- Prefer new modules over growing `main.ts`. Thin wiring in `main.ts` is fine;
+  camera and mode logic belong in dedicated files.
+- `src/render/` is empty today — create it for the orbit camera.
+- Run `npm test` and `npm run typecheck` before considering the work done.
+- Do not delete elevator / carry / work-zone code in these phases; gate it so
+  it is inactive (or unreachable) while `mode === 'workshop'`.
+
+### Phase 1 — Explore ↔ Workshop mode switch
+
+**Goal.** Prove the product seam: walk the existing VAB as Explore, enter a
+Workshop mode that is a distinct camera / input context, exit back to Explore.
+
+**Done when:**
+
+1. Player can walk in first person as today (Explore).
+2. Near a clearly marked workshop station / door volume, an interact prompt
+   offers entering the workshop (reuse `E` or a dedicated affordance).
+3. Entering Workshop: exits pointer lock, stops first-person look/move from
+   driving the camera, shows a Command Pod (or clear capsule placeholder)
+   centred on the assembly stand (`assemblyRoot` is at `(0, 1.6, 0)` in
+   `VABScene`).
+4. Exiting Workshop (Esc and/or interact at an exit control): restores Explore,
+   re-parents or re-enables the FPS camera on `PlayerController.yawObject`,
+   and allows pointer lock again on the next canvas gesture.
+5. While in Workshop, legacy fit / carry / elevator / `Q` / `R` assemble
+   shortcuts do not run (or are no-ops). Mission clock may pause or continue —
+   prefer **pause mission resource drain** in Workshop for this spike so
+   testing the camera does not burn the window.
+6. At least one unit test covers mode enter/exit state (e.g. `mode` flips and
+   workshop root present), without requiring WebGL.
+
+**Suggested shape (not mandatory names):**
+
+```
+src/game/mode.ts          # type GameMode = 'explore' | 'workshop'; enter/exit helpers
+src/vab/WorkshopStation.ts  # trigger volume + placard near the stand or bay wall
+src/workshop/session.ts   # spawn/despawn placeholder Command Pod on the stand
+```
+
+**Reuse:**
+
+- `PlayerController.requestLock` / `releaseLock` already exist.
+- `createVABScene()` / existing hangar — do **not** rebuild the campus yet;
+  Phase 1 uses the current VAB as the explore space and hangar.
+- Existing HUD: hide or dim Explore-only chrome in Workshop (crosshair,
+  carry card, work-zone prompt). A minimal "Workshop — Esc to leave" banner
+  is enough. Do not add the full part palette yet.
+
+**Explicit non-goals for Phase 1:** orbit camera polish (that is Phase 2),
+part palette, snap nodes, contract gating for "Complete."
+
+### Phase 2 — Workshop orbit camera
+
+**Goal.** In Workshop mode only, frame the stand with a third-person orbit
+camera: orbit, pan, zoom. Pointer lock stays off.
+
+**Done when:**
+
+1. Entering Workshop hands the shared `THREE.PerspectiveCamera` to the orbit
+   rig (or the orbit rig writes camera transform each frame while Workshop is
+   active). Explore no longer updates `PlayerController` movement into the
+   active view.
+2. **Orbit** — drag (recommend LMB) rotates azimuth/elevation around a target
+   at the Command Pod / stand centre.
+3. **Pan** — drag (recommend RMB or MMB, or Shift+LMB) moves the target in the
+   camera's local plane.
+4. **Zoom** — scroll wheel changes distance; clamp min/max so the camera never
+   enters the pod mesh or flies through the far wall.
+5. Elevation clamped (no flipping upside-down through the floor).
+6. Target defaults to the placeholder Command Pod world position.
+7. Unit tests assert *direction / framing properties* (e.g. after orbit by π/2,
+   camera lies roughly on the expected axis relative to target; distance stays
+   within clamps) — same lesson as `PlayerController.test.ts`: assert where
+   the camera points, not only that a number changed.
+8. Leaving Workshop restores Explore camera behaviour cleanly (no leftover
+   orbit listeners stealing mouse input).
+
+**Suggested shape:**
+
+```
+src/render/OrbitCamera.ts       # pure-ish rig: update(dt), handlePointer*, setTarget
+src/render/OrbitCamera.test.ts  # framing / clamp tests (jsdom + Three math, no WebGL)
+```
+
+**Input conflict rules (Workshop):**
+
+- Mouse drag = orbit/pan, not FPS look.
+- Scroll = zoom, not page scroll (`preventDefault` on the canvas).
+- `Esc` = exit Workshop (Phase 1), not only exit pointer lock.
+- Do not parent the Command Pod to the camera.
+
+**Explicit non-goals for Phase 2:** dragging parts from a palette, green/red
+nodes, saving craft, launch handoff.
+
+### After Phase 1 & 2
+
+Stop and playtest. Next is Phase 3 (vessel graph + axial snap with stub
+parts), documented under workshop assembly above — not in this spike.

@@ -1405,3 +1405,69 @@ kbd {
   border-left: 2px solid var(--burn);
   padding-left: 10px;
 }
+
+/* Workshop keeps the viewport clear while the legacy HUD is suspended. */
+#workshop {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-top: 2px solid var(--cyan);
+  pointer-events: none;
+}
+#workshop strong { display: block; font-family: var(--display); color: var(--cyan); }
+#workshop span, #workshop p { font-size: 12px; color: var(--dim); }
+#workshop p { margin: 0; }
+#workshop button { pointer-events: auto; cursor: pointer; }
+
+/* Phase 3 uses only the two Propulsion stubs; detailed stats stay on hover. */
+#workshop .workshop-palette {
+  position: absolute;
+  top: calc(100% + 12px);
+  left: 0;
+  width: 190px;
+  padding: 14px;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  pointer-events: auto;
+}
+#workshop .workshop-palette h2 { margin: 0 0 12px; font: 600 15px var(--display); }
+#workshop .workshop-palette button {
+  display: block; width: 100%; margin: 8px 0; padding: 12px 8px;
+  color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
+  border-radius: 4px; font: 13px var(--body); text-align: left;
+}
+#workshop .workshop-palette button[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan); }
+#workshop button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+#workshop .workshop-palette button:disabled { opacity: 0.4; cursor: default; }
+#workshop .workshop-palette small { display: block; color: var(--dim); font-size: 11px; line-height: 1.5; }
+#workshop .workshop-readout { font: 12px var(--mono); color: var(--ink); }
+#workshop .workshop-status {
+  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
+  max-width: calc(100vw - 32px); width: max-content;
+  border: 1px solid var(--line); border-radius: 4px; background: var(--panel);
+  padding: 12px 18px; color: var(--ink); text-align: center;
+}
+@media (max-width: 600px) {
+  #workshop .workshop-palette { width: 146px; padding: 9px; }
+  #workshop .workshop-status { bottom: 12px; font-size: 11px; }
+}
+
+#workshop .workshop-part { position: relative; }
+#workshop .workshop-tooltip {
+  display: none; position: absolute; left: calc(100% + 10px); top: 0;
+  width: 240px; padding: 12px; background: var(--panel-solid); color: var(--ink);
+  border: 1px solid var(--cyan); border-radius: 4px;
+  white-space: pre-line; font: 12px/1.5 var(--body); pointer-events: none;
+}
+#workshop .workshop-part:hover .workshop-tooltip,
+#workshop .workshop-part button:focus-visible + .workshop-tooltip { display: block; }

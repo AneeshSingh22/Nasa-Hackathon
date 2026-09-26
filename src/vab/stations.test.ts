@@ -1,129 +1,60 @@
-import { describe, it, expect } from 'vitest';
-import {
-  STATIONS,
-  STATION_REACH,
-  stationNear,
-  stationForKind,
-  stationForStep,
-} from './stations';
-import { PART_LIBRARY } from './parts';
-import { ELEVATOR_X, ELEVATOR_Z, CAR_HALF } from './Elevator';
-import { VAB_WIDTH, VAB_DEPTH } from './VABScene';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import * as THREE from 'three';
+import { createVABScene, type VABEnvironment } from './VABScene';
+import { STATIONS } from './stations';
+import { PlayerController } from './PlayerController';
+import { WorkshopStation } from './WorkshopStation';
 
-/**
- * The bay layout is content, and content bugs are invisible until someone walks
- * into them. Two benches once sat 5 m apart with 2.6 m collision radii, so they
- * intersected; an earlier version had ten benches that all looked the same.
- */
-
-/** Bench collision radius, matching VABScene. */
-const BENCH_RADIUS = 2.9;
-
-describe('station layout', () => {
-  it('has exactly one station per build step', () => {
-    // One bench per part meant walking to a different bench duplicated what
-    // the Tab panel already does.
-    expect(STATIONS).toHaveLength(4);
-    for (const step of [1, 2, 3, 4]) {
-      expect(stationForStep(step), `step ${step}`).not.toBeNull();
-    }
+// The old station coordinates are regression probes, not active destinations.
+describe('Explore without part benches', () => {
+  let env: VABEnvironment;
+  const labels: string[] = [];
+  beforeEach(() => {
+    labels.length = 0;
+    const context = {
+      fillRect() {}, strokeRect() {}, beginPath() {}, moveTo() {}, lineTo() {},
+      closePath() {}, fill() {}, fillText(text: string) { labels.push(text); },
+    } as unknown as CanvasRenderingContext2D;
+    vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(context);
+    env = createVABScene();
+    env.scene.updateMatrixWorld(true);
+  });
+  afterEach(() => {
+    vi.restoreAllMocks();
+    env.scene.traverse(object => {
+      if (object instanceof THREE.Mesh) object.geometry.dispose();
+    });
   });
 
-  it('issues every kind of part the library contains', () => {
-    const kinds = new Set(PART_LIBRARY.map((p) => p.kind));
-    for (const kind of kinds) {
-      expect(stationForKind(kind), `kind ${kind}`).not.toBeNull();
-    }
-  });
-
-  it('gives every station at least one part to issue', () => {
+  it('has floor, not bench geometry or step paint, at every former station', () => {
+    const meshes: THREE.Mesh[] = [];
+    env.scene.traverse(object => { if (object instanceof THREE.Mesh) meshes.push(object); });
     for (const station of STATIONS) {
-      const options = PART_LIBRARY.filter((p) => p.kind === station.kind);
-      expect(options.length, station.id).toBeGreaterThan(0);
-    }
-  });
-
-  it('keeps every bench inside the building', () => {
-    const halfW = VAB_WIDTH / 2;
-    const halfD = VAB_DEPTH / 2;
-    for (const station of STATIONS) {
-      expect(Math.abs(station.x), station.id).toBeLessThan(halfW - BENCH_RADIUS);
-      expect(Math.abs(station.z), station.id).toBeLessThan(halfD - BENCH_RADIUS);
-    }
-  });
-
-  it('never lets two benches intersect', () => {
-    for (let i = 0; i < STATIONS.length; i++) {
-      for (let j = i + 1; j < STATIONS.length; j++) {
-        const a = STATIONS[i];
-        const b = STATIONS[j];
-        if (!a || !b) continue;
-        const d = Math.hypot(a.x - b.x, a.z - b.z);
-        expect(d, `${a.id} and ${b.id}`).toBeGreaterThan(BENCH_RADIUS * 2);
+      for (const z of [station.z, station.z + 4.2]) {
+        const ray = new THREE.Raycaster(new THREE.Vector3(station.x, 2.5, z), new THREE.Vector3(0, -1, 0));
+        const hits = ray.intersectObjects(meshes, false);
+        expect(hits.length).toBeGreaterThan(0);
+        expect(hits[0]!.point.y, station.id).toBeLessThan(0.1);
       }
+      expect(env.staticObstacles.some(o => o.x === station.x && o.z === station.z)).toBe(false);
     }
+    expect(labels.join(' ')).not.toMatch(/Step [1-4]|payload & fairing|first stage/i);
   });
 
-  it('keeps benches clear of the assembly stand', () => {
-    for (const station of STATIONS) {
-      expect(Math.hypot(station.x, station.z), station.id).toBeGreaterThan(9);
+  it('lets the player walk from spawn to Workshop using the real scene colliders', () => {
+    const player = new PlayerController(new THREE.PerspectiveCamera(),
+      { minX: -29, maxX: 29, minZ: -22, maxZ: 22 });
+    const detach = player.attach(document.createElement('canvas'));
+    player.obstacles = env.staticObstacles;
+    const workshop = new WorkshopStation();
+    window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
+    for (let i = 0; i < 35; i++) {
+      player.supportHeight = env.supportHeightAt(player.position.x, player.position.z, player.feetHeight);
+      player.update(1 / 60);
     }
-  });
-
-  it('keeps benches clear of the elevator', () => {
-    for (const station of STATIONS) {
-      const d = Math.hypot(station.x - ELEVATOR_X, station.z - ELEVATOR_Z);
-      expect(d, station.id).toBeGreaterThan(CAR_HALF + BENCH_RADIUS + 1);
-    }
-  });
-
-  it('lays the steps out in order along one wall', () => {
-    // The player should walk a straight line from step 1 to step 4 rather than
-    // crossing the bay between sequential steps.
-    const sorted = [...STATIONS].sort((a, b) => a.step - b.step);
-    for (let i = 1; i < sorted.length; i++) {
-      const previous = sorted[i - 1];
-      const current = sorted[i];
-      if (!previous || !current) continue;
-      // Each step is further along +X than the last.
-      expect(current.x, `step ${current.step} after ${previous.step}`)
-        .toBeGreaterThan(previous.x);
-      // And on the same wall run, so they are all visible together.
-      expect(Math.abs(current.z - previous.z)).toBeLessThan(2);
-    }
-  });
-
-  it('numbers the labels to match the step', () => {
-    for (const station of STATIONS) {
-      expect(station.label, station.id).toContain(`Step ${station.step}`);
-    }
-  });
-
-  it('finds the nearest station within reach', () => {
-    const first = STATIONS[0];
-    expect(first).toBeDefined();
-    if (!first) return;
-
-    expect(stationNear(first.x, first.z)?.id).toBe(first.id);
-    // The middle of the floor is not at any station.
-    expect(stationNear(0, 5)).toBeNull();
-  });
-
-  it('does not let one position match two stations', () => {
-    // Overlapping reach radii would make collection ambiguous.
-    for (const station of STATIONS) {
-      const matches = STATIONS.filter(
-        (s) => Math.hypot(s.x - station.x, s.z - station.z) < STATION_REACH,
-      );
-      expect(matches.length, `at ${station.id}`).toBe(1);
-    }
-  });
-
-  it('spaces the stations so all four are reachable in a short walk', () => {
-    const xs = STATIONS.map((s) => s.x);
-    const span = Math.max(...xs) - Math.min(...xs);
-    // Wide enough not to overlap, tight enough to see the whole row.
-    expect(span).toBeGreaterThan(20);
-    expect(span).toBeLessThan(40);
+    window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
+    detach();
+    expect(workshop.contains(player.position)).toBe(true);
+    expect(player.feetHeight).toBeCloseTo(0);
   });
 });

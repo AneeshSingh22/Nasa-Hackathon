@@ -1,9 +1,7 @@
 import * as THREE from 'three';
 import { createMaterials, type Materials } from './parts';
-import { STATIONS } from './stations';
-import { placardForStation } from './placards';
 import { createElevator, type ElevatorRig } from './Elevator';
-import { createBlueprintBoard, type BlueprintState } from './blueprint';
+import type { BlueprintState } from './blueprint';
 
 /**
  * The Vehicle Assembly Building.
@@ -87,18 +85,6 @@ export function createVABScene(): VABEnvironment {
     color: 0x3f6fa8,
     roughness: 0.7,
     metalness: 0.05,
-  });
-  /** Station bench tops. */
-  const benchMat = new THREE.MeshStandardMaterial({
-    color: 0x4a5462,
-    roughness: 0.55,
-    metalness: 0.45,
-  });
-  /** Placard faces, which read as printed signage. */
-  const placardMat = new THREE.MeshStandardMaterial({
-    color: 0xf2f4f7,
-    roughness: 0.9,
-    metalness: 0.0,
   });
   const steel = new THREE.MeshStandardMaterial({
     color: 0x4b5260,
@@ -290,121 +276,8 @@ export function createVABScene(): VABEnvironment {
   assemblyRoot.position.set(0, 1.6, 0);
   scene.add(assemblyRoot);
 
-  // ---- part stations ----
-  // Each component sits on its own bench with a placard, so choosing a payload
-  // means walking to a different station rather than cycling a menu.
-  const stationObstacles: Array<{ x: number; z: number; radius: number; top: number }> = [];
-  /** Placard faces, so a station's sign can be redrawn on selection. */
-  const placardFaces = new Map<
-    string,
-    { mesh: THREE.Mesh; kind: string }
-  >();
-
-  for (const station of STATIONS) {
-    const bench = new THREE.Group();
-    bench.position.set(station.x, 0, station.z);
-    bench.rotation.y = station.rotation;
-
-    // Bench top and legs.
-    const top = new THREE.Mesh(new THREE.BoxGeometry(4.6, 0.18, 2.6), benchMat);
-    top.position.y = 0.95;
-    top.castShadow = true;
-    top.receiveShadow = true;
-    bench.add(top);
-
-    for (const lx of [-2.0, 2.0]) {
-      for (const lz of [-1.0, 1.0]) {
-        const leg = new THREE.Mesh(
-          new THREE.BoxGeometry(0.16, 0.95, 0.16),
-          benchMat,
-        );
-        leg.position.set(lx, 0.475, lz);
-        bench.add(leg);
-      }
-    }
-
-    // Angled placard carrying the part's name, a schematic and its numbers.
-    // Blank white boards left the bay unreadable: identical grey benches with
-    // no way to tell which held what without walking up to every one.
-    const texture = placardForStation(
-      station.kind,
-      station.label,
-      station.bay,
-      station.step,
-    );
-    const faceMat = texture
-      ? new THREE.MeshStandardMaterial({ map: texture, roughness: 0.82, metalness: 0.0 })
-      : placardMat;
-
-    // Mounted on a short post at the back of the bench and tilted back, so it
-    // reads as a sign standing on the bench rather than a billboard hovering
-    // in front of the room.
-    const placard = new THREE.Mesh(new THREE.BoxGeometry(3.4, 1.7, 0.07), [
-      placardMat, placardMat, placardMat, placardMat, faceMat, placardMat,
-    ]);
-    placard.position.set(0, 1.92, -0.72);
-    placard.rotation.x = -0.34;
-    placard.castShadow = true;
-    bench.add(placard);
-
-    for (const px of [-1.3, 1.3]) {
-      const post = new THREE.Mesh(
-        new THREE.CylinderGeometry(0.05, 0.05, 0.95, 8),
-        benchMat,
-      );
-      post.position.set(px, 1.42, -0.86);
-      bench.add(post);
-    }
-
-    // A small stand light over the sign, so it is legible from a distance.
-    const signLight = new THREE.PointLight(0xfff6e6, 3.4, 9, 2);
-    signLight.position.set(0, 3.3, 0.6);
-    bench.add(signLight);
-
-    // Coloured stripe along the front edge, keyed to the bay, so the three
-    // groups of stations read as groups from across the room.
-    const stripeColour =
-      station.bay === 'stages' ? 0xff6b3d : station.bay === 'payloads' ? 0x52d9ec : 0xffbc4d;
-    const stripe = new THREE.Mesh(
-      new THREE.BoxGeometry(4.6, 0.1, 0.12),
-      new THREE.MeshStandardMaterial({
-        color: stripeColour,
-        emissive: stripeColour,
-        emissiveIntensity: 0.35,
-        roughness: 0.6,
-      }),
-    );
-    stripe.position.set(0, 1.05, 1.32);
-    bench.add(stripe);
-
-    scene.add(bench);
-    placardFaces.set(station.id, { mesh: placard, kind: station.kind });
-
-    // Painted step number on the floor in front of the bench, which is how a
-    // real facility marks out work areas.
-    const floorMark = new THREE.Mesh(
-      new THREE.PlaneGeometry(3.4, 3.4),
-      new THREE.MeshStandardMaterial({
-        color:
-          station.bay === 'stages'
-            ? 0xff6b3d
-            : station.bay === 'payloads'
-              ? 0x2e9fc4
-              : 0xd89a1f,
-        roughness: 0.8,
-        transparent: true,
-        opacity: 0.3,
-      }),
-    );
-    floorMark.rotation.x = -Math.PI / 2;
-    // All four stations face the room from the back wall, so the patch always
-    // goes on the +Z side.
-    floorMark.position.set(station.x, 0.14, station.z + 4.2);
-    scene.add(floorMark);
-
-    // Benches are solid, so the player walks round them.
-    stationObstacles.push({ x: station.x, z: station.z, radius: 2.9, top: 1.1 });
-  }
+  // Part benches, placards and floor step marks are retired. Workshop is
+  // the sole assembly entry point; the back wall no longer issues parts.
 
   // ---- service elevator ----
   // Replaces the gantry ladder, which could not be made to work: climbing
@@ -413,20 +286,8 @@ export function createVABScene(): VABEnvironment {
   const elevator = createElevator();
   scene.add(elevator.group);
 
-  // ---- blueprint board ----
-  // A wall-sized exploded diagram showing every slot and which are done.
-  // Reading ten near-identical placards to work out what was missing was the
-  // most confusing thing in the bay; a diagram answers it at a glance.
-  const blueprint = createBlueprintBoard({ fitted: new Map(), nextKind: 'booster' });
-  // High on the BACK wall, dead ahead of where the player spawns.
-  //
-  // The board was previously on the front wall at z = +21.4. The player spawns
-  // at z = +14 facing -Z, so it sat behind them for the entire game, with the
-  // console bank two metres in front of it occluding what little showed. From
-  // spawn it is now 37 m away and 18 degrees up — inside the field of view
-  // without turning or looking around.
-  blueprint.group.position.set(-3.5, 0, -22.7);
-  scene.add(blueprint.group);
+  // The old four-step blueprint board taught bench assembly, so it is not
+  // spawned. Its drawing module remains available to legacy tests/tools.
 
   // ---- wayfinding sign ----
   // Mounted on the shaft above the car door. The player spawns at +Z and the
@@ -449,7 +310,7 @@ export function createVABScene(): VABEnvironment {
 
     signCtx.fillStyle = '#e9f2fb';
     signCtx.font = '500 44px "Courier New", monospace';
-    signCtx.fillText('Work platform · payload & fairing', 52, 184);
+    signCtx.fillText('Service access · inactive', 52, 184);
 
     // Arrow pointing right, toward the shaft.
     signCtx.fillStyle = '#ffc23d';
@@ -786,7 +647,6 @@ export function createVABScene(): VABEnvironment {
 
   // Structural columns and gantry legs are solid too.
   const structureObstacles = [
-    ...stationObstacles,
     ...decorObstacles,
     { x: 10.4, z: 2.0, radius: 0.7, top: VAB_HEIGHT * 0.85 },
     { x: 10.4, z: -2.0, radius: 0.7, top: VAB_HEIGHT * 0.85 },
@@ -808,31 +668,9 @@ export function createVABScene(): VABEnvironment {
     assemblyRoot,
     staticObstacles: structureObstacles,
     elevator,
-    refreshBlueprint: blueprint.refresh,
-
-    refreshPlacard(stationId: string, partId: string) {
-      const entry = placardFaces.get(stationId);
-      if (!entry) return;
-      const station = STATIONS.find((st) => st.id === stationId);
-      if (!station) return;
-
-      const texture = placardForStation(
-        station.kind,
-        station.label,
-        station.bay,
-        station.step,
-        partId,
-      );
-      if (!texture) return;
-
-      // Index 4 is the front face of the box, which carries the sign.
-      const materials = entry.mesh.material as THREE.Material[];
-      const front = materials[4] as THREE.MeshStandardMaterial | undefined;
-      if (front) {
-        front.map = texture;
-        front.needsUpdate = true;
-      }
-    },
+    // Retain the interface for the disconnected legacy assembly handlers.
+    refreshBlueprint: () => {},
+    refreshPlacard: () => {},
 
     isAtPlatformLevel(feetY: number) {
       return platformHeights.some((h) => Math.abs(h - feetY) < 0.6);

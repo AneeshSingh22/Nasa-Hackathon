@@ -21,31 +21,35 @@
           <p class="eyebrow">Ad Astra Program · Mission 02</p>
           <h1>Vehicle Assembly Building</h1>
           <p class="blurb">
-            You are the flight engineer. Walk the assembly bay, inspect each
-            stage, and build a launch vehicle that can actually reach orbit —
-            the numbers on the wall are the same ones that will fly.
+            Explore the bay, then enter the workshop to build. Walk to the cyan
+            Workshop marker and press E to view your floating Command Pod.
+            Choose a tank or engine, then click a green attachment point to build.
           </p>
           <div class="controls">
-            <div><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd><span>Walk</span></div>
-            <div><kbd>E</kbd><span>Collect, place, ride</span></div>
+            <div><kbd>WASD</kbd><span>Walk (arrow keys also work)</span></div>
             <div><kbd>Shift</kbd><span>Run</span></div>
             <div><kbd>Mouse</kbd><span>Look</span></div>
-            <div><kbd>E</kbd><span>Attach next stage</span></div>
-            <div><kbd>Q</kbd><span>Remove top stage</span></div>
-            <div><kbd>R</kbd><span>Reset stack</span></div>
+            <div><kbd>E</kbd><span>Enter Workshop at the cyan marker</span></div>
+            <div><kbd>Esc</kbd><span>Leave Workshop / release cursor</span></div>
             <div><kbd>T</kbd><span>Ask for advice</span></div>
-            <div><kbd>H</kbd><span>Controls, any time</span></div>
+            <div><kbd>H</kbd><span>Controls</span></div>
           </div>
           <button id="start-button">Enter the building</button>
         </div>
       </div>
+
+      <section id="workshop" class="hidden" aria-label="Workshop">
+        <div><strong>Workshop</strong><span>Axial rocket builder</span></div>
+        <p>Idle drag: orbit · Right / middle drag: pan · Scroll: zoom</p>
+        <button type="button">Return to bay <kbd>Esc</kbd></button>
+      </section>
 
       <!-- In-game HUD -->
       <div id="hud" class="hidden">
         <div id="crosshair"></div>
 
         <!-- Engineering readout, styled as a board on the VAB wall -->
-        <section id="readout" aria-label="Vehicle engineering readout">
+        <section id="readout" class="hidden" aria-label="Vehicle engineering readout">
           <header>
             <span class="panel-title">Vehicle Analysis</span>
             <span id="stack-state" class="pill">Empty stand</span>
@@ -147,15 +151,14 @@
 
         <!-- Next-action prompt -->
         <div id="prompt" class="prompt" data-key="E">
-          <kbd id="prompt-key">E</kbd><span id="prompt-text">Fit the core booster</span>
+          <kbd id="prompt-key">E</kbd><span id="prompt-text">Walk to the cyan Workshop marker to build</span>
         </div>
 
         <!-- CAPCOM dialogue -->
         <div id="capcom">
           <span class="capcom-who">Elena Vásquez · Flight Director</span>
           <p id="capcom-text">
-            Morning, engineer. That stand is empty and we launch in three weeks.
-            Start with the core booster and work up.
+            Explore the bay, then enter the workshop at the cyan marker to build.
           </p>
         </div>
 
@@ -182,92 +185,29 @@
           </header>
 
           <div class="help-body">
-            <h3>Moving</h3>
+            <h3>Explore the bay</h3>
             <dl class="keymap">
-              <dt><kbd>&uarr;</kbd><kbd>&darr;</kbd><kbd>&larr;</kbd><kbd>&rarr;</kbd></dt>
-              <dd>Walk around the bay <span class="alt-keys">(WASD also works)</span></dd>
-              <dt><kbd>Shift</kbd></dt>
-              <dd>Run</dd>
-              <dt>Mouse</dt>
-              <dd>Look around</dd>
-              <dt><kbd>E</kbd> in the elevator</dt>
-              <dd>
-                Ride to the top work platform. The payload and fairing are
-                fitted from up there.
-              </dd>
-              <dt><kbd>Esc</kbd></dt>
-              <dd>Release the cursor — click the view to take it back</dd>
+              <dt><kbd>WASD</kbd> / arrow keys</dt><dd>Walk</dd>
+              <dt><kbd>Shift</kbd></dt><dd>Run</dd>
+              <dt>Mouse</dt><dd>Look around (drag if pointer lock is unavailable)</dd>
+              <dt><kbd>E</kbd> at the cyan marker</dt><dd>Enter the workshop to build</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Release the cursor; click the view to take it back</dd>
+              <dt><kbd>H</kbd></dt><dd>Show or hide controls</dd>
+              <dt><kbd>T</kbd></dt><dd>Ask for advice</dd>
+              <dt><kbd>V</kbd></dt><dd>Mute or unmute the flight director</dd>
             </dl>
-
-            <h3>Building the vehicle</h3>
+            <h3>Workshop camera</h3>
             <dl class="keymap">
-              <dt><kbd>E</kbd></dt>
-              <dd>
-                Collect a part at its station, or place the part you are
-                carrying
-              </dd>
-              <dt><kbd>Q</kbd></dt>
-              <dd>Remove the top part</dd>
-              <dt><kbd>R</kbd></dt>
-              <dd>Clear the stand and start over</dd>
-              <dt><kbd>G</kbd></dt>
-              <dd>Swap an already-fitted payload for another</dd>
-              <dt><kbd>F</kbd></dt>
-              <dd>Roll out to the pad, once the contract is satisfied</dd>
-              <dt><kbd>H</kbd></dt>
-              <dd>Show or hide this panel</dd>
-              <dt><kbd>T</kbd></dt>
-              <dd>Ask the flight director for advice about your situation</dd>
-              <dt><kbd>V</kbd></dt>
-              <dd>Mute or unmute her voice</dd>
+              <dt>Left drag</dt><dd>Orbit the Command Pod</dd>
+              <dt>Right / middle drag, or Shift + left drag</dt><dd>Pan</dd>
+              <dt>Scroll</dt><dd>Zoom</dd>
+              <dt><kbd>Q</kbd> / Backspace</dt><dd>Remove the last attached part</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Cancel placement first; press again to return to the bay</dd>
             </dl>
-
-            <h3>How assembly works</h3>
-            <p>
-              The <strong>blueprint board</strong> by the entrance shows all four
-              steps and fills in as you build, so you can always see what is
-              still open.
-            </p>
-            <p>
-              Parts sit on numbered stations: <strong>Step 1</strong> first
-              stages and <strong>Step 2</strong> upper stages down the left wall,
-              <strong>Step 3</strong> payloads across the back,
-              <strong>Step 4</strong> fairing on the right. Walk into a bay and
-              a panel lists every option with its specifications. <kbd>Tab</kbd>
-              compares them, <kbd>E</kbd> collects the selected one.
-            </p>
-            <p>
-              The first stages are too heavy to lift, so the overhead crane flies
-              those to the stand while you watch. Everything else you carry.
-            </p>
-            <p>
-              The payload and fairing go on top of the stack, so those are fitted
-              from the work platform. Step into the <strong>service
-              elevator</strong> on the right and press <kbd>E</kbd> to ride up;
-              if the car is at the other end, pressing <kbd>E</kbd> at the
-              landing calls it to you first.
-            </p>
-            <p class="warn-line">
-              Do not step off the car while it is raised. A fall from the
-              platform ends the mission.
-            </p>
-            <p>
-              A translucent preview shows exactly where the part will attach.
-              Press <kbd>E</kbd> to confirm the placement.
-            </p>
-            <p>
-              Your payload choice is simply which bench you walk to. Look
-              directly at any fitted part to read what it is and why it is
-              built that way.
-            </p>
-            <p>
-              The <strong>Vehicle Analysis</strong> board is live. Watch the
-              &Delta;v figure as you add parts: two stages alone give about
-              13&nbsp;900&nbsp;m/s, and the eight-tonne telescope takes roughly
-              3&nbsp;000&nbsp;m/s of that away. Reaching orbit costs about
-              9&nbsp;400&nbsp;m/s, so the margin bar is what tells you whether
-              this vehicle can fly the mission.
-            </p>
+            <p>Choose a tank or engine from the Workshop palette, move its ghost to
+              an attachment sphere, then click to attach. Green means compatible;
+              red means the connection is unavailable. Tanks go below the pod,
+              engines below tanks. Builds reset when you leave Workshop.</p>
           </div>
         </section>
       </div>
