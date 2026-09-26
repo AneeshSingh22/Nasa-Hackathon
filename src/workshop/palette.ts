@@ -1,4 +1,5 @@
 import { WORKSHOP_PARTS, type PartKind } from './parts';
+import type { VesselAnalysis } from './analysis';
 
 const dollars = (value: number) => `$${value.toLocaleString('en-US')}`;
 export class WorkshopPalette {
@@ -57,8 +58,22 @@ export class WorkshopPalette {
   message(text: string): void {
     if (this.status.textContent !== text) this.status.textContent = text;
   }
-  update(cost: number, mass: number, canDetach: boolean): void {
-    this.readout.textContent = `Craft cost ${dollars(cost)} · Wet mass ${(mass / 1000).toFixed(2)} t`;
+  update(analysis: VesselAnalysis, canDetach: boolean): void {
+    // SI in, display units out: tonnes and km/s are what an engineer reads, but
+    // the analysis itself stays in kilograms and metres per second.
+    const parts = [
+      `Craft cost ${dollars(analysis.cost)}`,
+      `Wet mass ${(analysis.wetMass / 1000).toFixed(2)} t`,
+    ];
+    // Progressive disclosure: delta-v and TWR only mean something once an
+    // engine can burn the propellant, so they appear when one is fitted.
+    if (analysis.hasEngine) {
+      parts.push(`Δv ${Math.round(analysis.deltaV).toLocaleString('en-US')} m/s`);
+      parts.push(`TWR ${analysis.twr.toFixed(2)}`);
+    } else {
+      parts.push('Δv — no engine');
+    }
+    this.readout.textContent = parts.join(' · ');
     this.undo.disabled = !canDetach;
   }
   dispose(): void {

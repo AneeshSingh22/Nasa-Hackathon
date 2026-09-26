@@ -149,6 +149,55 @@ describe('Workshop assembly input and visuals', () => {
     expect(session.vessel.parts).toHaveLength(1);
   });
 
+  it('reports cost, mass and delta-v in the readout as parts are attached', () => {
+    // The readout is the only place the player sees the engineering consequence
+    // of a choice, so it must track the real graph rather than a stale copy.
+    const readout = () => chrome.querySelector('.workshop-readout')!.textContent!;
+
+    // Pod alone: no engine, so no delta-v figure to quote.
+    expect(readout()).toContain('$600,000');
+    expect(readout()).toContain('1.20 t');
+    expect(readout()).toMatch(/no engine/);
+
+    select('fuel-tank'); clickNode('pod');
+    const tank = session.vessel.parts.at(-1)!.id;
+    // A tank with nothing to burn its propellant still has no delta-v.
+    expect(readout()).toContain('$680,000');
+    expect(readout()).toContain('3.00 t');
+    expect(readout()).toMatch(/no engine/);
+
+    select('liquid-engine'); clickNode(tank);
+    expect(session.vessel.parts).toHaveLength(3);
+    expect(readout()).toContain('$830,000');
+    expect(readout()).toContain('3.40 t');
+    // Now an engine can burn the propellant: a real figure, and a TWR.
+    const withEngine = readout().match(/Δv ([\d,]+) m\/s/);
+    expect(withEngine).not.toBeNull();
+    const dv = Number(withEngine![1]!.replace(/,/g, ''));
+    expect(dv).toBeGreaterThan(1900);
+    expect(dv).toBeLessThan(1970);
+    expect(readout()).toMatch(/TWR \d+\.\d\d/);
+  });
+
+  it('drops the readout back down when the last part is detached', () => {
+    const readout = () => chrome.querySelector('.workshop-readout')!.textContent!;
+    select('fuel-tank'); clickNode('pod');
+    const tank = session.vessel.parts.at(-1)!.id;
+    select('liquid-engine'); clickNode(tank);
+    expect(readout()).toContain('$830,000');
+
+    press('KeyQ');
+    // Engine gone: the propellant is dead weight again.
+    expect(session.vessel.parts).toHaveLength(2);
+    expect(readout()).toContain('$680,000');
+    expect(readout()).toMatch(/no engine/);
+
+    press('KeyQ');
+    expect(session.vessel.parts).toHaveLength(1);
+    expect(readout()).toContain('$600,000');
+    expect(readout()).toContain('1.20 t');
+  });
+
   it('keeps the longest supported hanging craft within the camera view after edits', () => {
     let parent = 'pod';
     for (let i = 0; i < 3; i++) {

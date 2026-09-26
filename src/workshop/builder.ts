@@ -4,6 +4,7 @@ import { WorkshopVessel } from './vessel';
 import { WorkshopPalette } from './palette';
 import { Placement } from './placement';
 import { createPartMesh, disposeMesh } from './meshes';
+import { analyzeWorkshopVessel } from './analysis';
 
 export class WorkshopBuilder {
   readonly placement: Placement;
@@ -17,8 +18,7 @@ export class WorkshopBuilder {
     this.updateReadout();
   }
   private updateReadout(): void {
-    const analysis = this.vessel.analyze();
-    this.palette.update(analysis.cost, analysis.wetMass, this.vessel.parts.length > 1);
+    this.palette.update(analyzeWorkshopVessel(this.vessel.parts), this.vessel.parts.length > 1);
   }
   private sync(): void {
     for (const [id, mesh] of this.meshes) {

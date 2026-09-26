@@ -1450,7 +1450,11 @@ kbd {
 #workshop button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
 #workshop .workshop-palette button:disabled { opacity: 0.4; cursor: default; }
 #workshop .workshop-palette small { display: block; color: var(--dim); font-size: 11px; line-height: 1.5; }
-#workshop .workshop-readout { font: 12px var(--mono); color: var(--ink); }
+#workshop .workshop-readout {
+  font: 12px var(--mono); color: var(--ink);
+  border: 1px solid var(--line); border-radius: 4px; background: var(--panel);
+  padding: 8px 12px; white-space: nowrap;
+}
 #workshop .workshop-status {
   position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
   max-width: calc(100vw - 32px); width: max-content;

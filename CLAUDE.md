@@ -327,6 +327,20 @@ product.
 - **Meshes are not collision.** Solid objects need registered colliders
   (cylinders on `PlayerController.obstacles` in explore mode). The rocket was a
   pass-through hologram for several commits when only the mesh existed.
+- **Propellant with no engine is not delta-v.** The Workshop readout summed
+  wet mass straight from the part definitions, so a stack of tanks with nothing
+  to burn them would have quoted a delta-v figure from an isp of zero. The fix
+  is `workshop/analysis.ts`: propellant only counts toward delta-v once a part
+  with thrust and isp is attached, and the readout says "no engine" until then.
+  It also sums *mass flow* rather than averaging isp, because two engines of
+  different isp burn like their combined flow, not their mean.
+- **Check the stub numbers teach the intended trade.** The Phase 3 tank and
+  engine stubs turned out to be well chosen by accident: one tank gives
+  1 933 m/s at TWR 1.95, and a three-tank stack on one engine reaches 3 519 m/s
+  but a TWR of 0.95 — it cannot lift off. That ceiling is the lesson the builder
+  exists to teach, so `analysis.test.ts` pins it. A retune that makes more tanks
+  strictly better should fail that test.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should
