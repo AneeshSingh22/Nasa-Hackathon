@@ -840,6 +840,11 @@ kbd {
   background: rgba(95, 217, 154, 0.12);
 }
 
+#workshop .palette-note {
+  font: 10px/1.5 var(--mono);
+  color: var(--dim);
+}
+
 #workshop .palette-undo {
   margin-top: auto;
   padding: 7px;

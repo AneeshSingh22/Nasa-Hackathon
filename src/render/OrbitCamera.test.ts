@@ -1,7 +1,14 @@
 // @vitest-environment jsdom
 import { describe, expect, it } from 'vitest';
 import * as THREE from 'three';
-import { OrbitCamera, ORBIT_LIMITS } from './OrbitCamera';
+import { OrbitCamera, FLOOR_CLEARANCE, RESET_RADIUS, ORBIT_LIMITS } from './OrbitCamera';
+
+/**
+ * The camera may leave the bay — framing a 67 m rocket needs more standoff
+ * than a 46 m-deep building has — but it must stay within the zoom limit, so a
+ * pan cannot fling it into empty space.
+ */
+const MAX_REACH = ORBIT_LIMITS.maxDistance + ORBIT_LIMITS.panHorizontal + 1;
 
 function rig() {
   const camera = new THREE.PerspectiveCamera(72, 1.6, 0.1, 400);
@@ -76,9 +83,10 @@ describe('workshop orbit camera', () => {
     orbit.pan(10000, -10000);
     orbit.zoom(10000);
     orbit.orbit(0, -10000);
-    expect(camera.position.y).toBeGreaterThan(1.6);
-    expect(Math.abs(camera.position.x)).toBeLessThan(29);
-    expect(Math.abs(camera.position.z)).toBeLessThan(22);
+    // Never underground, whatever the pan and zoom extremes.
+    expect(camera.position.y).toBeGreaterThanOrEqual(FLOOR_CLEARANCE);
+    expect(Math.abs(camera.position.x)).toBeLessThan(MAX_REACH);
+    expect(Math.abs(camera.position.z)).toBeLessThan(MAX_REACH);
   });
 
   it('handles drag, wheel cancellation and re-entry without duplicate listeners', () => {
@@ -94,7 +102,7 @@ describe('workshop orbit camera', () => {
     const wheel = new WheelEvent('wheel', { deltaY: -100, cancelable: true });
     canvas.dispatchEvent(wheel);
     expect(wheel.defaultPrevented).toBe(true);
-    expect(camera.position.distanceTo(orbit.target)).toBeCloseTo(10 * Math.exp(-0.1));
+    expect(camera.position.distanceTo(orbit.target)).toBeCloseTo(RESET_RADIUS * Math.exp(-0.1));
     orbit.detach();
     const saved = camera.position.clone();
     pointer(canvas, 'pointerdown', 100, 100);

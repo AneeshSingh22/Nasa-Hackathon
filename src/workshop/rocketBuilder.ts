@@ -51,7 +51,21 @@ export class RocketBuilder {
    * Fit a part. One rule decides: `Assembly.nextSlot` says what the stack is
    * ready for, and the budget says whether it can be paid for.
    */
+  /**
+   * Click a part to fit it, or to swap it for the one already in that slot.
+   *
+   * Committing to the first click was the wrong model: the whole point of
+   * offering three boosters is comparing them, and making the player tear the
+   * stack down to change their mind punished exactly the experimentation the
+   * phase is meant to encourage. `Assembly.swapPart` rebuilds the parts above
+   * the swapped slot, so a payload can be changed with the fairing already on.
+   */
   fit(part: PartDefinition): void {
+    const index = this.assembly.indexOfKind(part.kind);
+    if (index >= 0) {
+      this.swap(index, part);
+      return;
+    }
     const expected = this.assembly.nextSlot();
     if (expected !== part.kind) {
       this.palette.message(
@@ -75,6 +89,35 @@ export class RocketBuilder {
     }
     this.palette.select(null);
     this.palette.message(`${fitted.name} fitted. ${fitted.keyFact}`);
+    this.refresh();
+  }
+
+  /** Exchange a fitted part for another of the same kind. */
+  private swap(index: number, replacement: PartDefinition): void {
+    const existing = this.assembly.parts[index];
+    if (!existing) return;
+    if (existing.id === replacement.id) {
+      this.palette.message(`${existing.name} is already fitted. ${existing.keyFact}`);
+      return;
+    }
+    // Charge the difference only. A swap is one decision, so billing it as a
+    // full removal plus a full fit would make comparing options ruinous.
+    const difference = replacement.cost - existing.cost;
+    if (difference > 0 && !this.hooks.charge({ ...replacement, cost: difference })) {
+      this.hooks.refuse(
+        `Swapping to ${replacement.name} costs another ${difference} million. The programme cannot cover it.`,
+      );
+      this.palette.message(`Not enough budget to swap to ${replacement.name}.`);
+      return;
+    }
+    const result = this.assembly.swapPart(index, replacement.id);
+    if (!result) {
+      if (difference > 0) this.hooks.refund({ ...replacement, cost: difference });
+      this.palette.message('That part cannot go there.');
+      return;
+    }
+    if (difference < 0) this.hooks.refund({ ...existing, cost: -difference });
+    this.palette.message(`Swapped to ${result.fitted.name}. ${result.fitted.keyFact}`);
     this.refresh();
   }
 

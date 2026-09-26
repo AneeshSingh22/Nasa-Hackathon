@@ -370,6 +370,22 @@ product.
   heavier payload buys less delta-v, so a retune that makes one option strictly
   best fails.
 
+- **Camera limits are part scale, not camera taste.** `ORBIT_LIMITS.maxDistance`
+  was 18 m, tuned for a 2.8 m stub pod. A finished rocket is 67.5 m tall and
+  needs about 72 m of standoff to frame, so the player could not pull back far
+  enough to see the payload at all — and `frame()` silently clamped to 18 too,
+  so the automatic reframing could not rescue it either. Limits are now 5–110 m
+  with a floor clearance so the eye never drops underground. The camera is
+  deliberately allowed outside the 46 m-deep bay, because the standoff a launch
+  vehicle needs does not fit indoors. Any change to part heights needs checking
+  against `maxDistance` as well as `VAB_HEIGHT`.
+- **A choice you cannot reverse is not a comparison.** Clicking a part committed
+  it, so comparing three boosters meant tearing the stack down. `Assembly.swapPart`
+  already existed and rebuilds everything above the swapped slot; the palette now
+  keeps a fitted slot's buttons live and a click swaps in place, charging only the
+  price difference. Going cheaper refunds half, like every other reversal in the
+  programme, so experimenting still costs something.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

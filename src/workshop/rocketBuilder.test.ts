@@ -63,7 +63,9 @@ describe('Workshop rocket builder', () => {
     expect(enabled('telescope')).toBe(false);
 
     click('core-booster');
-    expect(enabled('core-booster')).toBe(false);
+    // The booster slot stays live so the player can compare and swap.
+    expect(enabled('core-booster')).toBe(true);
+    expect(enabled('solid-booster')).toBe(true);
     expect(enabled('upper-stage')).toBe(true);
     expect(enabled('telescope')).toBe(false);
 
@@ -134,5 +136,52 @@ describe('Workshop rocket builder', () => {
     const analysis = assembly.analyze();
     expect(readout()).toContain(`TWR ${analysis.liftoffTWR.toFixed(2)}`);
     expect(readout()).toContain(`${Math.round(analysis.totalDeltaV).toLocaleString('en-US')} m/s`);
+  });
+});
+
+describe('changing your mind', () => {
+  it('swaps a fitted part without disturbing the parts above it', () => {
+    click('core-booster'); click('upper-stage'); click('telescope'); click('fairing');
+    expect(assembly.parts.map(p => p.id)).toEqual(
+      ['core-booster', 'upper-stage', 'telescope', 'fairing'],
+    );
+
+    // Change the payload with the fairing already on: the whole point of a
+    // swap is not having to tear the stack down.
+    click('crew-capsule');
+    expect(assembly.parts.map(p => p.id)).toEqual(
+      ['core-booster', 'upper-stage', 'crew-capsule', 'fairing'],
+    );
+    expect(root.getObjectByName('crew-capsule')).toBeDefined();
+    expect(root.getObjectByName('telescope')).toBeUndefined();
+    // The fairing moved with it rather than being left floating.
+    const fairing = root.getObjectByName('fairing')!;
+    const expectedBase = PART_LIBRARY.find(p => p.id === 'core-booster')!.height
+      + PART_LIBRARY.find(p => p.id === 'upper-stage')!.height
+      + PART_LIBRARY.find(p => p.id === 'crew-capsule')!.height;
+    expect(fairing.position.y).toBeCloseTo(expectedBase, 5);
+  });
+
+  it('charges only the difference when swapping, and refunds it going cheaper', () => {
+    click('core-booster'); // $148M
+    expect(budget).toBe(332);
+
+    // Up to the $196M extended core: pay the $48M difference, not $196M.
+    click('extended-booster');
+    expect(budget).toBe(284);
+
+    // Back down to the $96M solid. The refund is half, as everywhere else in
+    // the programme: reversing a decision always costs something, which is
+    // what stops swapping being free experimentation.
+    click('solid-booster');
+    expect(budget).toBe(334);
+  });
+
+  it('says so and changes nothing when the same part is clicked again', () => {
+    click('core-booster');
+    const before = budget;
+    click('core-booster');
+    expect(budget).toBe(before);
+    expect(assembly.parts).toHaveLength(1);
   });
 });

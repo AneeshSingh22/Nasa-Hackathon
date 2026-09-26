@@ -77,6 +77,11 @@ export class RocketPalette {
     this.undo.addEventListener('click', () => this.callbacks.removeLast());
     this.element.append(this.undo);
 
+    const note = document.createElement('small');
+    note.className = 'palette-note';
+    note.textContent = 'Click a fitted slot’s other options to compare and swap.';
+    this.element.append(note);
+
     this.readout.className = 'rocket-readout';
     this.readout.setAttribute('aria-label', 'Vehicle analysis');
     this.status.className = 'workshop-status';
@@ -96,10 +101,15 @@ export class RocketPalette {
       button.classList.toggle('fitted', fittedIds.has(id));
       button.setAttribute('aria-pressed', String(this.selectedId === id));
     }
+    const fittedKinds = new Set(fitted.map(part => part.kind));
     for (const kind of BUILD_ORDER) {
+      // A slot stays clickable once it is filled, so the player can compare the
+      // alternatives and swap. Only slots the stack is not ready for are
+      // disabled.
+      const usable = kind === nextKind || fittedKinds.has(kind);
       for (const option of optionsFor(kind)) {
         const button = this.buttons.get(option.id);
-        if (button) button.disabled = kind !== nextKind;
+        if (button) button.disabled = !usable;
       }
     }
     this.undo.disabled = fitted.length === 0;
