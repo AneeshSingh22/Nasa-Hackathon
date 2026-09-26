@@ -558,24 +558,33 @@ export function createVABScene(): VABEnvironment {
   // Calibrated between the two previous extremes: the first pass was a dark
   // warehouse, the second was flat white glare with no shadow contrast. A real
   // high bay is bright but still has direction and shading.
-  scene.add(new THREE.AmbientLight(0xc2ccdb, 0.85));
+  // Light arriving equally from every direction produces no gradient across a
+  // surface, so it erases the very shading that conveys shape. The environment
+  // map now does the ambient work with actual directionality; this is a small
+  // floor so deep shadow does not go black.
+  scene.add(new THREE.AmbientLight(0xc2ccdb, 0.12));
 
-  const hemi = new THREE.HemisphereLight(0xd4e2f5, 0x4a5364, 0.75);
+  const hemi = new THREE.HemisphereLight(0xd4e2f5, 0x4a5364, 0.22);
   scene.add(hemi);
 
   // Key light, casting the shadow that gives the vehicle its sense of mass.
   const key = new THREE.DirectionalLight(0xfff4e4, 1.55);
   key.position.set(22, 52, 18);
   key.castShadow = true;
-  key.shadow.mapSize.set(2048, 2048);
+  key.shadow.mapSize.set(4096, 4096);
   key.shadow.camera.near = 1;
   key.shadow.camera.far = 160;
+  // VSM blurs in shadow-map space, so radius is what softens the contact edge.
+  // A hard-edged shadow under a 300-tonne booster reads as a decal.
+  key.shadow.radius = 4;
+  key.shadow.blurSamples = 16;
   const shadowSpan = 46;
   key.shadow.camera.left = -shadowSpan;
   key.shadow.camera.right = shadowSpan;
   key.shadow.camera.top = shadowSpan;
   key.shadow.camera.bottom = -shadowSpan;
-  key.shadow.bias = -0.0004;
+  key.shadow.bias = 0;
+  key.shadow.normalBias = 0.04;
   scene.add(key);
 
   // Fill from the opposite side so nothing reads as a silhouette.

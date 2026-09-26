@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import './style.css';
 import { createVABScene, VAB_WIDTH, VAB_DEPTH, VAB_HEIGHT } from './vab/VABScene';
+import { configureRenderer, installEnvironment } from './render/lookDev';
 import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
 import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
@@ -146,10 +147,7 @@ const renderer = new THREE.WebGLRenderer({
   powerPreference: 'high-performance',
 });
 renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-renderer.shadowMap.enabled = true;
-renderer.shadowMap.type = THREE.PCFSoftShadowMap;
-renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.05;
+configureRenderer(renderer);
 
 const camera = new THREE.PerspectiveCamera(
   72,
@@ -159,6 +157,9 @@ const camera = new THREE.PerspectiveCamera(
 );
 
 const env = createVABScene();
+// Image-based lighting: metals need something to reflect before they read as
+// metal at all. Must come after the scene exists and before the first frame.
+installEnvironment(renderer, env.scene);
 const assembly = new Assembly(env.assemblyRoot, env.materials);
 
 const player = new PlayerController(camera, {
