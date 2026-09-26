@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import './style.css';
 import { createVABScene, VAB_WIDTH, VAB_DEPTH, VAB_HEIGHT } from './vab/VABScene';
 import { configureRenderer, installEnvironment } from './render/lookDev';
+import { createPipeline, type Pipeline, type Quality } from './render/pipeline';
 import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
 import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
@@ -160,6 +161,35 @@ const env = createVABScene();
 // Image-based lighting: metals need something to reflect before they read as
 // metal at all. Must come after the scene exists and before the first frame.
 installEnvironment(renderer, env.scene);
+
+/**
+ * Post-processing. Null where the composer cannot be built, in which case
+ * every render falls back to the plain path — a missing pipeline must cost
+ * ambient occlusion and bloom, not the game.
+ */
+let pipeline: Pipeline | null = null;
+
+/** One render call for the whole game, so both phases stay in step. */
+function present(): void {
+  if (pipeline) pipeline.render();
+  else renderer.render(env.scene, camera);
+}
+
+pipeline = createPipeline(renderer, env.scene, camera, 'high');
+
+/**
+ * Quality toggle, on `P`.
+ *
+ * Ambient occlusion and bloom are the two passes that cost real frames. The
+ * fast path drops them and keeps the grade and anti-aliasing, which are cheap
+ * and carry most of the style, so a weak machine loses depth cues rather than
+ * the look entirely.
+ */
+function setQuality(next: Quality): void {
+  if (!pipeline) return;
+  const applied = pipeline.setQuality(next);
+  log(`GRAPHICS  ${applied === 'high' ? 'full effects' : 'fast path'}`);
+}
 const assembly = new Assembly(env.assemblyRoot, env.materials);
 
 const player = new PlayerController(camera, {
@@ -240,6 +270,9 @@ function resize() {
   renderer.setSize(w, h);
   camera.aspect = w / h;
   camera.updateProjectionMatrix();
+  // The composer owns render targets at the old size; several passes hold
+  // their own, so they must all be told or the effects drift out of register.
+  pipeline?.setSize(w, h);
 }
 resize();
 window.addEventListener('resize', resize);
@@ -1602,6 +1635,9 @@ window.addEventListener('keydown', (e) => {
   if (LEGACY_ASSEMBLY_ENABLED && e.code === 'KeyR') clearStand();
   if (e.code === 'KeyH' || e.code === 'Slash') toggleHelp();
   if (e.code === 'KeyV') narrator.toggle();
+  // Graphics quality. Held on P rather than a menu because it is the one
+  // setting a player may need mid-session on a struggling machine.
+  if (e.code === 'KeyP') setQuality(pipeline?.quality === 'high' ? 'fast' : 'high');
   if (LEGACY_ASSEMBLY_ENABLED && e.code === 'KeyF') rollOut();
   if (LEGACY_ASSEMBLY_ENABLED && e.code === 'KeyG') swapPayload();
   if (e.code === 'KeyT') requestAdvice();
@@ -1747,7 +1783,7 @@ function frame(): void {
   if (workshop.mode === 'workshop') {
     workshop.update();
     env.update(elapsed);
-    renderer.render(env.scene, camera);
+    present();
     requestAnimationFrame(frame);
     return;
   }
@@ -1806,7 +1842,7 @@ function frame(): void {
     refreshOptions();
   }
 
-  renderer.render(env.scene, camera);
+  present();
   requestAnimationFrame(frame);
 }
 

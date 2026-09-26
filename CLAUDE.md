@@ -420,6 +420,24 @@ product.
   would take the game down before the start button is wired, which this project
   has already paid for once.
 
+- **`EffectComposer.setSize` already forwards to every pass.** The pipeline
+  called `gtao.setSize` and `smaa.setSize` explicitly afterwards, and the test
+  that "proved" it spied on the pass and passed even with those calls deleted —
+  because the composer had made them anyway. Another test that could not fail.
+  The redundant calls are gone and the test now breaks when `setSize` is
+  stubbed out. When a test still passes after deleting the code it covers, the
+  test is wrong, not lucky.
+- **Post-processing is where a real-time scene stops looking rendered.**
+  `render/pipeline.ts` adds ground-truth ambient occlusion, bloom, SMAA and a
+  grade pass. AO does most of the work: without it every object appears to
+  hover a millimetre above whatever it rests on, because direct lighting cannot
+  know a corner receives less bounced light than a flat face. The grade — split
+  toning, slight contrast, vignette, a trace of chromatic aberration — is what
+  separates a game still from a default render; an ungraded scene reads as
+  clinical however well lit it is. `P` drops AO and bloom for a fast path,
+  keeping the cheap passes that carry the style. `createPipeline` returns null
+  rather than throwing, and `present()` falls back to `renderer.render`.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should
