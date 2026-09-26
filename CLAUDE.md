@@ -404,6 +404,22 @@ product.
   angle than its half-height implies — 20 m rather than 16.3 m for a 23.6 m
   vehicle. Two rounds of guessing multipliers failed before computing it.
 
+- **Flat colour is why a scene looks like a placeholder.** Good lighting on an
+  untextured surface still looks untextured: what the eye reads as
+  "manufactured" is the density of panel seams, fastener rows, weld beads and
+  wear. `render/textures.ts` draws these to canvas at load time — no binary
+  assets in the repository, no licensing, no hosting, and the pattern can
+  follow the part instead of being tiled blindly. Each generator returns three
+  maps, and all three matter: the normal map is what makes a seam catch the
+  light as the camera moves, and the roughness map is what stops a whole panel
+  reflecting uniformly. A colour map alone leaves the surface just as flat.
+- **A texture generator must never throw.** Tests stub `getContext` with a
+  handful of methods and a locked-down browser can return a partial context, so
+  `surface()` checks for every method the generators call and returns null
+  otherwise. An untextured scene is a degraded look; a throw at module scope
+  would take the game down before the start button is wired, which this project
+  has already paid for once.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

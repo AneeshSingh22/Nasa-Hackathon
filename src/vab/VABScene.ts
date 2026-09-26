@@ -1,5 +1,6 @@
 import * as THREE from 'three';
 import { createMaterials, DISPLAY_SCALE, type Materials } from './parts';
+import { bayFloor, hullPlating, paintedSteel, setRepeat } from '../render/textures';
 import { createElevator, type ElevatorRig } from './Elevator';
 import type { BlueprintState } from './blueprint';
 
@@ -70,15 +71,37 @@ export function createVABScene(): VABEnvironment {
 
   const mats = createMaterials();
 
+  // Worn concrete: aggregate speckle, expansion joints and scuff marks from
+  // dragging heavy hardware around. A flat grey plane the size of the bay is
+  // the largest single surface on screen, so it sets the tone for everything.
+  const floorMaps = bayFloor();
+  if (floorMaps) setRepeat(floorMaps, 7, 6);
   const concrete = new THREE.MeshStandardMaterial({
     color: 0x6f7885,
     roughness: 0.88,
     metalness: 0.02,
+    ...(floorMaps ? {
+      map: floorMaps.map,
+      normalMap: floorMaps.normalMap,
+      roughnessMap: floorMaps.roughnessMap,
+      normalScale: new THREE.Vector2(0.8, 0.8),
+    } : {}),
   });
+
+  // The walls are clad in panels, which gives the bay its sense of scale: the
+  // eye counts panels to judge how big the room is.
+  const wallMaps = hullPlating(11);
+  if (wallMaps) setRepeat(wallMaps, 6, 9);
   const wallMat = new THREE.MeshStandardMaterial({
     color: 0xa8b0bd,
     roughness: 0.8,
     metalness: 0.04,
+    ...(wallMaps ? {
+      map: wallMaps.map,
+      normalMap: wallMaps.normalMap,
+      roughnessMap: wallMaps.roughnessMap,
+      normalScale: new THREE.Vector2(0.55, 0.55),
+    } : {}),
   });
   /** Painted floor, for the bay markings. */
   const floorPaint = new THREE.MeshStandardMaterial({
@@ -86,10 +109,21 @@ export function createVABScene(): VABEnvironment {
     roughness: 0.7,
     metalness: 0.05,
   });
+  // Painted structural steel: primer, weld beads and chipped edges showing
+  // bare metal. The gantry is close to the player for the whole build phase,
+  // so it is where a flat surface is most obvious.
+  const steelMaps = paintedSteel('#4b5260', 3);
+  if (steelMaps) setRepeat(steelMaps, 3, 3);
   const steel = new THREE.MeshStandardMaterial({
     color: 0x4b5260,
     roughness: 0.55,
     metalness: 0.7,
+    ...(steelMaps ? {
+      map: steelMaps.map,
+      normalMap: steelMaps.normalMap,
+      roughnessMap: steelMaps.roughnessMap,
+      normalScale: new THREE.Vector2(0.7, 0.7),
+    } : {}),
   });
   const paint = new THREE.MeshStandardMaterial({
     color: 0xffb400,

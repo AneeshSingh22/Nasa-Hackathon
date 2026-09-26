@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { hullPlating } from '../render/textures';
 import {
   buildSolidBooster,
   buildExtendedBooster,
@@ -228,18 +229,45 @@ export const PART_LIBRARY: PartDefinition[] = [
 ];
 
 
-/** Materials, created once and shared. */
+/**
+ * Materials, created once and shared.
+ *
+ * The hull materials carry procedural plating: panel seams, fastener rows and
+ * streaked wear, with a matching normal map so a seam catches the light as the
+ * camera moves and a roughness map so a panel does not reflect uniformly. Flat
+ * colour was the main reason the vehicle read as plastic — good lighting on an
+ * untextured surface still looks untextured.
+ *
+ * Textures degrade to null where there is no 2D canvas, such as in tests, and
+ * the material is then simply untextured rather than broken.
+ */
 export function createMaterials() {
+  const plating = hullPlating(1);
+  const darkPlating = hullPlating(5);
+
   return {
     hull: new THREE.MeshStandardMaterial({
       color: 0xd8dde6,
       metalness: 0.35,
       roughness: 0.42,
+      ...(plating ? {
+        map: plating.map,
+        normalMap: plating.normalMap,
+        roughnessMap: plating.roughnessMap,
+        // Seams should read as shallow tooling marks, not corrugation.
+        normalScale: new THREE.Vector2(0.65, 0.65),
+      } : {}),
     }),
     hullDark: new THREE.MeshStandardMaterial({
       color: 0x2a3446,
       metalness: 0.5,
       roughness: 0.55,
+      ...(darkPlating ? {
+        map: darkPlating.map,
+        normalMap: darkPlating.normalMap,
+        roughnessMap: darkPlating.roughnessMap,
+        normalScale: new THREE.Vector2(0.5, 0.5),
+      } : {}),
     }),
     accent: new THREE.MeshStandardMaterial({
       color: 0xff6b3d,
