@@ -22,7 +22,7 @@
  */
 export const INTRO = [
   'Morning, engineer. Explore the bay, then enter the workshop at the cyan marker to build.',
-  'Build downward from your Command Pod: tanks first, then an engine. Green attachment points show a valid connection. Press T if you need help.',
+  'Build from the bottom up: first stage, second stage, payload, then the fairing. Every part spends the budget, and the payload you pick decides whether you have the delta-v to reach orbit. Press T if you need help.',
 ];
 
 /** Said the first time the player looks at a part on the stack. */

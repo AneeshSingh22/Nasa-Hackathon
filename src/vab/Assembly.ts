@@ -41,6 +41,11 @@ export class Assembly {
     return this.stack;
   }
 
+  /** The meshes of the fitted parts, for code that needs to show or hide them. */
+  get meshObjects(): readonly THREE.Object3D[] {
+    return [...this.meshes.values()];
+  }
+
   /**
    * What kind of part each slot takes, bottom to top.
    *

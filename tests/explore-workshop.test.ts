@@ -93,15 +93,25 @@ it('retires station inputs and walks spawn → Workshop → floating pod → Esc
   frames();
   expect(hidden('workshop')).toBe(false);
   expect(hidden('hud')).toBe(true);
-  const pod = scene.getObjectByName('Workshop Command Pod')!;
-  expect(pod).toBeDefined();
-  expect(pod.getWorldPosition(new THREE.Vector3()).y).toBeGreaterThan(8);
-  for (const code of ['KeyE', 'KeyQ', 'KeyR', 'Tab', 'KeyF']) key(code);
-  expect(['res-budget', 'res-days', 'res-conf'].map(text)).toEqual(initialResources);
+  // The palette offers every option for the active slot, so there is a real
+  // choice rather than one part per step.
+  const boosterButtons = document.querySelectorAll('[data-slot="booster"] [data-part]');
+  expect(boosterButtons.length).toBeGreaterThan(2);
+
+  // Fit a real part and leave. The build must survive the handoff: this is
+  // what makes the Workshop the game rather than a sandbox.
+  document.querySelector<HTMLButtonElement>('[data-part="solid-booster"]')!.click();
+  expect(scene.getObjectByName('solid-booster')).toBeDefined();
+  // Real money left the budget.
+  expect(text('res-budget')).not.toEqual(initialResources[0]);
+
   key('Escape');
   expect(hidden('workshop')).toBe(true);
   expect(hidden('hud')).toBe(false);
-  expect(scene.getObjectByName('Workshop Command Pod')).toBeUndefined();
+  // Still standing in the bay after the walk back out.
+  const kept = scene.getObjectByName('solid-booster');
+  expect(kept).toBeDefined();
+  expect(kept!.visible).toBe(true);
   expect(player.camera.position.distanceTo(explorePosition)).toBeLessThan(1e-6);
   key('KeyE');
   expect(hidden('workshop')).toBe(false);

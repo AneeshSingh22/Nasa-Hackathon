@@ -353,6 +353,23 @@ product.
   integration test was missing: it clicked the button and never checked that
   anything happened.
 
+- **A build phase that discards the build is a sandbox, not a game.** The
+  Workshop owned its own three-stub vessel and called `vessel.reset()` on exit,
+  so nothing the player did in there survived, counted, cost anything or
+  reached the contract panel. The fix was not to copy state out but to delete
+  the parallel model: the Workshop now drives the same `Assembly` the bay and
+  the contract panel already read, so the vehicle is simply standing there when
+  the player walks back out. Whenever two models describe the same thing, one
+  of them is going to be thrown away — prefer driving the real one.
+- **Offer every option or there is no decision.** Phase 3 shipped one tank and
+  one engine, so every build was identical and nothing could go wrong. The
+  library already held nine parts with real trade-offs. The balance that makes
+  it a game: the cheapest stack reaches orbit but misses the science floor, the
+  most scientific one either busts the budget or cannot reach orbit at 8 189
+  m/s, and several paths in between work. `rocketBuilder.test.ts` asserts a
+  heavier payload buys less delta-v, so a retune that makes one option strictly
+  best fails.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

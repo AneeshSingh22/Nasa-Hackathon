@@ -771,6 +771,145 @@ kbd {
   font-size: 11px;
 }
 
+/* ---------------- Workshop parts palette ----------------
+   Every option for the active slot is visible at once, because a choice the
+   player cannot see is not a choice. Inactive slots dim rather than vanish so
+   the shape of the whole build stays legible. */
+#workshop .rocket-palette {
+  position: fixed;
+  top: 74px;
+  left: 16px;
+  bottom: 16px;
+  width: 232px;
+  overflow-y: auto;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#workshop .palette-slot {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  opacity: 0.4;
+  transition: opacity 0.2s ease;
+}
+#workshop .palette-slot.active { opacity: 1; }
+#workshop .palette-slot.done { opacity: 0.62; }
+
+#workshop .palette-slot h3 {
+  margin: 0;
+  font: 600 10px/1 var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cyan);
+}
+
+#workshop .palette-part {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 1px 8px;
+  text-align: left;
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--ink);
+  cursor: pointer;
+}
+#workshop .palette-part b { font: 600 12px/1.3 var(--body); }
+#workshop .palette-part small {
+  grid-column: 1 / -1;
+  font: 10px/1.4 var(--mono);
+  color: var(--dim);
+}
+#workshop .palette-cost {
+  font: 600 11px/1.3 var(--mono);
+  color: var(--green);
+}
+#workshop .palette-part:hover:not(:disabled) { border-color: var(--cyan); }
+#workshop .palette-part:disabled { opacity: 0.45; cursor: default; }
+#workshop .palette-part.fitted {
+  border-color: var(--green);
+  background: rgba(95, 217, 154, 0.12);
+}
+
+#workshop .palette-undo {
+  margin-top: auto;
+  padding: 7px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel-2);
+  color: var(--ink);
+  font: 11px var(--mono);
+  cursor: pointer;
+  pointer-events: auto;
+}
+#workshop .palette-undo:disabled { opacity: 0.4; cursor: default; }
+
+#workshop .rocket-readout {
+  font: 12px var(--mono);
+  color: var(--ink);
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--panel);
+  padding: 8px 12px;
+  white-space: nowrap;
+}
+#workshop .rocket-readout.bad { border-color: var(--burn); color: var(--burn); }
+#workshop .rocket-readout.good { border-color: var(--green); }
+
+/* ---------------- HUD density ----------------
+   The panels were sized for a large monitor and took a quarter of a laptop
+   screen, crowding out the 3D view the game is actually about. Each panel is
+   anchored to its own corner, so scaling from that corner shrinks it without
+   moving anything or reflowing the text inside. One variable tunes the lot. */
+#hud {
+  --hud-scale: 0.78;
+}
+
+#contract {
+  transform: scale(var(--hud-scale));
+  transform-origin: top right;
+}
+
+#resources {
+  transform: scale(var(--hud-scale));
+  transform-origin: top left;
+}
+
+#readout {
+  transform: scale(var(--hud-scale));
+  transform-origin: top left;
+}
+
+#capcom {
+  transform: scale(var(--hud-scale));
+  transform-origin: bottom left;
+}
+
+#hud-buttons {
+  /* Already centred by translateX(-50%); keep that and add the scale. */
+  transform: translateX(-50%) scale(var(--hud-scale));
+  transform-origin: bottom center;
+}
+
+#prompt {
+  transform: translateX(-50%) scale(var(--hud-scale));
+  transform-origin: bottom center;
+}
+
+/* Small laptop screens need the panels smaller still. */
+@media (max-width: 1500px) {
+  #hud { --hud-scale: 0.7; }
+}
+
 /* ---------------- mission failed ---------------- */
 
 #failure {

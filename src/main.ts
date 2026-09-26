@@ -5,7 +5,7 @@ import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
 import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
 import { Narrator } from './ui/Narrator';
-import { Mission, type FailureReason, type MissionStatus } from './game/Mission';
+import { Mission, type FailureReason, type MissionStatus, MISSION_2_START } from './game/Mission';
 import * as script from './content/dialogue';
 import { syncWorkHeight as syncWorkSite } from './game/worksite';
 import {
@@ -174,7 +174,18 @@ const workshopStation = new WorkshopStation();
 const workshopSign = workshopStation.createMesh();
 env.scene.add(workshopSign);
 const workshop = new WorkshopSession(player, env.assemblyRoot, canvas, hud,
-  required<HTMLElement>('#workshop'), () => {
+  required<HTMLElement>('#workshop'),
+  assembly,
+  {
+    // Real money: fitting in the Workshop spends the same budget as anywhere
+    // else, so an expensive stack can bankrupt the programme mid-build.
+    charge: part => mission.fitPart(part.cost),
+    refund: part => { mission.removePart(part.cost); },
+    spent: () => MISSION_2_START.budget - mission.status.budget,
+    changed: () => { refreshReadout(); refreshContract(); },
+    refuse: message => say(message),
+  },
+  () => {
     setHelp(false);
     clearGhost();
     narrator.stop();
