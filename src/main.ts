@@ -70,6 +70,57 @@ const startOverlay = required<HTMLElement>('#start-overlay');
 const startButton = required<HTMLButtonElement>('#start-button');
 const hud = required<HTMLElement>('#hud');
 
+/**
+ * Startup failure has to be visible.
+ *
+ * Everything below runs at module top level, and the start button's click
+ * handler is not registered until roughly 1 400 lines later. Any throw in
+ * between — a WebGL context the driver refuses, a bad shader, a null node —
+ * left the overlay up with a button that focused, highlighted on hover and did
+ * nothing at all. It looks exactly like a laggy machine, so a player retries,
+ * reboots and never sees the real cause. Report it instead of dying silently.
+ */
+function reportStartupFailure(error: unknown): void {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('Ad Astra failed to start:', error);
+  const card = startOverlay.querySelector('.start-card') ?? startOverlay;
+  const notice = document.createElement('p');
+  notice.className = 'start-error';
+  notice.setAttribute('role', 'alert');
+  notice.textContent =
+    `This browser could not start the 3D view: ${message}. `
+    + 'Check that hardware acceleration is switched on, then reload.';
+  card.append(notice);
+  startButton.disabled = true;
+  startButton.textContent = 'Unable to start';
+}
+
+// WebGL is the one dependency the game cannot degrade around, and a laptop on
+// hybrid graphics is exactly where it fails, so say so before building a scene.
+if (!hasWebGL(canvas)) {
+  reportStartupFailure(new Error('WebGL is unavailable'));
+  throw new Error('WebGL is unavailable');
+}
+
+function hasWebGL(target: HTMLCanvasElement): boolean {
+  try {
+    return Boolean(
+      target.getContext('webgl2') ?? target.getContext('webgl'),
+    );
+  } catch {
+    return false;
+  }
+}
+
+// A throw anywhere below unwinds past every listener registration, so catch it
+// at the window rather than restructuring the module into one huge try block.
+window.addEventListener('error', event => {
+  if (started) return; // A runtime error mid-game is not a startup failure.
+  if (startOverlay.classList.contains('hidden')) return;
+  if (startOverlay.querySelector('.start-error')) return;
+  reportStartupFailure(event.error ?? event.message);
+});
+
 // ---------------------------------------------------------------- renderer
 
 const renderer = new THREE.WebGLRenderer({

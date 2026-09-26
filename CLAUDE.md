@@ -341,6 +341,18 @@ product.
   exists to teach, so `analysis.test.ts` pins it. A retune that makes more tanks
   strictly better should fail that test.
 
+- **A dead start button is a silent startup throw.** `main.ts` builds the
+  renderer at line 75 and does not register the start button's click handler
+  until about 1 400 lines later, with no try/catch anywhere in between. Any
+  throw in that window — a refused WebGL context, a null node — left the overlay
+  up and the button focusable, hoverable and completely inert, which reads to a
+  player as a laggy machine rather than an error. There is now a WebGL probe
+  before the renderer and a `window` `error` listener that writes the reason
+  into the start card and disables the button. `tests/startup.test.ts` asserts
+  the overlay actually hides on click, which is the assertion the old
+  integration test was missing: it clicked the button and never checked that
+  anything happened.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

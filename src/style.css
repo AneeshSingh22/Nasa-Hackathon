@@ -83,6 +83,19 @@ kbd {
   backdrop-filter: blur(6px);
 }
 
+/* Startup failure notice. Red, because it is the one message that means the
+   game will not run at all. */
+.start-error {
+  margin-top: 18px;
+  padding: 12px 14px;
+  border: 1px solid var(--burn, #ff6b3d);
+  border-left: 3px solid var(--burn, #ff6b3d);
+  border-radius: 4px;
+  background: rgba(255, 107, 61, 0.12);
+  color: var(--ink, #e8eef7);
+  font: 13px/1.6 var(--body, sans-serif);
+}
+
 .start-card {
   max-width: 560px;
   width: 100%;
