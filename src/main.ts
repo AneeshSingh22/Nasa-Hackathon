@@ -87,26 +87,43 @@ function reportStartupFailure(error: unknown): void {
   const notice = document.createElement('p');
   notice.className = 'start-error';
   notice.setAttribute('role', 'alert');
-  notice.textContent =
-    `This browser could not start the 3D view: ${message}. `
-    + 'Check that hardware acceleration is switched on, then reload.';
+  notice.textContent = `This browser could not start the 3D view: ${message}.`;
   card.append(notice);
+
+  const steps = document.createElement('ol');
+  steps.className = 'start-error-steps';
+  for (const step of [
+    'Open chrome://settings/system and switch on "Use graphics acceleration when available", then restart Chrome.',
+    'If that is already on, open chrome://gpu and look for WebGL under Graphics Feature Status.',
+    'Edge and Firefox run the same build if Chrome stays blocked.',
+  ]) {
+    const item = document.createElement('li');
+    item.textContent = step;
+    steps.append(item);
+  }
+  card.append(steps);
   startButton.disabled = true;
   startButton.textContent = 'Unable to start';
 }
 
 // WebGL is the one dependency the game cannot degrade around, and a laptop on
 // hybrid graphics is exactly where it fails, so say so before building a scene.
-if (!hasWebGL(canvas)) {
+if (!hasWebGL()) {
   reportStartupFailure(new Error('WebGL is unavailable'));
   throw new Error('WebGL is unavailable');
 }
 
-function hasWebGL(target: HTMLCanvasElement): boolean {
+/**
+ * Probe a throwaway canvas, never the viewport.
+ *
+ * A canvas keeps the first context type it is given for life, so probing
+ * `#viewport` would claim it and leave the real renderer unable to acquire its
+ * own — turning a working machine into a failing one.
+ */
+function hasWebGL(): boolean {
   try {
-    return Boolean(
-      target.getContext('webgl2') ?? target.getContext('webgl'),
-    );
+    const probe = document.createElement('canvas');
+    return Boolean(probe.getContext('webgl2') ?? probe.getContext('webgl'));
   } catch {
     return false;
   }

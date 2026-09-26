@@ -96,6 +96,14 @@ kbd {
   font: 13px/1.6 var(--body, sans-serif);
 }
 
+.start-error-steps {
+  margin: 10px 0 0;
+  padding-left: 20px;
+  color: var(--dim, #93a4bd);
+  font: 12px/1.7 var(--body, sans-serif);
+}
+.start-error-steps li { margin-bottom: 6px; }
+
 .start-card {
   max-width: 560px;
   width: 100%;
