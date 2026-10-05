@@ -1,7 +1,7 @@
 import * as THREE from 'three';
 import { R_EARTH } from '../physics/constants';
 import { keepSeparate } from '../render/batching';
-import { hullPlating, paintedSteel, setRepeat } from '../render/textures';
+import { bayFloor, hullPlating, paintedSteel, setRepeat } from '../render/textures';
 
 /**
  * The cockpit and the world outside it.
@@ -42,6 +42,16 @@ export interface CockpitRig {
    * planetary distances — the standard trick for space scenes.
    */
   update(altitude: number, attitude: THREE.Vector3, up: THREE.Vector3, downrange: number): void;
+  /**
+   * Shake the cockpit.
+   *
+   * `intensity` 0..1. A launch is violent, and a perfectly steady view is the
+   * main reason a static screenshot of one looks like a menu. Driven by real
+   * thrust and dynamic pressure, so it peaks through max-Q and stops the
+   * moment the engines do — which also makes staging and burnout legible
+   * without a caption.
+   */
+  shake(intensity: number, elapsed: number): void;
   dispose(): void;
 }
 
@@ -101,6 +111,50 @@ export function createCockpit(): CockpitRig {
   );
   earth.add(atmosphere);
 
+  // ------------------------------------------------------- near-field ground
+  //
+  // The sphere alone gives no sense of motion low down. At zero altitude the
+  // surface is exactly at the camera, so there is nothing to see sliding past
+  // and a launch reads as a static blue screen — which is precisely how it
+  // looked. This is a textured plane a few kilometres below, scrolling against
+  // the vehicle's travel, which is what the eye actually reads as speed. It
+  // fades out as the altitude climbs and the real curvature takes over.
+  const groundMaps = bayFloor(512);
+  if (groundMaps) setRepeat(groundMaps, 60, 60);
+  const groundMaterial = new THREE.MeshStandardMaterial({
+    color: 0x4a5340,
+    roughness: 0.95,
+    metalness: 0,
+    transparent: true,
+    opacity: 1,
+    ...(groundMaps ? { map: groundMaps.map, normalMap: groundMaps.normalMap } : {}),
+  });
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(260_000, 260_000), groundMaterial);
+  ground.rotation.x = -Math.PI / 2;
+  ground.name = 'Near ground';
+  keepSeparate(ground);
+  scene.add(ground);
+
+  // Cloud deck. Passing through it is the single clearest altitude cue a
+  // launch has, and it is the moment every launch video makes a point of.
+  const cloudMaps = hullPlating(77, 512);
+  if (cloudMaps) setRepeat(cloudMaps, 28, 28);
+  const cloudMaterial = new THREE.MeshStandardMaterial({
+    color: 0xf2f6fb,
+    roughness: 1,
+    metalness: 0,
+    transparent: true,
+    opacity: 0,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+    ...(cloudMaps ? { alphaMap: cloudMaps.map } : {}),
+  });
+  const clouds = new THREE.Mesh(new THREE.PlaneGeometry(400_000, 400_000), cloudMaterial);
+  clouds.rotation.x = -Math.PI / 2;
+  clouds.name = 'Cloud deck';
+  keepSeparate(clouds);
+  scene.add(clouds);
+
   // ------------------------------------------------------------------- stars
   const starfield = createStarfield();
   scene.add(starfield);
@@ -123,6 +177,24 @@ export function createCockpit(): CockpitRig {
     scene,
     eye,
     vehicleFrame,
+
+    shake(intensity, elapsed) {
+      if (intensity <= 0) {
+        vehicleFrame.position.set(0, 0, 0);
+        vehicleFrame.rotation.set(0, 0, 0);
+        return;
+      }
+      // Several frequencies summed, so it reads as rumble rather than a
+      // regular wobble. Amplitudes are centimetres: enough to feel, not
+      // enough to make the instruments unreadable.
+      const amplitude = intensity * 0.012;
+      vehicleFrame.position.set(
+        Math.sin(elapsed * 37.1) * amplitude + Math.sin(elapsed * 71.3) * amplitude * 0.5,
+        Math.sin(elapsed * 43.7) * amplitude + Math.sin(elapsed * 88.1) * amplitude * 0.4,
+        0,
+      );
+      vehicleFrame.rotation.z = Math.sin(elapsed * 29.3) * intensity * 0.004;
+    },
 
     update(altitude, attitude, up, downrange) {
       // The cockpit never moves.
@@ -165,10 +237,64 @@ export function createCockpit(): CockpitRig {
       // effectively infinite distance.
       starfield.quaternion.copy(worldRotation);
 
+      // ---- near-field motion cues ----
+      //
+      // These are what make a launch feel like a launch. The ground and the
+      // cloud deck sit below the vehicle in its own frame, scroll against the
+      // distance travelled, and fade out as the vehicle leaves them behind.
+      const groundVisible = altitude < 90_000;
+      ground.visible = groundVisible;
+      if (groundVisible) {
+        const down = localUp.clone().multiplyScalar(-Math.max(1, altitude));
+        ground.position.copy(down.applyQuaternion(worldRotation));
+        ground.quaternion.copy(worldRotation);
+        ground.rotateX(-Math.PI / 2);
+        groundMaterial.opacity = Math.min(1, Math.max(0, 1 - altitude / 90_000));
+        if (groundMaps) {
+          // Scroll the texture with the distance flown. This is the motion the
+          // eye actually reads: a surface sliding past, not a sphere turning.
+          groundMaps.map.offset.y = -(downrange / 4_000) % 1;
+          groundMaps.normalMap.offset.y = groundMaps.map.offset.y;
+        }
+      }
+
+      // The cloud deck sits at 8 km, so it approaches, passes, and is gone —
+      // which is the clearest single altitude cue a launch has.
+      const CLOUD_ALTITUDE = 8_000;
+      const toClouds = CLOUD_ALTITUDE - altitude;
+      const cloudsVisible = altitude < 40_000;
+      clouds.visible = cloudsVisible;
+      if (cloudsVisible) {
+        const offset = localUp.clone().multiplyScalar(toClouds);
+        clouds.position.copy(offset.applyQuaternion(worldRotation));
+        clouds.quaternion.copy(worldRotation);
+        clouds.rotateX(-Math.PI / 2);
+        // Thickest right at the deck, gone well above and below it.
+        const nearness = 1 - Math.min(1, Math.abs(toClouds) / 14_000);
+        cloudMaterial.opacity = nearness * 0.85;
+        if (cloudMaps) {
+          cloudMaps.map.offset.y = -(downrange / 2_600) % 1;
+        }
+      }
+
       // The sky fades out as the air thins. By 100 km there is effectively
       // none, which is why that altitude is the conventional edge of space.
-      const skyFade = Math.max(0, 1 - altitude / 100_000);
-      scene.background = new THREE.Color(0x060910).lerp(new THREE.Color(0x4a7fb5), skyFade * 0.8);
+      // Sky colour by altitude. A flat blue fill reads as a blank screen; the
+      // real cue is that it darkens steadily as the air thins, so the player
+      // can see space arriving rather than being told about it.
+      const skyFade = Math.max(0, 1 - altitude / 80_000);
+      const deepSpace = new THREE.Color(0x02040a);
+      const highSky = new THREE.Color(0x0d2b5e);
+      const lowSky = new THREE.Color(0x5fa8e8);
+      const sky = skyFade > 0.5
+        ? highSky.clone().lerp(lowSky, (skyFade - 0.5) * 2)
+        : deepSpace.clone().lerp(highSky, skyFade * 2);
+      scene.background = sky;
+      // Haze near the ground so the horizon is a soft edge rather than a line,
+      // and so distant terrain recedes properly.
+      scene.fog = altitude < 60_000
+        ? new THREE.Fog(sky.getHex(), 2_000, 180_000 + altitude * 4)
+        : null;
       const shell = atmosphere.material as THREE.ShaderMaterial;
       if (shell.uniforms.intensity) {
         shell.uniforms.intensity.value = 0.55 + skyFade * 0.45;
@@ -456,17 +582,56 @@ function buildCockpitInterior(): THREE.Group {
   // is far sharper than a canvas texture on a quad and is how the rest of the
   // project draws its HUD.
   const screen = new THREE.MeshStandardMaterial({
-    color: 0x0a1016,
-    metalness: 0.2,
-    roughness: 0.22,
-    emissive: 0x0b2733,
-    emissiveIntensity: 0.6,
+    color: 0x071018,
+    metalness: 0.15,
+    roughness: 0.18,
+    emissive: 0x1a5c74,
+    emissiveIntensity: 1.4,
   });
-  for (const x of [-1.0, 0, 1.0]) {
-    const face = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.4, 0.04), screen);
-    face.position.set(x, -0.84, -1.42);
-    face.rotation.x = -0.38;
-    group.add(face);
+  const bezelMaterial = new THREE.MeshStandardMaterial({
+    color: 0x12161d, metalness: 0.6, roughness: 0.5,
+  });
+
+  // Two rows of screens in bezels, which is what a glass cockpit looks like.
+  // A single row of bare rectangles reads as a placeholder; the density of
+  // framed displays is what makes it read as equipment.
+  for (let row = 0; row < 2; row++) {
+    const y = -0.74 - row * 0.26;
+    const z = -1.46 + row * 0.1;
+    for (const x of [-1.05, -0.35, 0.35, 1.05]) {
+      const bezel = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.22, 0.05), bezelMaterial);
+      bezel.position.set(x, y, z);
+      bezel.rotation.x = -0.38;
+      group.add(bezel);
+
+      // The lit face sits proud of its bezel: a frame drawn in front of a
+      // screen hides the screen, which this project has already paid for once.
+      const face = new THREE.Mesh(new THREE.BoxGeometry(0.54, 0.165, 0.02), screen);
+      face.position.set(x, y + 0.012, z + 0.03);
+      face.rotation.x = -0.38;
+      group.add(face);
+    }
+  }
+
+  // Circular gauges between the screen rows, for the analogue feel a launch
+  // vehicle still has.
+  const gaugeRim = new THREE.MeshStandardMaterial({
+    color: 0x2a3038, metalness: 0.75, roughness: 0.35,
+  });
+  const gaugeFace = new THREE.MeshStandardMaterial({
+    color: 0x0c1218, emissive: 0x2b4f2f, emissiveIntensity: 0.8,
+    metalness: 0.1, roughness: 0.4,
+  });
+  for (const x of [-1.42, 1.42]) {
+    const rim = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.05, 20), gaugeRim);
+    rim.position.set(x, -0.86, -1.4);
+    rim.rotation.set(Math.PI / 2 - 0.38, 0, 0);
+    group.add(rim);
+
+    const dial = new THREE.Mesh(new THREE.CircleGeometry(0.082, 20), gaugeFace);
+    dial.position.set(x, -0.845, -1.37);
+    dial.rotation.x = -0.38;
+    group.add(dial);
   }
 
   // ---- indicator lamps along the brow ----
@@ -482,6 +647,29 @@ function buildCockpitInterior(): THREE.Group {
     const lamp = new THREE.Mesh(lampGeometry, new THREE.MeshBasicMaterial({ color: colour }));
     lamp.position.set(-1.2 + i * 0.22, 1.06, -1.32);
     group.add(lamp);
+  }
+
+  // ---- overhead panel ----
+  //
+  // High above the window, angled down. In the Shuttle this is where the
+  // breaker rows live, and it is most of why that cockpit reads as dense with
+  // equipment. It sits above the open band the view tests protect.
+  const overhead = new THREE.Mesh(new THREE.BoxGeometry(2.6, 0.7, 0.4), panel);
+  overhead.position.set(0, 1.62, -0.75);
+  overhead.rotation.x = 0.75;
+  group.add(overhead);
+
+  const breakerMaterial = new THREE.MeshStandardMaterial({
+    color: 0x1a1f27, metalness: 0.5, roughness: 0.6,
+  });
+  const breakerGeometry = new THREE.BoxGeometry(0.045, 0.045, 0.035);
+  for (let row = 0; row < 3; row++) {
+    for (let i = 0; i < 20; i++) {
+      const breaker = new THREE.Mesh(breakerGeometry, breakerMaterial);
+      breaker.position.set(-1.14 + i * 0.12, 1.48 + row * 0.1, -0.62 - row * 0.09);
+      breaker.rotation.x = 0.75;
+      group.add(breaker);
+    }
   }
 
   // Switch rows on the console, catching the light so the surface is not bare.

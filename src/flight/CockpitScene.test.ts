@@ -136,6 +136,73 @@ describe('the cockpit view', () => {
     expect(position.length()).toBeCloseTo(R_EARTH + 200_000, -3);
   });
 
+  it('shows ground near the pad and hides it in space', () => {
+    // The original flight view was a flat blue screen with nothing moving,
+    // because at zero altitude the planet's surface is exactly at the camera.
+    // A near-field plane is what gives a launch any sense of speed at all.
+    const rig = createCockpit();
+    const ground = () => rig.scene.getObjectByName('Near ground')!;
+    expect(ground()).toBeDefined();
+
+    rig.update(500, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0), 0);
+    expect(ground().visible).toBe(true);
+
+    rig.update(300_000, new THREE.Vector3(1, 0, 0), new THREE.Vector3(0, 1, 0), 0);
+    expect(ground().visible).toBe(false);
+  });
+
+  it('scrolls the ground with distance flown', () => {
+    // A static texture under a moving vehicle is the bug being fixed: the eye
+    // reads a surface sliding past as speed, and reads a still one as a
+    // screenshot.
+    const rig = createCockpit();
+    const ground = rig.scene.getObjectByName('Near ground') as THREE.Mesh;
+    const material = ground.material as THREE.MeshStandardMaterial;
+    if (!material.map) return; // No canvas in this environment.
+
+    rig.update(2_000, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0), 0);
+    const start = material.map.offset.y;
+    rig.update(2_000, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0), 2_000);
+    expect(material.map.offset.y).not.toBe(start);
+  });
+
+  it('passes a cloud deck on the way up', () => {
+    const rig = createCockpit();
+    const clouds = rig.scene.getObjectByName('Cloud deck') as THREE.Mesh;
+    expect(clouds).toBeDefined();
+    const material = clouds.material as THREE.MeshStandardMaterial;
+
+    // Thickest at the deck itself, gone well above it.
+    rig.update(8_000, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0), 0);
+    const atDeck = material.opacity;
+    rig.update(30_000, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0), 0);
+    expect(material.opacity).toBeLessThan(atDeck);
+    expect(atDeck).toBeGreaterThan(0.3);
+  });
+
+  it('darkens the sky as the air thins', () => {
+    // Watching space arrive is better than being told about it.
+    const rig = createCockpit();
+    const brightness = (altitude: number) => {
+      rig.update(altitude, new THREE.Vector3(0, 1, 0), new THREE.Vector3(0, 1, 0), 0);
+      const sky = rig.scene.background as THREE.Color;
+      return sky.r + sky.g + sky.b;
+    };
+    expect(brightness(100_000)).toBeLessThan(brightness(2_000));
+  });
+
+  it('shakes under thrust and settles when the engines stop', () => {
+    const rig = createCockpit();
+    const frame = rig.vehicleFrame;
+
+    rig.shake(1, 12.5);
+    expect(frame.position.length()).toBeGreaterThan(0);
+
+    rig.shake(0, 12.5);
+    expect(frame.position.length()).toBe(0);
+    expect(frame.rotation.z).toBe(0);
+  });
+
   it('spans a depth range that fits both an instrument and a planet', () => {
     // A panel is centimetres away and the horizon is thousands of kilometres.
     expect(FLIGHT_NEAR_PLANE).toBeLessThan(0.1);

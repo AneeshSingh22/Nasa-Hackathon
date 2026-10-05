@@ -227,6 +227,16 @@ export class FlightPhase {
 
   private syncCockpit(): void {
     const readings = telemetry(this.vehicle, this.state);
+
+    // Shake from what is actually happening to the vehicle: engine thrust
+    // against its own weight, plus the buffeting of dynamic pressure. Both
+    // fall away naturally — thrust at burnout, buffeting above the air — so
+    // the player feels staging and max-Q without being told.
+    const weight = readings.mass * 9.80665;
+    const thrustShare = weight > 0 ? Math.min(1, readings.thrust / (weight * 2)) : 0;
+    const buffet = Math.min(1, readings.dynamicPressure / 30_000);
+    this.cockpit.shake(Math.min(1, thrustShare * 0.7 + buffet * 0.6), this.state.time);
+
     this.cockpit.update(
       readings.altitude,
       new THREE.Vector3(this.state.attitude.x, this.state.attitude.y, this.state.attitude.z),

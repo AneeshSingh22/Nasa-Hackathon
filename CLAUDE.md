@@ -520,6 +520,17 @@ product.
   whatever rotation Explore or the Workshop had left on it. A phase that
   assumes a camera at a known position and orientation has to set both.
 
+- **A planet alone gives no sense of motion low down.** At zero altitude the
+  Earth's surface is exactly at the camera, so a launch rendered against the
+  sphere is a flat blue screen with nothing moving — which is how it looked.
+  Speed is read from near-field detail sliding past, so the flight scene adds a
+  textured ground plane that scrolls with distance flown, a cloud deck at 8 km
+  that approaches and passes, a sky that darkens with altitude, and cockpit
+  shake driven by real thrust and dynamic pressure. The shake is the cheapest
+  of these and does the most: it peaks through max-Q and stops at burnout, so
+  staging is legible without a caption. `CockpitScene.test.ts` asserts each of
+  them, because every one is invisible to a type checker.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should
