@@ -499,6 +499,27 @@ product.
   calls through. When a feature is finished, test the route to it, not only the
   feature.
 
+- **In a cockpit view the cockpit does not move — the world does.** The first
+  flight scene rotated the cockpit with the vehicle and left the camera at
+  identity, so the camera ended up inside the hull looking at the back of a
+  wall, with the Earth visible through it and the overhead indicator lamps
+  strung across the middle of the screen. The player is sitting in the
+  cockpit: it stays fixed in front of a fixed camera, and the planet and stars
+  are rotated by the inverse of the vehicle's orientation. Keeping the camera
+  at the origin also avoids float32 precision loss, which at 6 371 km is
+  metres and shows up as jitter.
+- **Build the interior around the view, not around the camera.** The old
+  cockpit wrapped a cylinder shell right around the eye with a small gap to see
+  through. A flight deck is a console across the lower third, posts at the
+  edges of vision and a brow above — nothing in the middle, because the middle
+  is what the player is flying by. `CockpitScene.test.ts` casts rays from the
+  eye and asserts the band from -15 to +20 degrees is clear while structure
+  exists above and below, so either failure — a blocked view or a floating
+  camera with no vehicle around it — fails the suite.
+- **Reset the camera when a phase takes it over.** The flight camera inherited
+  whatever rotation Explore or the Workshop had left on it. A phase that
+  assumes a camera at a known position and orientation has to set both.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

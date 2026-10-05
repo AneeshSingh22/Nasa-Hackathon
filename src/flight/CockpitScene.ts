@@ -62,10 +62,23 @@ export function createCockpit(): CockpitRig {
   const earthshine = new THREE.HemisphereLight(0x5588cc, 0x101418, 0.55);
   scene.add(earthshine);
 
-  // Panel lighting: the instruments are lit from inside the cockpit.
-  const panelLight = new THREE.PointLight(0xffd9a0, 2.2, 6, 2);
-  panelLight.position.set(0, 0.5, 0.4);
+  // Panel lighting.
+  //
+  // The sun is behind the pilot as often as not, so the console needs its own
+  // light or the whole lower third of the screen is black. Two lamps: one
+  // above and behind the eye washing the console face, one low and warm for
+  // the under-panel glow a lit instrument bay has.
+  const panelLight = new THREE.PointLight(0xfff0d8, 6.5, 7, 2);
+  panelLight.position.set(0, 0.9, 0.6);
   scene.add(panelLight);
+
+  const underGlow = new THREE.PointLight(0xffc98a, 3.0, 4, 2);
+  underGlow.position.set(0, -0.5, -0.4);
+  scene.add(underGlow);
+
+  // Ambient floor so nothing in the cockpit is ever fully black. Space is
+  // high contrast, but an unreadable instrument panel is a bug, not a mood.
+  scene.add(new THREE.AmbientLight(0x6a7a90, 0.75));
 
   // ------------------------------------------------------------------- Earth
   const earth = new THREE.Group();
@@ -89,12 +102,14 @@ export function createCockpit(): CockpitRig {
   earth.add(atmosphere);
 
   // ------------------------------------------------------------------- stars
-  scene.add(createStarfield());
+  const starfield = createStarfield();
+  scene.add(starfield);
 
   // ----------------------------------------------------------------- cockpit
   //
   // Parented to a frame that rotates with the vehicle, so the panel stays
   // fixed relative to the pilot while the world outside swings past.
+  // Fixed in front of the camera, which sits at the origin looking down -Z.
   const vehicleFrame = new THREE.Object3D();
   keepSeparate(vehicleFrame);
   scene.add(vehicleFrame);
@@ -110,24 +125,45 @@ export function createCockpit(): CockpitRig {
     vehicleFrame,
 
     update(altitude, attitude, up, downrange) {
-      // Keep the camera at the origin and move the planet. At 6 371 km a
-      // float32 position loses metres of precision, which shows up as the
-      // cockpit visibly jittering; this avoids it entirely.
-      const centreDistance = R_EARTH + altitude;
-      earth.position.set(0, -centreDistance, 0);
-      // Rotate the planet under the vehicle so the ground slides past as the
-      // vehicle travels downrange, rather than the vehicle sliding over a
-      // static sphere.
-      earth.rotation.z = downrange / R_EARTH;
+      // The cockpit never moves.
+      //
+      // The player is sitting in it, so it stays fixed in front of a camera
+      // that also never moves, and the *world* rotates around them. The first
+      // version did the opposite — rotated the cockpit and left the camera at
+      // identity — which put the camera inside the hull looking at the back of
+      // a wall while the Earth showed through it. A cockpit view is defined by
+      // the cockpit being still.
+      //
+      // Keeping the camera at the origin also avoids float32 precision loss:
+      // at 6 371 km from the origin a float position is accurate to metres,
+      // which shows up as visible jitter.
 
-      // Orient the cockpit: the nose points along `attitude`, and `up` keeps
-      // the panel the right way round.
+      // Where the planet sits relative to the pilot, in the pilot's own frame.
+      // Nose along -Z (where the camera looks), local up along +Y.
       const forward = attitude.clone().normalize();
       const localUp = up.clone().normalize();
       const right = new THREE.Vector3().crossVectors(forward, localUp).normalize();
       const trueUp = new THREE.Vector3().crossVectors(right, forward).normalize();
-      const basis = new THREE.Matrix4().makeBasis(right, trueUp, forward.negate());
-      vehicleFrame.quaternion.setFromRotationMatrix(basis);
+
+      // World-to-vehicle rotation: the inverse of the vehicle's orientation.
+      const vehicleBasis = new THREE.Matrix4().makeBasis(right, trueUp, forward.clone().negate());
+      const worldRotation = new THREE.Quaternion()
+        .setFromRotationMatrix(vehicleBasis)
+        .invert();
+
+      // The planet's centre is one Earth radius plus the altitude straight
+      // down the local vertical, expressed in the pilot's frame.
+      const centreDistance = R_EARTH + altitude;
+      const centre = localUp.clone().multiplyScalar(-centreDistance).applyQuaternion(worldRotation);
+      earth.position.copy(centre);
+      earth.quaternion.copy(worldRotation);
+      // Spin the globe under the vehicle so the ground slides past as it
+      // travels downrange.
+      earth.rotateZ(downrange / R_EARTH);
+
+      // The stars rotate with the world but have no position: they are at
+      // effectively infinite distance.
+      starfield.quaternion.copy(worldRotation);
 
       // The sky fades out as the air thins. By 100 km there is effectively
       // none, which is why that altitude is the conventional edge of space.
@@ -331,98 +367,135 @@ function createStarfield(): THREE.Points {
  * needles are far sharper as HTML than as canvas textures on a quad — and the
  * project already renders its HUD that way.
  */
+/**
+ * The cockpit interior.
+ *
+ * Built around the view, not around the camera. The first version wrapped a
+ * cylinder shell right around the eye, so the player was enclosed by hull with
+ * only a small gap to see through; combined with the camera never being
+ * oriented, the result was a wall of dark geometry with the planet showing
+ * through it.
+ *
+ * This version is a flight deck: a wide console across the lower third of the
+ * screen, window posts at the edges of vision, and a brow above. Nothing sits
+ * in the middle of the view, because the middle of the view is the thing the
+ * player is flying by. Everything is placed in the camera's own frame — the
+ * camera is at the origin looking down -Z, so -Z is forward, +Y is up.
+ */
 function buildCockpitInterior(): THREE.Group {
   const group = new THREE.Group();
   group.name = 'Cockpit interior';
 
-  const hullMaps = hullPlating(21, 512);
-  if (hullMaps) setRepeat(hullMaps, 2, 2);
-  const shell = new THREE.MeshStandardMaterial({
-    color: 0x3c424e,
-    metalness: 0.55,
-    roughness: 0.6,
-    side: THREE.BackSide,
-    ...(hullMaps ? {
-      map: hullMaps.map,
-      normalMap: hullMaps.normalMap,
-      roughnessMap: hullMaps.roughnessMap,
-      normalScale: new THREE.Vector2(0.5, 0.5),
-    } : {}),
-  });
-
-  const panelMaps = paintedSteel('#23282f', 31, 512);
-  if (panelMaps) setRepeat(panelMaps, 3, 2);
-  const panelMaterial = new THREE.MeshStandardMaterial({
-    color: 0x23282f,
-    metalness: 0.4,
-    roughness: 0.72,
+  const panelMaps = paintedSteel('#1b2029', 31, 512);
+  if (panelMaps) setRepeat(panelMaps, 4, 2);
+  const panel = new THREE.MeshStandardMaterial({
+    color: 0x1b2029,
+    metalness: 0.45,
+    roughness: 0.68,
     ...(panelMaps ? {
       map: panelMaps.map,
       normalMap: panelMaps.normalMap,
       roughnessMap: panelMaps.roughnessMap,
+      normalScale: new THREE.Vector2(0.6, 0.6),
     } : {}),
   });
 
-  // The capsule shell, seen from inside.
-  const hull = new THREE.Mesh(new THREE.CylinderGeometry(1.5, 1.7, 2.6, 24, 1, true), shell);
-  hull.position.y = 0.2;
-  group.add(hull);
+  const hullMaps = hullPlating(21, 512);
+  if (hullMaps) setRepeat(hullMaps, 2, 1);
+  const frame = new THREE.MeshStandardMaterial({
+    color: 0x2e343f,
+    metalness: 0.7,
+    roughness: 0.45,
+    ...(hullMaps ? {
+      map: hullMaps.map,
+      normalMap: hullMaps.normalMap,
+      roughnessMap: hullMaps.roughnessMap,
+    } : {}),
+  });
 
-  // Bulkhead behind the pilot.
-  const bulkhead = new THREE.Mesh(new THREE.CircleGeometry(1.5, 24), panelMaterial);
-  bulkhead.position.set(0, 0.2, 1.3);
-  bulkhead.rotation.y = Math.PI;
-  group.add(bulkhead);
-
-  // The main instrument panel, below and ahead, angled toward the pilot the
-  // way a real console is so the gauges face the eye rather than the ceiling.
-  const console3d = new THREE.Mesh(new THREE.BoxGeometry(2.0, 0.62, 0.3), panelMaterial);
-  console3d.position.set(0, -0.62, -0.72);
-  console3d.rotation.x = -0.42;
+  // ---- main console, across the bottom of the view ----
+  //
+  // Angled toward the pilot so its face catches the panel light rather than
+  // presenting an edge. Low enough that it occupies the bottom third and
+  // leaves the horizon clear.
+  const console3d = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.9, 0.5), panel);
+  console3d.position.set(0, -0.92, -1.25);
+  console3d.rotation.x = -0.38;
   group.add(console3d);
 
-  // Window frame: four bars around the opening. The glass itself is left out
-  // deliberately — a transparent pane between the player and the planet costs
-  // a sorting pass and adds nothing they can see.
-  const frameMaterial = new THREE.MeshStandardMaterial({
-    color: 0x2b3038, metalness: 0.7, roughness: 0.45,
-  });
-  const frameBars: Array<[number, number, number, number, number, number]> = [
-    // width, height, depth, x, y, z
-    [2.3, 0.14, 0.18, 0, 0.62, -1.18],
-    [2.3, 0.14, 0.18, 0, -0.28, -1.18],
-    [0.14, 1.04, 0.18, -1.1, 0.17, -1.18],
-    [0.14, 1.04, 0.18, 1.1, 0.17, -1.18],
-  ];
-  for (const [w, h, d, x, y, z] of frameBars) {
-    const bar = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), frameMaterial);
-    bar.position.set(x, y, z);
-    group.add(bar);
-  }
+  // A raised lip along the top edge of the console, which is what stops it
+  // reading as a floating slab.
+  const lip = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.08, 0.14), frame);
+  lip.position.set(0, -0.56, -1.44);
+  lip.rotation.x = -0.38;
+  group.add(lip);
 
-  // Side consoles, which do most of the work of making it feel enclosed.
+  // ---- window posts at the edges of vision ----
   for (const side of [-1, 1]) {
-    const sideConsole = new THREE.Mesh(new THREE.BoxGeometry(0.34, 0.8, 1.4), panelMaterial);
-    sideConsole.position.set(side * 1.25, -0.35, -0.2);
-    sideConsole.rotation.z = side * 0.18;
+    const post = new THREE.Mesh(new THREE.BoxGeometry(0.16, 2.2, 0.26), frame);
+    post.position.set(side * 1.62, 0.1, -1.5);
+    post.rotation.z = side * 0.06;
+    group.add(post);
+
+    // Side consoles, angled inward, giving the deck depth at the periphery.
+    const sideConsole = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.72, 1.1), panel);
+    sideConsole.position.set(side * 1.5, -0.68, -0.75);
+    sideConsole.rotation.z = side * 0.22;
     group.add(sideConsole);
   }
 
-  // Overhead switch panel, visible at the top of the view.
-  const overhead = new THREE.Mesh(new THREE.BoxGeometry(1.6, 0.26, 0.9), panelMaterial);
-  overhead.position.set(0, 1.18, -0.3);
-  overhead.rotation.x = 0.32;
-  group.add(overhead);
+  // ---- brow above the window ----
+  const brow = new THREE.Mesh(new THREE.BoxGeometry(3.5, 0.3, 0.5), frame);
+  brow.position.set(0, 1.18, -1.4);
+  brow.rotation.x = 0.26;
+  group.add(brow);
 
-  // A scatter of indicator lamps, so the interior has something live in it.
-  const lampGeometry = new THREE.SphereGeometry(0.022, 8, 6);
-  const lampColours = [0x5fd99a, 0xffb400, 0xff6b3d, 0x52d9ec];
-  for (let i = 0; i < 18; i++) {
+  // ---- instrument faces on the console ----
+  //
+  // Dark glass rectangles reading as screens. The live numbers are DOM, which
+  // is far sharper than a canvas texture on a quad and is how the rest of the
+  // project draws its HUD.
+  const screen = new THREE.MeshStandardMaterial({
+    color: 0x0a1016,
+    metalness: 0.2,
+    roughness: 0.22,
+    emissive: 0x0b2733,
+    emissiveIntensity: 0.6,
+  });
+  for (const x of [-1.0, 0, 1.0]) {
+    const face = new THREE.Mesh(new THREE.BoxGeometry(0.82, 0.4, 0.04), screen);
+    face.position.set(x, -0.84, -1.42);
+    face.rotation.x = -0.38;
+    group.add(face);
+  }
+
+  // ---- indicator lamps along the brow ----
+  //
+  // On the brow, above the window, where a real caution-and-warning panel
+  // sits. They were previously scattered across the overhead panel directly in
+  // front of the eye, which is why the broken view was a field of coloured
+  // dots.
+  const lampGeometry = new THREE.SphereGeometry(0.03, 10, 8);
+  const lampColours = [0x5fd99a, 0x5fd99a, 0xffb400, 0x52d9ec, 0x5fd99a, 0xff6b3d];
+  for (let i = 0; i < 12; i++) {
     const colour = lampColours[i % lampColours.length]!;
     const lamp = new THREE.Mesh(lampGeometry, new THREE.MeshBasicMaterial({ color: colour }));
-    const row = Math.floor(i / 9);
-    lamp.position.set(-0.78 + (i % 9) * 0.195, 1.1 + row * 0.07, -0.72 - row * 0.02);
+    lamp.position.set(-1.2 + i * 0.22, 1.06, -1.32);
     group.add(lamp);
+  }
+
+  // Switch rows on the console, catching the light so the surface is not bare.
+  const switchGeometry = new THREE.BoxGeometry(0.05, 0.07, 0.03);
+  const switchMaterial = new THREE.MeshStandardMaterial({
+    color: 0x8d95a3, metalness: 0.8, roughness: 0.35,
+  });
+  for (let row = 0; row < 2; row++) {
+    for (let i = 0; i < 14; i++) {
+      const toggle = new THREE.Mesh(switchGeometry, switchMaterial);
+      toggle.position.set(-1.45 + i * 0.22, -1.16 - row * 0.1, -1.22 + row * 0.04);
+      toggle.rotation.x = -0.38;
+      group.add(toggle);
+    }
   }
 
   return group;

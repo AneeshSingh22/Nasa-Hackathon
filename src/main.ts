@@ -1882,7 +1882,14 @@ function startFlight(): void {
   // than the bay.
   camera.near = FLIGHT_NEAR_PLANE;
   camera.far = FLIGHT_FAR_PLANE;
+  // The cockpit is built in the camera's own frame — origin, looking down -Z,
+  // level. The camera arrives here carrying whatever rotation Explore or the
+  // Workshop left on it, so it must be reset explicitly or the player starts
+  // the flight facing a wall.
   camera.position.set(0, 0, 0);
+  camera.quaternion.identity();
+  camera.up.set(0, 1, 0);
+  camera.updateMatrixWorld(true);
   camera.updateProjectionMatrix();
 
   log('LAUNCH', true);
@@ -1927,11 +1934,21 @@ function refreshFlightHud(): void {
     if (node && node.textContent !== text) node.textContent = text;
   };
 
-  set('fi-alt', `${(t.altitude / 1000).toFixed(1)} km`);
+  // Clamp away the tiny negative altitude the pad constraint produces, which
+  // otherwise reads as "-0.0 km" on the pad and looks like a bug.
+  set('fi-alt', `${Math.max(0, t.altitude / 1000).toFixed(1)} km`);
   set('fi-speed', `${t.speed.toFixed(0)} m/s`);
   set('fi-vs', `${t.verticalSpeed >= 0 ? '+' : ''}${t.verticalSpeed.toFixed(0)} m/s`);
-  set('fi-apo', t.apoapsis === null ? '—' : `${(t.apoapsis / 1000).toFixed(0)} km`);
-  set('fi-peri', t.periapsis === null ? '—' : `${(t.periapsis / 1000).toFixed(0)} km`);
+  // A periapsis below the surface is mathematically right and meaningless to
+  // read: it says the trajectory hits the planet, so say that instead of
+  // quoting a point 6 363 km underground.
+  const apsis = (value: number | null) => {
+    if (value === null) return '—';
+    if (value < 0) return 'suborbital';
+    return `${(value / 1000).toFixed(0)} km`;
+  };
+  set('fi-apo', apsis(t.apoapsis));
+  set('fi-peri', apsis(t.periapsis));
   set('fi-q', `${(t.dynamicPressure / 1000).toFixed(1)} kPa`);
 
   set('fs-stage', `${snap.stage + 1} of ${snap.stageCount}`);
