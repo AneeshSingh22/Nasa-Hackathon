@@ -219,7 +219,10 @@ function applyGtaoSettings(pass: GTAOPass, quality: Quality): void {
     distanceExponent: 1.1,
     thickness: 0.4,
     scale: 1.0,
-    samples: quality === 'high' ? 16 : 8,
+    // AO is low-frequency and the denoise pass that follows hides sample
+    // noise, so 8 samples looks very close to 16 for half the work. This was
+    // the most expensive pass in the stack.
+    samples: quality === 'high' ? 8 : 4,
     screenSpaceRadius: false,
   });
 }

@@ -438,6 +438,26 @@ product.
   keeping the cheap passes that carry the style. `createPipeline` returns null
   rather than throwing, and `present()` falls back to `renderer.render`.
 
+- **Fifteen ceiling lamps lit nothing and cost a frame each.** The high-bay
+  fixtures sat 91.8 m above the floor with a 46 m range, so their falloff hit
+  zero roughly halfway down: nineteen point lights in the scene, fifteen of
+  them contributing no illumination at all while still being evaluated per lit
+  pixel. Reaching the floor from that height would need an intensity near 400.
+  They are emissive housings only now, which is all the player ever saw of
+  them. `vab/lighting.test.ts` fails if a point light is added that cannot
+  reach the floor or the vehicle — a light whose range does not cover anything
+  is pure cost, and that is invisible in a screenshot.
+- **Pixel ratio squares.** `setPixelRatio(2)` renders a 1080p window at 8.3
+  megapixels, and every post-processing pass runs at that size, so the whole
+  effect stack cost roughly twice what it needed to for a difference most
+  displays cannot resolve. Capped at 1.5.
+- **Ship a frame-rate watchdog, not just a quality key.** A judge on an unknown
+  laptop will not think to press `P`. `main.ts` averages frame time over 90
+  frames after a 1.5 s warm-up — long enough to skip shader compilation — and
+  drops to the fast path once if it is below about 32 fps. It never escalates
+  back on its own, because a pipeline that oscillates is worse than one that is
+  simply slower, and a manual choice disables it entirely.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

@@ -609,13 +609,17 @@ export function createVABScene(): VABEnvironment {
   const key = new THREE.DirectionalLight(0xfff4e4, 1.55);
   key.position.set(22, 52, 18);
   key.castShadow = true;
-  key.shadow.mapSize.set(4096, 4096);
+  // 2048 rather than 4096. A 4k VSM map blurred with 16 samples is about a
+  // quarter of a billion texel reads a frame, and at this shadow span the
+  // extra resolution is not visible against the blur radius that softens the
+  // contact edge anyway.
+  key.shadow.mapSize.set(2048, 2048);
   key.shadow.camera.near = 1;
   key.shadow.camera.far = 160;
   // VSM blurs in shadow-map space, so radius is what softens the contact edge.
   // A hard-edged shadow under a 300-tonne booster reads as a decal.
   key.shadow.radius = 4;
-  key.shadow.blurSamples = 16;
+  key.shadow.blurSamples = 8;
   const shadowSpan = 46;
   key.shadow.camera.left = -shadowSpan;
   key.shadow.camera.right = shadowSpan;
@@ -637,31 +641,40 @@ export function createVABScene(): VABEnvironment {
     emissiveIntensity: 1.6,
   });
   const flickerLights: THREE.PointLight[] = [];
+
+  // Ceiling fixtures are emissive housings only — no point lights.
+  //
+  // There used to be fifteen lamps up here, and they lit nothing: at 91.8 m
+  // above a floor the player stands on, with a 46 m range, their falloff
+  // reached zero roughly halfway down. They cost a per-pixel evaluation each
+  // and contributed no illumination whatsoever. Reaching the floor from that
+  // height would need an intensity around 400, which would blow out the roof.
+  //
+  // The key light and the environment map light the room. The housings still
+  // read as a working high bay because they glow, which is all the player ever
+  // saw of them. `lighting.test.ts` fails if point lights come back up here.
   for (let gx = -2; gx <= 2; gx++) {
     for (let gz = -1; gz <= 1; gz++) {
-      const x = gx * 13;
-      const z = gz * 15;
-
       const housing = new THREE.Mesh(
         new THREE.BoxGeometry(3.4, 0.3, 1.2),
         fixtureMat,
       );
-      housing.position.set(x, VAB_HEIGHT - 3.0, z);
+      housing.position.set(gx * 13, VAB_HEIGHT - 3.0, gz * 15);
       scene.add(housing);
-
-      const lamp = new THREE.PointLight(0xfff4e2, 16, 46, 2);
-      lamp.position.set(x, VAB_HEIGHT - 4.2, z);
-      scene.add(lamp);
-      flickerLights.push(lamp);
     }
   }
 
-  // Work lights low down around the stand, so the base of the vehicle and the
-  // player's own hands are lit.
-  for (const angle of [0, Math.PI / 2, Math.PI, -Math.PI / 2]) {
-    const work = new THREE.PointLight(0xfff2dd, 10, 26, 2);
+  // Work lights low down around the stand, so the base of the vehicle is lit.
+  // Two opposed lights give the same modelling as four at half the per-pixel
+  // cost: the pair the player cannot see behind the vehicle contributed almost
+  // nothing once the environment map was doing the ambient work.
+  for (const angle of [Math.PI / 4, -Math.PI * 3 / 4]) {
+    const work = new THREE.PointLight(0xfff2dd, 18, 30, 2);
     work.position.set(Math.cos(angle) * 11, 6.5, Math.sin(angle) * 11);
     scene.add(work);
+    // These are the lights the player can actually see varying, now that the
+    // ceiling lamps are housings only.
+    flickerLights.push(work);
   }
 
   const baseIntensities = flickerLights.map((l) => l.intensity);
