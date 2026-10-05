@@ -458,6 +458,36 @@ product.
   back on its own, because a pipeline that oscillates is worse than one that is
   simply slower, and a manual choice disables it entirely.
 
+- **Circularisation costs tens of metres per second, not thousands — if it
+  happens at apoapsis.** Vis-viva puts apoapsis speed on a 0 x 180 km ellipse
+  at 7 746 m/s against 7 800 m/s circular, so raising periapsis from the top of
+  the arc costs about 55 m/s. An autopilot that instead burns continuously
+  until periapsis rises spends its whole margin lifting apoapsis to thousands
+  of kilometres and arrives back in the atmosphere with an empty tank. The
+  vehicle was never short of delta-v: it had nearly 1 900 m/s spare and was
+  pointing it in the wrong direction. `physics/guidance.ts` encodes the three
+  real phases — gravity turn, cut and coast, circularise at apoapsis — and
+  `guidance.test.ts` asserts the cut, because five of its tests fail when the
+  vehicle burns on past the target.
+- **Do not steer on apoapsis, and do not steer on speed alone.** Correcting
+  pitch from apoapsis shortfall pitches the nose up early in the flight, when
+  apoapsis always lags, so the vehicle climbs almost vertically and arrives at
+  171 km with 1 400 m/s of horizontal speed. Steering purely on the fraction of
+  orbital speed achieved deadlocks the other way: it will not pitch over until
+  it is fast and cannot get fast without pitching over, so it holds 84 degrees
+  and coasts ballistically. The working shape is an altitude-based schedule
+  with speed as a bounded correction and apoapsis as a floor on the nose.
+- **Sitting on the pad is not a crash.** `evaluate` returned `crashed` for any
+  altitude at or below zero after one second, so a vehicle whose throttle the
+  player was still opening failed before the game began. The pad now holds the
+  vehicle up — clamp to the surface and cancel only the downward velocity
+  component — and a crash requires real closing speed.
+- **Tuning is not a substitute for deriving.** Several rounds of adjusting
+  gains produced *identical* results, which should have been the signal much
+  sooner that the variable being tuned was not the one that mattered. Working
+  the orbital mechanics out first, from published formulas, produced a working
+  ascent in one pass.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

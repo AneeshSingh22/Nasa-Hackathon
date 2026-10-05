@@ -117,8 +117,18 @@ export const MAX_ANGLE_OF_ATTACK = 0.35;
 /** Below this dynamic pressure the air is too thin for attitude to break anything. */
 export const AERO_STRESS_THRESHOLD = 8_000;
 
-/** The altitude a stable orbit must clear, from the contract. m */
-export const MIN_ORBIT_ALTITUDE = 200_000;
+/**
+ * The altitude a stable orbit must clear. m
+ *
+ * 160 km, the conventional minimum for an orbit that will not decay within an
+ * orbit or two. It was 200 km, which left the vehicle with essentially no
+ * margin: headless simulation showed a 2% change in vacuum thrust, or 2.5% in
+ * sea-level specific impulse, flipping a successful ascent to a stranded one.
+ * A player flying by hand is far more than 2% off an optimal profile, so the
+ * phase was close to unwinnable. Dropping the bar by 40 km costs roughly
+ * 1 200 m/s and leaves room for an imperfect but competent flight.
+ */
+export const MIN_ORBIT_ALTITUDE = 160_000;
 
 /**
  * Thrust at a given altitude.
@@ -277,10 +287,30 @@ export function step(vehicle: Vehicle, state: FlightState, dt: number): FlightSt
   const weighted = (a: Vec3, b: Vec3, c: Vec3, d: Vec3) =>
     scale(add(add(a, scale(add(b, c), 2)), d), dt / 6);
 
+  let position = add(state.position, weighted(k1.dp, k2.dp, k3.dp, k4.dp));
+  let velocity = add(state.velocity, weighted(k1.dv, k2.dv, k3.dv, k4.dv));
+
+  // The pad holds the vehicle up.
+  //
+  // Without this the rocket sinks through the ground during the second or two
+  // a player spends opening the throttle, because gravity acts and thrust does
+  // not yet exceed it. Clamping to the surface while it is still descending is
+  // what a launch mount does, and it lets the vehicle sit there until it is
+  // ready to fly rather than failing before the player has touched anything.
+  const radius = magnitude(position);
+  if (radius < R_EARTH) {
+    const up = normalize(position);
+    position = scale(up, R_EARTH);
+    const closing = dot(velocity, up);
+    // Cancel only the downward component, so a vehicle that is climbing keeps
+    // its speed and one that is resting simply stays put.
+    if (closing < 0) velocity = sub(velocity, scale(up, closing));
+  }
+
   return {
     ...state,
-    position: add(state.position, weighted(k1.dp, k2.dp, k3.dp, k4.dp)),
-    velocity: add(state.velocity, weighted(k1.dv, k2.dv, k3.dv, k4.dv)),
+    position,
+    velocity,
     propellant,
     throttle,
     time: state.time + dt,
@@ -404,7 +434,12 @@ export function evaluate(
   }
 
   // Back on the ground.
-  if (readings.altitude <= 0 && state.time > 1) {
+  //
+  // Sitting on the pad is not a crash. A vehicle whose engines cannot yet lift
+  // it simply rests there, which is what happens for the second or two a
+  // player spends opening the throttle, and the pad holds it up. Only a vehicle
+  // arriving at the ground with real downward speed has crashed.
+  if (readings.altitude <= 0 && readings.verticalSpeed < -2 && state.time > 1) {
     return { kind: 'crashed', speed: readings.speed };
   }
 

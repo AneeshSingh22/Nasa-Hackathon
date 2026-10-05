@@ -3,6 +3,9 @@ import './style.css';
 import { createVABScene, VAB_WIDTH, VAB_DEPTH, VAB_HEIGHT } from './vab/VABScene';
 import { configureRenderer, installEnvironment } from './render/lookDev';
 import { createPipeline, type Pipeline, type Quality } from './render/pipeline';
+import { FlightPhase, outcomeReport } from './flight/FlightPhase';
+import { vehicleFromParts } from './flight/vehicle';
+import { FLIGHT_FAR_PLANE, FLIGHT_NEAR_PLANE } from './flight/CockpitScene';
 import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
 import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
@@ -175,6 +178,13 @@ let pipeline: Pipeline | null = null;
 
 /** One render call for the whole game, so both phases stay in step. */
 function present(): void {
+  // While flying, the cockpit scene replaces the bay entirely. The composer is
+  // bypassed because its passes were built against the bay's scene and depth
+  // range; a 40 000 km far plane breaks the ambient-occlusion depth maths.
+  if (flight) {
+    renderer.render(flight.cockpit.scene, camera);
+    return;
+  }
   if (pipeline) pipeline.render();
   else renderer.render(env.scene, camera);
 }
@@ -1667,10 +1677,66 @@ function rollOut(): void {
   for (const line of script.ROLLOUT_ACCEPTED) narrator.say(line);
 }
 
+/**
+ * Flight controls.
+ *
+ * Held keys set an input axis rather than nudging a value, so the rate is the
+ * same whatever the frame rate — the same reason the integrator runs on a
+ * fixed step.
+ */
+function handleFlightKey(e: KeyboardEvent, down: boolean): boolean {
+  if (!flight) return false;
+
+  switch (e.code) {
+    case 'KeyW': case 'ArrowUp':
+      flight.inputs.pitch = down ? 1 : 0;
+      return true;
+    case 'KeyS': case 'ArrowDown':
+      flight.inputs.pitch = down ? -1 : 0;
+      return true;
+    case 'ShiftLeft': case 'ShiftRight':
+      flight.inputs.throttleChange = down ? 1 : 0;
+      return true;
+    case 'ControlLeft': case 'ControlRight':
+      flight.inputs.throttleChange = down ? -1 : 0;
+      return true;
+    default:
+      break;
+  }
+
+  if (!down || e.repeat) return false;
+  switch (e.code) {
+    case 'Space':
+      e.preventDefault();
+      if (flight.stage()) log('STAGE SEPARATION', true);
+      return true;
+    case 'KeyJ':
+      if (flight.jettison()) log('FAIRING AWAY', true);
+      return true;
+    case 'KeyG': {
+      const on = flight.toggleAutopilot();
+      log(`AUTOPILOT ${on ? 'ENGAGED' : 'OFF'}`, on);
+      return true;
+    }
+    case 'Period':
+      log(`TIME x${flight.cycleTimeScale()}`);
+      return true;
+    default:
+      return false;
+  }
+}
+
+window.addEventListener('keyup', (e) => {
+  handleFlightKey(e, false);
+});
+
 window.addEventListener('keydown', (e) => {
   // Build actions work whenever the game is showing, not only under pointer
   // lock — pointer lock can be refused, and the game must still be playable.
   if (!started) return;
+  // Flight takes the keyboard entirely while it runs, so a build shortcut
+  // cannot fire mid-ascent.
+  if (flight) { handleFlightKey(e, true); return; }
   if (workshop.handleKey(e)) return;
   if (e.repeat) return;
   if (e.code === 'KeyE') interact();
@@ -1776,6 +1842,114 @@ function restartMission(): void {
 
 el.winAgain?.addEventListener('click', () => restartMission());
 
+// ------------------------------------------------------------------ flight
+
+/**
+ * The launch phase.
+ *
+ * Null until the player flies. While it exists it owns the camera and the
+ * render target entirely: `present()` draws the cockpit scene instead of the
+ * bay, and the Explore and Workshop update paths are skipped.
+ */
+let flight: FlightPhase | null = null;
+const flightHud = document.querySelector<HTMLElement>('#flight');
+
+/** Saved so the bay can be restored exactly when the flight ends. */
+const savedCameraNear = camera.near;
+const savedCameraFar = camera.far;
+
+function startFlight(): void {
+  const vehicle = vehicleFromParts(assembly.parts);
+  if (!vehicle) {
+    say('The vehicle is not complete enough to fly.');
+    return;
+  }
+
+  flight = new FlightPhase(vehicle);
+  el.success?.classList.add('hidden');
+  hud.classList.add('hidden');
+  flightHud?.classList.remove('hidden');
+  player.setEnabled(false);
+  player.releaseLock();
+
+  // A cockpit instrument is centimetres from the eye and the planet is
+  // thousands of kilometres away, so the flight needs a far wider depth range
+  // than the bay.
+  camera.near = FLIGHT_NEAR_PLANE;
+  camera.far = FLIGHT_FAR_PLANE;
+  camera.position.set(0, 0, 0);
+  camera.updateProjectionMatrix();
+
+  log('LAUNCH', true);
+  say('Throttle up and hold her steady. Watch your dynamic pressure through the thick air.');
+}
+
+function endFlight(): void {
+  if (!flight) return;
+  const report = outcomeReport(flight.snapshot.outcome);
+  const peak = flight.peakDynamicPressure;
+
+  flight.dispose();
+  flight = null;
+  flightHud?.classList.add('hidden');
+
+  camera.near = savedCameraNear;
+  camera.far = savedCameraFar;
+  camera.updateProjectionMatrix();
+
+  if (el.winText) {
+    el.winText.textContent = `${report.text} Peak dynamic pressure was `
+      + `${(peak / 1000).toFixed(0)} kilopascals.`;
+  }
+  const heading = document.querySelector<HTMLElement>('#success h1');
+  if (heading) heading.textContent = report.title;
+  el.success?.classList.remove('hidden');
+  // The flight is over; there is nothing to fly again from here.
+  document.querySelector<HTMLButtonElement>('#win-launch')?.classList.add('hidden');
+}
+
+document.querySelector<HTMLButtonElement>('#win-launch')
+  ?.addEventListener('click', () => startFlight());
+
+/** Instruments are rewritten from the snapshot; nothing is tracked beside it. */
+function refreshFlightHud(): void {
+  if (!flight) return;
+  const snap = flight.snapshot;
+  const t = snap.telemetry;
+
+  const set = (id: string, text: string) => {
+    const node = document.getElementById(id);
+    if (node && node.textContent !== text) node.textContent = text;
+  };
+
+  set('fi-alt', `${(t.altitude / 1000).toFixed(1)} km`);
+  set('fi-speed', `${t.speed.toFixed(0)} m/s`);
+  set('fi-vs', `${t.verticalSpeed >= 0 ? '+' : ''}${t.verticalSpeed.toFixed(0)} m/s`);
+  set('fi-apo', t.apoapsis === null ? '—' : `${(t.apoapsis / 1000).toFixed(0)} km`);
+  set('fi-peri', t.periapsis === null ? '—' : `${(t.periapsis / 1000).toFixed(0)} km`);
+  set('fi-q', `${(t.dynamicPressure / 1000).toFixed(1)} kPa`);
+
+  set('fs-stage', `${snap.stage + 1} of ${snap.stageCount}`);
+  set('fs-prop', `${Math.round(snap.propellantFraction * 100)}%`);
+  set('fs-throttle', `${Math.round(snap.throttle * 100)}%`);
+  set('fs-dv', `${t.stageDeltaV.toFixed(0)} m/s`);
+  set('fc-warp', String(snap.timeScale));
+
+  const propBar = document.getElementById('fs-prop-bar');
+  if (propBar) propBar.style.width = `${snap.propellantFraction * 100}%`;
+  const throttleBar = document.getElementById('fs-throttle-bar');
+  if (throttleBar) throttleBar.style.width = `${snap.throttle * 100}%`;
+
+  const guidance = document.getElementById('flight-guidance');
+  if (guidance) {
+    const prefix = snap.autopilot ? 'Autopilot: ' : '';
+    const text = `${prefix}${snap.guidance.instruction}`;
+    if (guidance.textContent !== text) guidance.textContent = text;
+    // Warn only on a real hazard, not on every phase change.
+    guidance.classList.toggle('warn', t.dynamicPressure > 38_000);
+  }
+}
+
 el.failRetry?.addEventListener('click', () => {
   assembly.clear();
   mission.reset();
@@ -1821,6 +1995,17 @@ function frame(): void {
   const dt = Math.min(0.05, clock.getDelta());
   const elapsed = clock.elapsedTime;
   watchFrameRate(dt);
+
+  // Flight owns everything while it runs: no bay update, no player movement,
+  // no mission drain.
+  if (flight) {
+    flight.update(dt);
+    refreshFlightHud();
+    present();
+    if (flight.finished) endFlight();
+    requestAnimationFrame(frame);
+    return;
+  }
 
   // Mission costs are action-based. Pausing legacy actions, crane and player
   // here keeps all resources and the Explore scene state intact in Workshop.

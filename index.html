@@ -214,6 +214,39 @@
       </div>
 
       <!-- Roll out approved: mission phase complete -->
+      <!-- Flight HUD: shown only while flying. -->
+      <div id="flight" class="hidden">
+        <section id="flight-instruments" aria-label="Flight instruments">
+          <div class="inst"><span>Altitude</span><b id="fi-alt">0 km</b></div>
+          <div class="inst"><span>Speed</span><b id="fi-speed">0 m/s</b></div>
+          <div class="inst"><span>Vertical</span><b id="fi-vs">0 m/s</b></div>
+          <div class="inst"><span>Apoapsis</span><b id="fi-apo">&mdash;</b></div>
+          <div class="inst"><span>Periapsis</span><b id="fi-peri">&mdash;</b></div>
+          <div class="inst"><span>Dyn. pressure</span><b id="fi-q">0 kPa</b></div>
+        </section>
+
+        <section id="flight-stage" aria-label="Vehicle status">
+          <div class="stage-row"><span>Stage</span><b id="fs-stage">1</b></div>
+          <div class="stage-row"><span>Propellant</span><b id="fs-prop">100%</b></div>
+          <div class="stage-bar"><i id="fs-prop-bar"></i></div>
+          <div class="stage-row"><span>Throttle</span><b id="fs-throttle">0%</b></div>
+          <div class="stage-bar"><i id="fs-throttle-bar"></i></div>
+          <div class="stage-row"><span>Stage &Delta;v</span><b id="fs-dv">0 m/s</b></div>
+        </section>
+
+        <div id="flight-guidance" role="status">Hold W to pitch up, S to pitch down.</div>
+
+        <div id="flight-controls">
+          <span><kbd>Shift</kbd> throttle up</span>
+          <span><kbd>Ctrl</kbd> throttle down</span>
+          <span><kbd>W</kbd><kbd>S</kbd> pitch</span>
+          <span><kbd>Space</kbd> stage</span>
+          <span><kbd>J</kbd> fairing</span>
+          <span><kbd>G</kbd> autopilot</span>
+          <span><kbd>.</kbd> time &times;<b id="fc-warp">1</b></span>
+        </div>
+      </div>
+
       <div id="success" class="overlay hidden">
         <div class="win-card">
           <p class="win-eyebrow">Roll out approved</p>
@@ -222,6 +255,7 @@
           <div class="fail-stats" id="win-stats"></div>
           <p class="win-note" id="win-note">—</p>
           <div class="win-buttons">
+            <button id="win-launch">Fly it &rarr;</button>
             <button id="win-again">Build another</button>
           </div>
         </div>

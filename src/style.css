@@ -870,6 +870,109 @@ kbd {
 #workshop .rocket-readout.bad { border-color: var(--burn); color: var(--burn); }
 #workshop .rocket-readout.good { border-color: var(--green); }
 
+/* The launch button is the primary action on the roll-out screen. */
+#win-launch {
+  background: var(--cyan);
+  border-color: var(--cyan);
+  color: #06121a;
+  font-weight: 600;
+}
+#win-launch:hover { filter: brightness(1.1); }
+
+/* ---------------- flight HUD ----------------
+   Instruments left, vehicle status right, guidance across the bottom. The
+   cockpit fills the screen, so the panels sit in the corners and stay out of
+   the window the player is flying by. */
+#flight { position: absolute; inset: 0; pointer-events: none; }
+
+#flight-instruments, #flight-stage {
+  position: absolute;
+  top: 16px;
+  width: 196px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+}
+#flight-instruments { left: 16px; border-top: 2px solid var(--cyan); }
+#flight-stage { right: 16px; border-top: 2px solid var(--violet); }
+
+#flight .inst, #flight .stage-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+  font: 11px/1.5 var(--mono);
+  color: var(--dim);
+}
+#flight .inst b, #flight .stage-row b {
+  font: 600 13px/1.4 var(--mono);
+  color: var(--ink);
+}
+
+#flight .stage-bar {
+  height: 4px;
+  margin: 2px 0 7px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+#flight .stage-bar i {
+  display: block;
+  height: 100%;
+  width: 100%;
+  background: var(--cyan);
+  transition: width 0.12s linear;
+}
+#fs-prop-bar { background: var(--green); }
+
+/* The guidance line is the teaching surface: it says what to do and why. */
+#flight-guidance {
+  position: absolute;
+  left: 50%;
+  bottom: 68px;
+  transform: translateX(-50%);
+  max-width: min(620px, calc(100vw - 48px));
+  padding: 9px 16px;
+  border: 1px solid var(--line);
+  border-left: 2px solid var(--cyan);
+  border-radius: 4px;
+  background: var(--panel);
+  backdrop-filter: blur(8px);
+  font: 13px/1.5 var(--body);
+  color: var(--ink);
+  text-align: center;
+}
+#flight-guidance.warn { border-left-color: var(--burn); color: var(--burn); }
+
+#flight-controls {
+  position: absolute;
+  left: 50%;
+  bottom: 18px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 14px;
+  font: 11px var(--mono);
+  color: var(--faint);
+}
+#flight-controls kbd {
+  margin-right: 4px;
+  padding: 1px 5px;
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  background: var(--panel-2);
+  color: var(--dim);
+}
+
+@media (max-width: 900px) {
+  #flight-instruments, #flight-stage { width: 150px; font-size: 10px; }
+  #flight-controls { gap: 8px; font-size: 10px; }
+}
+
 /* ---------------- HUD density ----------------
    The panels were sized for a large monitor and took a quarter of a laptop
    screen, crowding out the 3D view the game is actually about. Each panel is
