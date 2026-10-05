@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { keepSeparate } from '../render/batching';
 
 /**
  * The service elevator.
@@ -145,6 +146,9 @@ export function createElevator(): ElevatorRig {
 
   // ---- the car ----
   const car = new THREE.Group();
+  // The car rides up and down, so its geometry must not be baked into world
+  // space by the scenery batcher. The shaft around it is static and may batch.
+  keepSeparate(car);
 
   const deck = new THREE.Mesh(
     new THREE.BoxGeometry(CAR_HALF * 2, 0.18, CAR_HALF * 2),

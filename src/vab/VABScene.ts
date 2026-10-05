@@ -1,6 +1,7 @@
 import * as THREE from 'three';
 import { createMaterials, DISPLAY_SCALE, type Materials } from './parts';
 import { bayFloor, hullPlating, paintedSteel, setRepeat } from '../render/textures';
+import { batchStatic, keepSeparate } from '../render/batching';
 import { createElevator, type ElevatorRig } from './Elevator';
 import type { BlueprintState } from './blueprint';
 
@@ -210,24 +211,38 @@ export function createVABScene(): VABEnvironment {
   scene.add(sky);
 
   // ---- roof trusses ----
+  //
+  // Seven beams and forty-nine braces, all identical. As separate meshes that
+  // was fifty-six draw calls and fifty-six geometries for structure the player
+  // sees as a texture 94 m overhead. Two InstancedMeshes draw the same thing in
+  // two calls: the GPU is told the shape once and given a transform per copy.
   const trussGroup = new THREE.Group();
+  const beamGeometry = new THREE.BoxGeometry(VAB_WIDTH, 0.5, 0.5);
+  const braceGeometry = new THREE.BoxGeometry(0.22, 0.22, 5.6);
+  const beams = new THREE.InstancedMesh(beamGeometry, steel, 7);
+  const braces = new THREE.InstancedMesh(braceGeometry, steel, 49);
+  const transform = new THREE.Object3D();
+  let beamIndex = 0;
+  let braceIndex = 0;
+
   for (let i = -3; i <= 3; i++) {
     const z = i * 6;
-    const beam = new THREE.Mesh(
-      new THREE.BoxGeometry(VAB_WIDTH, 0.5, 0.5),
-      steel,
-    );
-    beam.position.set(0, VAB_HEIGHT - 1.5, z);
-    trussGroup.add(beam);
+    transform.position.set(0, VAB_HEIGHT - 1.5, z);
+    transform.rotation.set(0, 0, 0);
+    transform.updateMatrix();
+    beams.setMatrixAt(beamIndex++, transform.matrix);
 
     // Diagonal bracing, which is what makes a truss read as a truss.
     for (let j = -3; j <= 3; j++) {
-      const brace = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.22, 5.6), steel);
-      brace.position.set(j * 6.5, VAB_HEIGHT - 2.6, z);
-      brace.rotation.x = j % 2 === 0 ? 0.38 : -0.38;
-      trussGroup.add(brace);
+      transform.position.set(j * 6.5, VAB_HEIGHT - 2.6, z);
+      transform.rotation.set(j % 2 === 0 ? 0.38 : -0.38, 0, 0);
+      transform.updateMatrix();
+      braces.setMatrixAt(braceIndex++, transform.matrix);
     }
   }
+  beams.instanceMatrix.needsUpdate = true;
+  braces.instanceMatrix.needsUpdate = true;
+  trussGroup.add(beams, braces);
   scene.add(trussGroup);
 
   // ---- vertical structural columns ----
@@ -720,6 +735,20 @@ export function createVABScene(): VABEnvironment {
         top: VAB_HEIGHT,
       });
     }
+  }
+
+  // Batch the static scenery into as few draw calls as the materials allow.
+  //
+  // The vehicle and the elevator move, and anything named is looked up
+  // elsewhere, so both are excluded. This runs once at build time: the merge
+  // bakes world transforms into the vertices, which is why it can only be done
+  // to things that will never move again.
+  keepSeparate(assemblyRoot);
+  // The elevator's car marks itself dynamic in Elevator.ts; the shaft around
+  // it is static and batches with everything else.
+  const batched = batchStatic(scene);
+  if (batched.before !== batched.after) {
+    console.info(`Scenery batched: ${batched.before} draw calls into ${batched.after}.`);
   }
 
   return {
