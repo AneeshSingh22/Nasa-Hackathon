@@ -969,6 +969,27 @@ kbd {
 }
 #flight-guidance.warn { border-left-color: var(--burn); color: var(--burn); }
 
+/* Names the control under the cursor. Sits just above the guidance line so
+   the two read as one column rather than competing. */
+#flight-control-label {
+  position: absolute;
+  left: 50%;
+  bottom: 108px;
+  transform: translateX(-50%);
+  max-width: min(560px, calc(100vw - 48px));
+  padding: 7px 14px;
+  border: 1px solid var(--cyan);
+  border-radius: 4px;
+  background: var(--panel-2);
+  font: 12px/1.45 var(--body);
+  color: var(--ink);
+  text-align: center;
+  pointer-events: none;
+}
+
+/* The cursor is a tool in the cockpit, so it stays visible. */
+#flight { cursor: crosshair; }
+
 #flight-controls {
   position: absolute;
   left: 50%;

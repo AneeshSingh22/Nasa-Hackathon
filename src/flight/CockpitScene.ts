@@ -2,6 +2,7 @@ import * as THREE from 'three';
 import { R_EARTH } from '../physics/constants';
 import { keepSeparate } from '../render/batching';
 import { bayFloor, hullPlating, paintedSteel, setRepeat } from '../render/textures';
+import { buildControls, type BuiltControl } from './controls';
 
 /**
  * The cockpit and the world outside it.
@@ -33,6 +34,8 @@ export interface CockpitRig {
   readonly eye: THREE.Vector3;
   /** Everything that rotates with the vehicle. */
   readonly vehicleFrame: THREE.Object3D;
+  /** The physical controls on the console, for hit testing. */
+  readonly controls: readonly BuiltControl[];
   /**
    * Point the world at a vehicle state.
    *
@@ -171,12 +174,16 @@ export function createCockpit(): CockpitRig {
   const cockpit = buildCockpitInterior();
   vehicleFrame.add(cockpit);
 
+  // Physical controls, built into the same frame so they shake with it.
+  const controls = buildControls(cockpit);
+
   const eye = new THREE.Vector3(0, 0, 0);
 
   return {
     scene,
     eye,
     vehicleFrame,
+    controls,
 
     shake(intensity, elapsed) {
       if (intensity <= 0) {

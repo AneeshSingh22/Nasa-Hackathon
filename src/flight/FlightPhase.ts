@@ -8,6 +8,7 @@ import { normalize, cross, vec, magnitude } from '../physics/orbit';
 import { R_EARTH } from '../physics/constants';
 import type { Vehicle } from '../physics/rocket';
 import { createCockpit, type CockpitRig } from './CockpitScene';
+import type { ControlAction } from './controls';
 
 /**
  * The launch phase, start to finish.
@@ -126,6 +127,50 @@ export class FlightPhase {
       readings.verticalSpeed, readings.horizontalSpeed, readings.dynamicPressure,
       this.state.position, this.state.velocity,
     ), TARGET_ORBIT);
+  }
+
+  /**
+   * Operate a physical control.
+   *
+   * One entry point for both the panel and the keyboard, so a switch and its
+   * shortcut cannot drift apart — the same rule the work zone and the elevator
+   * learned the hard way.
+   */
+  operate(action: ControlAction): void {
+    switch (action) {
+      case 'throttle-up':
+        this.nudgeThrottle(1);
+        break;
+      case 'throttle-down':
+        this.nudgeThrottle(-1);
+        break;
+      case 'stage':
+        this.stage();
+        break;
+      case 'jettison':
+        this.jettison();
+        break;
+      case 'autopilot':
+        this.toggleAutopilot();
+        break;
+      case 'time-warp':
+        this.cycleTimeScale();
+        break;
+    }
+  }
+
+  /**
+   * Move the throttle by one press.
+   *
+   * A click is a discrete event but a throttle is continuous, so a press moves
+   * it a fixed amount and holding repeats. 8% a press gives the player fine
+   * control through max-Q without making full travel tedious.
+   */
+  private nudgeThrottle(direction: 1 | -1): void {
+    // A manual input takes the vehicle back off the autopilot, because fighting
+    // an autopilot for the throttle is the most confusing thing a cockpit can do.
+    if (this.autopilotOn) this.autopilotOn = false;
+    this.throttle = clamp(this.throttle + direction * 0.08, 0, 1);
   }
 
   toggleAutopilot(): boolean {

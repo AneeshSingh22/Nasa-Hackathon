@@ -4,6 +4,7 @@ import { createVABScene, VAB_WIDTH, VAB_DEPTH, VAB_HEIGHT } from './vab/VABScene
 import { configureRenderer, installEnvironment } from './render/lookDev';
 import { createPipeline, type Pipeline, type Quality } from './render/pipeline';
 import { FlightPhase, outcomeReport } from './flight/FlightPhase';
+import { CockpitLook } from './flight/CockpitLook';
 import { vehicleFromParts } from './flight/vehicle';
 import { FLIGHT_FAR_PLANE, FLIGHT_NEAR_PLANE } from './flight/CockpitScene';
 import { PlayerController } from './vab/PlayerController';
@@ -1710,21 +1711,28 @@ function handleFlightKey(e: KeyboardEvent, down: boolean): boolean {
   }
 
   if (!down || e.repeat) return false;
+  // Shortcuts go through the same `operate` path as the panel switches, so a
+  // key and its physical control can never do different things.
   switch (e.code) {
     case 'Space':
       e.preventDefault();
-      if (flight.stage()) log('STAGE SEPARATION', true);
+      if (flight.snapshot.canStage) { flight.operate('stage'); log('STAGE SEPARATION', true); }
       return true;
     case 'KeyJ':
-      if (flight.jettison()) log('FAIRING AWAY', true);
+      if (flight.snapshot.canJettison) { flight.operate('jettison'); log('FAIRING AWAY', true); }
       return true;
-    case 'KeyG': {
-      const on = flight.toggleAutopilot();
-      log(`AUTOPILOT ${on ? 'ENGAGED' : 'OFF'}`, on);
+    case 'KeyG':
+      flight.operate('autopilot');
+      log(`AUTOPILOT ${flight.snapshot.autopilot ? 'ENGAGED' : 'OFF'}`, flight.snapshot.autopilot);
       return true;
-    }
     case 'Period':
-      log(`TIME x${flight.cycleTimeScale()}`);
+      flight.operate('time-warp');
+      log(`TIME x${flight.snapshot.timeScale}`);
+      return true;
+    case 'KeyC':
+      // Snap the head back to the window, for when the player has looked away
+      // and the horizon is about to matter.
+      cockpitLook?.recentre();
       return true;
     default:
       return false;
@@ -1857,7 +1865,9 @@ el.winAgain?.addEventListener('click', () => restartMission());
  * bay, and the Explore and Workshop update paths are skipped.
  */
 let flight: FlightPhase | null = null;
+let cockpitLook: CockpitLook | null = null;
 const flightHud = document.querySelector<HTMLElement>('#flight');
+const controlLabel = document.querySelector<HTMLElement>('#flight-control-label');
 
 /** Saved so the bay can be restored exactly when the flight ends. */
 const savedCameraNear = camera.near;
@@ -1892,6 +1902,23 @@ function startFlight(): void {
   camera.updateMatrixWorld(true);
   camera.updateProjectionMatrix();
 
+  // Free-look and clickable controls. The pilot is strapped in, so this is
+  // head movement rather than walking: drag to look, release to drift back to
+  // the window.
+  cockpitLook = new CockpitLook(camera, canvas, flight.cockpit.controls, {
+    operate: action => flight?.operate(action),
+    hover: control => {
+      if (!controlLabel) return;
+      if (control) {
+        controlLabel.textContent =
+          `${control.definition.label} — ${control.definition.description}`;
+        controlLabel.classList.remove('hidden');
+      } else {
+        controlLabel.classList.add('hidden');
+      }
+    },
+  });
+
   log('LAUNCH', true);
   say('Throttle up and hold her steady. Watch your dynamic pressure through the thick air.');
 }
@@ -1901,6 +1928,9 @@ function endFlight(): void {
   const report = outcomeReport(flight.snapshot.outcome);
   const peak = flight.peakDynamicPressure;
 
+  cockpitLook?.dispose();
+  cockpitLook = null;
+  controlLabel?.classList.add('hidden');
   flight.dispose();
   flight = null;
   flightHud?.classList.add('hidden');
@@ -1962,6 +1992,15 @@ function refreshFlightHud(): void {
   const throttleBar = document.getElementById('fs-throttle-bar');
   if (throttleBar) throttleBar.style.width = `${snap.throttle * 100}%`;
 
+  // Light the panel from real state, so a switch shows what the vehicle is
+  // actually doing rather than what was last pressed.
+  cockpitLook?.setLit('autopilot', snap.autopilot);
+  cockpitLook?.setLit('stage', snap.canStage);
+  cockpitLook?.setLit('jettison', snap.canJettison);
+  cockpitLook?.setLit('throttle-up', snap.throttle < 1);
+  cockpitLook?.setLit('throttle-down', snap.throttle > 0);
+  cockpitLook?.setLit('time-warp', snap.timeScale > 1);
+
   const guidance = document.getElementById('flight-guidance');
   if (guidance) {
     const prefix = snap.autopilot ? 'Autopilot: ' : '';
@@ -2021,6 +2060,7 @@ function frame(): void {
   // Flight owns everything while it runs: no bay update, no player movement,
   // no mission drain.
   if (flight) {
+    cockpitLook?.update(dt);
     flight.update(dt);
     refreshFlightHud();
     present();

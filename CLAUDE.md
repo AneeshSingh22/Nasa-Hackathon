@@ -531,6 +531,23 @@ product.
   staging is legible without a caption. `CockpitScene.test.ts` asserts each of
   them, because every one is invisible to a type checker.
 
+- **A keyboard legend is not a cockpit.** The flight was driven entirely by
+  shortcuts listed along the bottom of the screen, which is a keyboard with a
+  picture behind it. `flight/controls.ts` defines each control as a labelled
+  mesh with a description and an action; hovering names it, so the panel
+  teaches itself and a player can find out what STAGE does without pressing it.
+  Keys still work and go through the same `operate()` path, because a shortcut
+  and its switch doing different things is exactly the dual-source bug the work
+  zone and the elevator already paid for.
+- **A control nobody can look at is as useless as one that does nothing, and
+  neither shows up in a type check.** `controls.test.ts` asserts every control
+  sits inside the head's yaw and pitch travel, and below the window band that
+  `CockpitScene.test.ts` protects — so a switch can be neither unreachable nor
+  in the way of the horizon.
+- **Drag to look, not pointer lock.** The player needs a visible cursor to aim
+  at a switch. Pointer lock suits a first-person walk and actively fights a
+  seated pilot operating a panel.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should
