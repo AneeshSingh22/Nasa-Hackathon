@@ -488,6 +488,17 @@ product.
   the orbital mechanics out first, from published formulas, produced a working
   ascent in one pass.
 
+- **A phase with no way into it does not exist.** The whole launch phase —
+  cockpit, guidance, HUD, controls, 37 passing tests — shipped unreachable. Its
+  only entry was a button on the roll-out screen, and roll-out was reached by
+  `F`, which is gated behind `LEGACY_ASSEMBLY_ENABLED = false`. Every test
+  passed because they all construct `FlightPhase` directly; none of them asked
+  whether a player could get there. The Workshop now carries the Launch button,
+  and `rocketBuilder.test.ts` asserts it exists, that it stays disabled until
+  the stack is complete, that it names the missing part, and that clicking it
+  calls through. When a feature is finished, test the route to it, not only the
+  feature.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

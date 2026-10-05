@@ -840,6 +840,28 @@ kbd {
   background: rgba(95, 217, 154, 0.12);
 }
 
+/* The launch button is the end of the build phase, so it reads as the
+   primary action rather than another part button. */
+#workshop .palette-launch {
+  margin-top: 8px;
+  padding: 10px;
+  border: 1px solid var(--cyan);
+  border-radius: 4px;
+  background: var(--cyan);
+  color: #06121a;
+  font: 600 13px var(--body);
+  cursor: pointer;
+  pointer-events: auto;
+}
+#workshop .palette-launch:hover:not(:disabled) { filter: brightness(1.12); }
+#workshop .palette-launch:disabled {
+  background: transparent;
+  border-color: var(--line);
+  color: var(--dim);
+  font-size: 11px;
+  cursor: default;
+}
+
 #workshop .palette-note {
   font: 10px/1.5 var(--mono);
   color: var(--dim);

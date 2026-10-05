@@ -268,6 +268,11 @@ const workshop = new WorkshopSession(player, env.assemblyRoot, canvas, hud,
     spent: () => MISSION_2_START.budget - mission.status.budget,
     changed: () => { refreshReadout(); refreshContract(); },
     refuse: message => say(message),
+    // Leave the Workshop and fly what was just built.
+    launch: () => {
+      workshop.exit();
+      startFlight();
+    },
   },
   () => {
     setHelp(false);

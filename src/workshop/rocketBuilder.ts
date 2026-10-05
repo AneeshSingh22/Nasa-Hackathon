@@ -27,6 +27,8 @@ export interface BuilderHooks {
   readonly changed: () => void;
   /** Speak, but only for refusals — the narrator stays quiet otherwise. */
   readonly refuse: (message: string) => void;
+  /** Hand the finished vehicle to the launch phase. */
+  readonly launch: () => void;
 }
 
 export class RocketBuilder {
@@ -43,6 +45,7 @@ export class RocketBuilder {
     this.palette = new RocketPalette(chrome, {
       select: part => this.fit(part),
       removeLast: () => this.removeLast(),
+      launch: () => this.hooks.launch(),
     });
     this.refresh();
   }

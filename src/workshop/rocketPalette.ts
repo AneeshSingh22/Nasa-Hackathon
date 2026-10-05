@@ -18,6 +18,8 @@ import { SLOT_LABELS, optionsFor, BUILD_ORDER } from './catalog';
 export interface PaletteCallbacks {
   readonly select: (part: PartDefinition) => void;
   readonly removeLast: () => void;
+  /** Hand the finished vehicle to the launch phase. */
+  readonly launch: () => void;
 }
 
 const millions = (value: number) => `$${value}M`;
@@ -29,6 +31,7 @@ export class RocketPalette {
   private readonly buttons = new Map<string, HTMLButtonElement>();
   private readonly slotSections = new Map<string, HTMLElement>();
   private readonly undo = document.createElement('button');
+  private readonly launch = document.createElement('button');
   private selectedId: string | null = null;
 
   constructor(chrome: HTMLElement, private readonly callbacks: PaletteCallbacks) {
@@ -77,6 +80,15 @@ export class RocketPalette {
     this.undo.addEventListener('click', () => this.callbacks.removeLast());
     this.element.append(this.undo);
 
+    // The launch button lives here because this is where the build finishes.
+    // It was previously only on a roll-out screen reachable by a key that the
+    // Workshop disabled, so the flight phase could not be started at all.
+    this.launch.type = 'button';
+    this.launch.className = 'palette-launch';
+    this.launch.textContent = 'Launch →';
+    this.launch.addEventListener('click', () => this.callbacks.launch());
+    this.element.append(this.launch);
+
     const note = document.createElement('small');
     note.className = 'palette-note';
     note.textContent = 'Click a fitted slot’s other options to compare and swap.';
@@ -113,6 +125,14 @@ export class RocketPalette {
       }
     }
     this.undo.disabled = fitted.length === 0;
+
+    // A vehicle can only fly once every slot is filled. Saying *why* it is
+    // disabled is the difference between a dead button and an instruction.
+    const complete = nextKind === null;
+    this.launch.disabled = !complete;
+    this.launch.textContent = complete
+      ? 'Launch →'
+      : `Fit the ${nextKind === 'upper' ? 'second stage' : nextKind} to launch`;
   }
 
   select(id: string | null): void {

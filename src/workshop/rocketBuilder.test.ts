@@ -43,6 +43,7 @@ beforeEach(() => {
     spent: () => 480 - budget,
     changed: () => {},
     refuse: message => refusals.push(message),
+    launch: () => {},
   });
 });
 
@@ -109,6 +110,7 @@ describe('Workshop rocket builder', () => {
         spent: () => 0,
         changed: () => {},
         refuse: message => denied.push(message),
+        launch: () => {},
       });
     bankrupt.fit(PART_LIBRARY.find(part => part.id === 'extended-booster')!);
 
@@ -186,6 +188,49 @@ describe('changing your mind', () => {
   });
 });
 
+describe('reaching the launch', () => {
+  it('offers a launch button that is disabled until the vehicle is complete', () => {
+    // The flight phase was unreachable for a whole session: the only route to
+    // it was a roll-out screen behind a key the Workshop disables. A build
+    // phase with no way out is not a game, and nothing failed to say so.
+    const button = () => chrome.querySelector<HTMLButtonElement>('.palette-launch')!;
+    expect(button()).not.toBeNull();
+    expect(button().disabled).toBe(true);
+    // And it says what is missing rather than sitting there inert.
+    expect(button().textContent).toMatch(/booster/i);
+
+    click('core-booster');
+    expect(button().disabled).toBe(true);
+    click('upper-stage');
+    click('telescope');
+    expect(button().disabled).toBe(true);
+    click('fairing');
+
+    expect(button().disabled).toBe(false);
+    expect(button().textContent).toMatch(/launch/i);
+  });
+
+  it('calls the launch hook when the finished vehicle is sent to the pad', () => {
+    let launched = 0;
+    const camera = new THREE.PerspectiveCamera(72, 1.5, 0.1, 400);
+    const chrome2 = document.createElement('section');
+    document.body.append(chrome2);
+    const root2 = new THREE.Group();
+    const assembly2 = new Assembly(root2, createMaterials());
+    const builder2 = new RocketBuilder(assembly2, root2, camera,
+      new OrbitCamera(camera), chrome2, {
+        charge: () => true, refund: () => {}, spent: () => 0,
+        changed: () => {}, refuse: () => {},
+        launch: () => { launched++; },
+      });
+    for (const id of ['core-booster', 'upper-stage', 'telescope', 'fairing']) {
+      builder2.fit(PART_LIBRARY.find(p => p.id === id)!);
+    }
+    chrome2.querySelector<HTMLButtonElement>('.palette-launch')!.click();
+    expect(launched).toBe(1);
+  });
+});
+
 describe('framing', () => {
   it('keeps the camera inside the building for every stack it can build', () => {
     // The camera once had to back out through the wall to frame a full-size
@@ -201,6 +246,7 @@ describe('framing', () => {
     const builder2 = new RocketBuilder(assembly2, root2, camera, orbit, chrome2, {
       charge: () => true, refund: () => {}, spent: () => 0,
       changed: () => {}, refuse: () => {},
+      launch: () => {},
     });
 
     // The tallest vehicle in the library.
