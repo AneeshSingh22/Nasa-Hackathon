@@ -4,9 +4,11 @@ import { createVABScene, VAB_WIDTH, VAB_DEPTH, VAB_HEIGHT } from './vab/VABScene
 import { configureRenderer, installEnvironment } from './render/lookDev';
 import { createPipeline, type Pipeline, type Quality } from './render/pipeline';
 import { FlightPhase, outcomeReport } from './flight/FlightPhase';
-import { CockpitLook } from './flight/CockpitLook';
+import { HeadLook } from './flight/HeadLook';
+import { CockpitPanel } from './ui/CockpitPanel';
 import { vehicleFromParts } from './flight/vehicle';
-import { FLIGHT_FAR_PLANE, FLIGHT_NEAR_PLANE } from './flight/CockpitScene';
+import type { ControlAction } from './flight/controls';
+import { createOutsideView, VIEW_FAR, VIEW_NEAR, type OutsideView } from './flight/OutsideView';
 import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
 import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
@@ -182,8 +184,8 @@ function present(): void {
   // While flying, the cockpit scene replaces the bay entirely. The composer is
   // bypassed because its passes were built against the bay's scene and depth
   // range; a 40 000 km far plane breaks the ambient-occlusion depth maths.
-  if (flight) {
-    renderer.render(flight.cockpit.scene, camera);
+  if (flight && outside) {
+    renderer.render(outside.scene, camera);
     return;
   }
   if (pipeline) pipeline.render();
@@ -1693,46 +1695,40 @@ function rollOut(): void {
 function handleFlightKey(e: KeyboardEvent, down: boolean): boolean {
   if (!flight) return false;
 
-  switch (e.code) {
-    case 'KeyW': case 'ArrowUp':
-      flight.inputs.pitch = down ? 1 : 0;
-      return true;
-    case 'KeyS': case 'ArrowDown':
-      flight.inputs.pitch = down ? -1 : 0;
-      return true;
-    case 'ShiftLeft': case 'ShiftRight':
-      flight.inputs.throttleChange = down ? 1 : 0;
-      return true;
-    case 'ControlLeft': case 'ControlRight':
-      flight.inputs.throttleChange = down ? -1 : 0;
-      return true;
-    default:
-      break;
+  // Held controls: the same `hold` path the panel's switches use, so a key
+  // and its switch cannot behave differently.
+  const held: Record<string, ControlAction> = {
+    KeyW: 'pitch-up', ArrowUp: 'pitch-up',
+    KeyS: 'pitch-down', ArrowDown: 'pitch-down',
+    ShiftLeft: 'throttle-up', ShiftRight: 'throttle-up',
+    ControlLeft: 'throttle-down', ControlRight: 'throttle-down',
+  };
+  const heldAction = held[e.code];
+  if (heldAction) {
+    if (!e.repeat) flight.hold(heldAction, down);
+    return true;
   }
 
   if (!down || e.repeat) return false;
-  // Shortcuts go through the same `operate` path as the panel switches, so a
-  // key and its physical control can never do different things.
+  const snap = flight.snapshot;
   switch (e.code) {
     case 'Space':
       e.preventDefault();
-      if (flight.snapshot.canStage) { flight.operate('stage'); log('STAGE SEPARATION', true); }
+      // One key, the obvious next step: ignition on the pad, staging after.
+      if (!snap.launched) flight.operate('launch');
+      else if (snap.canStage) { flight.operate('stage'); log('STAGE SEPARATION', true); }
       return true;
     case 'KeyJ':
-      if (flight.snapshot.canJettison) { flight.operate('jettison'); log('FAIRING AWAY', true); }
+      if (snap.canJettison) { flight.operate('jettison'); log('FAIRING AWAY', true); }
       return true;
     case 'KeyG':
       flight.operate('autopilot');
-      log(`AUTOPILOT ${flight.snapshot.autopilot ? 'ENGAGED' : 'OFF'}`, flight.snapshot.autopilot);
       return true;
     case 'Period':
       flight.operate('time-warp');
-      log(`TIME x${flight.snapshot.timeScale}`);
       return true;
     case 'KeyC':
-      // Snap the head back to the window, for when the player has looked away
-      // and the horizon is about to matter.
-      cockpitLook?.recentre();
+      headLook?.recentre();
       return true;
     default:
       return false;
@@ -1860,18 +1856,23 @@ el.winAgain?.addEventListener('click', () => restartMission());
 /**
  * The launch phase.
  *
- * Null until the player flies. While it exists it owns the camera and the
- * render target entirely: `present()` draws the cockpit scene instead of the
+ * Null until the player flies. While it exists it owns the camera, the render
+ * target and the keyboard: `present()` draws the window view instead of the
  * bay, and the Explore and Workshop update paths are skipped.
+ *
+ * Three objects, each with one job: `FlightPhase` is the simulation,
+ * `OutsideView` is the world through the window, `CockpitPanel` is the flight
+ * deck drawn over it. They meet only here.
  */
 let flight: FlightPhase | null = null;
-let cockpitLook: CockpitLook | null = null;
-const flightHud = document.querySelector<HTMLElement>('#flight');
-const controlLabel = document.querySelector<HTMLElement>('#flight-control-label');
+let outside: OutsideView | null = null;
+let panel: CockpitPanel | null = null;
+let headLook: HeadLook | null = null;
+let flightEndHold = 0;
+const flightHud = required<HTMLElement>('#flight');
 
 /** Saved so the bay can be restored exactly when the flight ends. */
-const savedCameraNear = camera.near;
-const savedCameraFar = camera.far;
+const savedCamera = { near: camera.near, far: camera.far, fov: camera.fov };
 
 function startFlight(): void {
   const vehicle = vehicleFromParts(assembly.parts);
@@ -1881,46 +1882,27 @@ function startFlight(): void {
   }
 
   flight = new FlightPhase(vehicle);
+  outside = createOutsideView();
+  headLook = new HeadLook(canvas);
+  panel = new CockpitPanel(flightHud, {
+    operate: action => flight?.operate(action),
+    hold: (action, down) => flight?.hold(action, down),
+  });
+
   el.success?.classList.add('hidden');
   hud.classList.add('hidden');
-  flightHud?.classList.remove('hidden');
+  flightHud.classList.remove('hidden');
   player.setEnabled(false);
   player.releaseLock();
 
-  // A cockpit instrument is centimetres from the eye and the planet is
-  // thousands of kilometres away, so the flight needs a far wider depth range
-  // than the bay.
-  camera.near = FLIGHT_NEAR_PLANE;
-  camera.far = FLIGHT_FAR_PLANE;
-  // The cockpit is built in the camera's own frame — origin, looking down -Z,
-  // level. The camera arrives here carrying whatever rotation Explore or the
-  // Workshop left on it, so it must be reset explicitly or the player starts
-  // the flight facing a wall.
-  camera.position.set(0, 0, 0);
-  camera.quaternion.identity();
-  camera.up.set(0, 1, 0);
-  camera.updateMatrixWorld(true);
+  // The window looks at a pad 60 m below and a horizon thousands of
+  // kilometres away, so the depth range is far wider than the bay's.
+  camera.near = VIEW_NEAR;
+  camera.far = VIEW_FAR;
+  camera.fov = 70;
   camera.updateProjectionMatrix();
 
-  // Free-look and clickable controls. The pilot is strapped in, so this is
-  // head movement rather than walking: drag to look, release to drift back to
-  // the window.
-  cockpitLook = new CockpitLook(camera, canvas, flight.cockpit.controls, {
-    operate: action => flight?.operate(action),
-    hover: control => {
-      if (!controlLabel) return;
-      if (control) {
-        controlLabel.textContent =
-          `${control.definition.label} — ${control.definition.description}`;
-        controlLabel.classList.remove('hidden');
-      } else {
-        controlLabel.classList.add('hidden');
-      }
-    },
-  });
-
-  log('LAUNCH', true);
-  say('Throttle up and hold her steady. Watch your dynamic pressure through the thick air.');
+  log('ON THE PAD', true);
 }
 
 function endFlight(): void {
@@ -1928,15 +1910,18 @@ function endFlight(): void {
   const report = outcomeReport(flight.snapshot.outcome);
   const peak = flight.peakDynamicPressure;
 
-  cockpitLook?.dispose();
-  cockpitLook = null;
-  controlLabel?.classList.add('hidden');
-  flight.dispose();
+  panel?.dispose();
+  headLook?.dispose();
+  outside?.dispose();
+  panel = null;
+  headLook = null;
+  outside = null;
   flight = null;
-  flightHud?.classList.add('hidden');
+  flightHud.classList.add('hidden');
 
-  camera.near = savedCameraNear;
-  camera.far = savedCameraFar;
+  camera.near = savedCamera.near;
+  camera.far = savedCamera.far;
+  camera.fov = savedCamera.fov;
   camera.updateProjectionMatrix();
 
   if (el.winText) {
@@ -1953,62 +1938,24 @@ function endFlight(): void {
 document.querySelector<HTMLButtonElement>('#win-launch')
   ?.addEventListener('click', () => startFlight());
 
-/** Instruments are rewritten from the snapshot; nothing is tracked beside it. */
-function refreshFlightHud(): void {
-  if (!flight) return;
+/** One flight frame: simulate, move the world, aim the eye, redraw the panel. */
+function updateFlight(dt: number): void {
+  if (!flight || !outside || !panel || !headLook) return;
+  flight.update(dt);
+  headLook.update(dt);
+
   const snap = flight.snapshot;
-  const t = snap.telemetry;
-
-  const set = (id: string, text: string) => {
-    const node = document.getElementById(id);
-    if (node && node.textContent !== text) node.textContent = text;
+  const frame = {
+    altitude: snap.telemetry.altitude,
+    downrange: snap.downrange,
+    time: snap.missionTime,
+    shake: snap.shake,
+    enginesLit: snap.enginesLit,
   };
-
-  // Clamp away the tiny negative altitude the pad constraint produces, which
-  // otherwise reads as "-0.0 km" on the pad and looks like a bug.
-  set('fi-alt', `${Math.max(0, t.altitude / 1000).toFixed(1)} km`);
-  set('fi-speed', `${t.speed.toFixed(0)} m/s`);
-  set('fi-vs', `${t.verticalSpeed >= 0 ? '+' : ''}${t.verticalSpeed.toFixed(0)} m/s`);
-  // A periapsis below the surface is mathematically right and meaningless to
-  // read: it says the trajectory hits the planet, so say that instead of
-  // quoting a point 6 363 km underground.
-  const apsis = (value: number | null) => {
-    if (value === null) return '—';
-    if (value < 0) return 'suborbital';
-    return `${(value / 1000).toFixed(0)} km`;
-  };
-  set('fi-apo', apsis(t.apoapsis));
-  set('fi-peri', apsis(t.periapsis));
-  set('fi-q', `${(t.dynamicPressure / 1000).toFixed(1)} kPa`);
-
-  set('fs-stage', `${snap.stage + 1} of ${snap.stageCount}`);
-  set('fs-prop', `${Math.round(snap.propellantFraction * 100)}%`);
-  set('fs-throttle', `${Math.round(snap.throttle * 100)}%`);
-  set('fs-dv', `${t.stageDeltaV.toFixed(0)} m/s`);
-  set('fc-warp', String(snap.timeScale));
-
-  const propBar = document.getElementById('fs-prop-bar');
-  if (propBar) propBar.style.width = `${snap.propellantFraction * 100}%`;
-  const throttleBar = document.getElementById('fs-throttle-bar');
-  if (throttleBar) throttleBar.style.width = `${snap.throttle * 100}%`;
-
-  // Light the panel from real state, so a switch shows what the vehicle is
-  // actually doing rather than what was last pressed.
-  cockpitLook?.setLit('autopilot', snap.autopilot);
-  cockpitLook?.setLit('stage', snap.canStage);
-  cockpitLook?.setLit('jettison', snap.canJettison);
-  cockpitLook?.setLit('throttle-up', snap.throttle < 1);
-  cockpitLook?.setLit('throttle-down', snap.throttle > 0);
-  cockpitLook?.setLit('time-warp', snap.timeScale > 1);
-
-  const guidance = document.getElementById('flight-guidance');
-  if (guidance) {
-    const prefix = snap.autopilot ? 'Autopilot: ' : '';
-    const text = `${prefix}${snap.guidance.instruction}`;
-    if (guidance.textContent !== text) guidance.textContent = text;
-    // Warn only on a real hazard, not on every phase change.
-    guidance.classList.toggle('warn', t.dynamicPressure > 38_000);
-  }
+  outside.update(frame);
+  outside.aim(camera, frame, headLook.yaw, headLook.pitch);
+  panel.look(headLook.yaw, headLook.pitch);
+  panel.update(snap);
 }
 
 el.failRetry?.addEventListener('click', () => {
@@ -2060,11 +2007,17 @@ function frame(): void {
   // Flight owns everything while it runs: no bay update, no player movement,
   // no mission drain.
   if (flight) {
-    cockpitLook?.update(dt);
-    flight.update(dt);
-    refreshFlightHud();
+    updateFlight(dt);
     present();
-    if (flight.finished) endFlight();
+    // Hold the final view for a moment, so the player sees orbit achieved (or
+    // the failure) from the cockpit rather than being cut straight to a card.
+    if (flight.finished) {
+      flightEndHold += dt;
+      if (flightEndHold > 3) {
+        flightEndHold = 0;
+        endFlight();
+      }
+    }
     requestAnimationFrame(frame);
     return;
   }
@@ -2140,6 +2093,39 @@ function frame(): void {
 refreshReadout();
 refreshResources(mission.status);
 syncWorkHeight();
+
+/**
+ * Development shortcut straight onto the launch pad.
+ *
+ *   ?flight            pad, standard vehicle, waiting for ignition
+ *   ?flight&auto       autopilot engaged, countdown running
+ *   ?flight&auto&at=90 fast-forwarded 90 seconds into the ascent
+ *
+ * Reaching the cockpit through the game takes a walk, a workshop session and
+ * four parts, which makes iterating on the flight deck slow for anyone on the
+ * team. It also lets a headless browser screenshot the cockpit at any moment
+ * of the flight, which is how the flight deck's look is checked.
+ */
+const devParams = new URLSearchParams(location.search);
+if (devParams.has('flight')) {
+  started = true;
+  startOverlay.classList.add('hidden');
+  for (const id of ['extended-booster', 'upper-stage', 'telescope', 'fairing']) {
+    assembly.attachNextSpecific(id);
+  }
+  startFlight();
+  // TypeScript cannot see that startFlight() assigned `flight`, so re-read it.
+  const devFlight = flight as FlightPhase | null;
+  if (devFlight && devParams.has('auto')) {
+    devFlight.operate('autopilot');
+    const seconds = Number(devParams.get('at') ?? 0);
+    if (seconds > 0) {
+      devFlight.update(3.01);
+      for (let t = 0; t < seconds && !devFlight.finished; t += 0.02) devFlight.update(0.02);
+    }
+  }
+}
+
 frame();
 
 // Vite HMR: drop the input listeners so reloads do not stack handlers.

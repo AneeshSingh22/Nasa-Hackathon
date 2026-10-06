@@ -1,5 +1,5 @@
 import { MU_EARTH, R_EARTH } from './constants';
-import { magnitude, type Vec3 } from './orbit';
+import { dot, elementsFromState, type Vec3 } from './orbit';
 
 /**
  * Ascent guidance: the flight plan a launch vehicle actually follows.
@@ -65,6 +65,12 @@ export interface GuidanceInput {
   /** Position and velocity, for the time-to-apoapsis estimate. */
   readonly position: Vec3;
   readonly velocity: Vec3;
+  /**
+   * Whether the circularisation burn is already under way. Once it starts it
+   * runs until the orbit is made: re-deciding every step on a threshold the
+   * burn itself moves made the autopilot flick between coasting and burning.
+   */
+  readonly circularising?: boolean;
 }
 
 /** Altitude at which the gravity turn begins. m */
@@ -78,6 +84,9 @@ export const TURN_START_ALTITUDE = 1_500;
  * through max-Q.
  */
 export const TURN_END_ALTITUDE = 65_000;
+
+/** Seconds before apoapsis at which the circularisation burn starts. */
+export const CIRCULARISE_LEAD = 30;
 
 /** Dynamic pressure above which the vehicle throttles back. Pa */
 export const MAX_Q_THROTTLE_THRESHOLD = 24_000;
@@ -140,18 +149,36 @@ export function circularisationDeltaV(
 }
 
 /**
- * Seconds until the vehicle reaches apoapsis.
+ * Seconds until the vehicle reaches apoapsis, from Kepler's equation.
  *
- * Approximated from the current vertical speed and the height still to climb,
- * under constant local gravity. Exact enough to decide when to start a burn,
- * and far cheaper than solving Kepler's equation every frame.
+ * An earlier version divided vertical speed by gravity, which is the answer
+ * for a ball thrown straight up and badly wrong for a vehicle near orbital
+ * speed: its sideways motion curves its path round the planet and cancels most
+ * of gravity. At 7 600 m/s the effective gravity is about 0.4 m/s^2, not 9.2,
+ * so the vehicle was really ~250 s from apoapsis while the guidance believed it
+ * was 11 s away — and dithered between coasting and burning for minutes.
+ *
+ * This is the textbook route: orbital elements from the state vector, true
+ * anomaly from the current radius, eccentric anomaly, then mean anomaly; the
+ * time to apoapsis is the mean anomaly still to sweep to pi, divided by the
+ * mean motion. Exact for a Kepler orbit, which is what the vehicle is on
+ * whenever the engines are off.
  */
 export function timeToApoapsis(input: GuidanceInput): number {
-  if (input.apoapsis === null) return Infinity;
-  if (input.verticalSpeed <= 0) return 0;
-  const radius = magnitude(input.position);
-  const gravity = MU_EARTH / (radius * radius);
-  return input.verticalSpeed / gravity;
+  const elements = elementsFromState({ position: input.position, velocity: input.velocity });
+  const { semiMajorAxis: a, eccentricity: e, radius: r } = elements;
+  // Open trajectories have no apoapsis; near-circular ones are always at it.
+  if (!(a > 0) || e >= 1) return Infinity;
+  if (e < 1e-6) return 0;
+  // Already past the top of the arc: apoapsis is behind, not ahead.
+  if (dot(input.position, input.velocity) <= 0) return 0;
+
+  const cosNu = Math.max(-1, Math.min(1, ((a * (1 - e * e)) / r - 1) / e));
+  const nu = Math.acos(cosNu); // 0..pi on the climbing half of the orbit
+  const eccentricAnomaly = 2 * Math.atan(Math.sqrt((1 - e) / (1 + e)) * Math.tan(nu / 2));
+  const meanAnomaly = eccentricAnomaly - e * Math.sin(eccentricAnomaly);
+  const meanMotion = Math.sqrt(MU_EARTH / (a * a * a));
+  return Math.max(0, (Math.PI - meanAnomaly) / meanMotion);
 }
 
 /**
@@ -213,46 +240,32 @@ export function guide(input: GuidanceInput, targetAltitude: number): GuidanceSta
     };
   }
 
-  if (apoapsis >= targetAltitude * 0.95) {
+  if (apoapsis >= targetAltitude * 0.95 || input.circularising) {
     const seconds = timeToApoapsis(input);
     const needed = circularisationDeltaV(Math.max(0, periapsis), apoapsis);
 
-    // Circularise once at or near the top of the arc. "Near the top" means
-    // close in *altitude*, not merely descending: a vehicle that has fallen
-    // halfway back down is also descending, and burning horizontally there
-    // pushes apoapsis up instead of raising periapsis, which is exactly the
-    // failure that stranded earlier attempts at 700 km apoapsis.
-    const nearApoapsis = input.altitude > apoapsis - 12_000;
-    if (nearApoapsis && (seconds < 25 || input.verticalSpeed <= 0)) {
+    // Start a little before apoapsis so the finite burn straddles the top,
+    // which is how it best approximates the instantaneous manoeuvre the maths
+    // assumes. Once started, keep going: the guard against flicking back to a
+    // coast is the `circularising` flag, not a threshold.
+    if (input.circularising || seconds < CIRCULARISE_LEAD || input.verticalSpeed <= 0) {
       return {
         phase: 'circularise',
-        // Burn along the horizon: all of it should go into speed, none into
-        // height.
-        pitch: 0,
+        // Hold vertical speed near zero, so the thrust goes into horizontal
+        // speed — which raises periapsis — rather than lifting apoapsis.
+        pitch: Math.max(-0.15, Math.min(0.3, -input.verticalSpeed / 400)),
         throttle: 1,
         instruction: `Circularise: about ${needed.toFixed(0)} m/s to raise periapsis.`,
-      };
-    }
-
-    // Falling well short of apoapsis with periapsis still underground means
-    // the coast was mistimed or the vehicle lost energy to drag. Burning
-    // prograde recovers more than coasting to the ground does.
-    if (input.verticalSpeed < 0 && input.altitude < apoapsis - 12_000) {
-      return {
-        phase: 'circularise',
-        pitch: 0,
-        throttle: 1,
-        instruction: 'Below apoapsis and falling — burn prograde to recover.',
       };
     }
 
     return {
       phase: 'coast',
       // Nose on prograde so the vehicle is not held across the airflow if it
-      // is still high enough for that to matter.
+      // is still low enough for that to matter.
       pitch: flightPathAngle(input),
       throttle: 0,
-      instruction: `Coast to apoapsis — about ${seconds.toFixed(0)} seconds.`,
+      instruction: `Coast to apoapsis — about ${Math.round(seconds)} seconds.`,
     };
   }
 
@@ -350,9 +363,10 @@ export function guidanceInput(
   dynamicPressure: number,
   position: Vec3,
   velocity: Vec3,
+  circularising = false,
 ): GuidanceInput {
   return {
     altitude, apoapsis, periapsis, verticalSpeed, horizontalSpeed,
-    dynamicPressure, position, velocity,
+    dynamicPressure, position, velocity, circularising,
   };
 }

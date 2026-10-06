@@ -1,13 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
-  guide, guidanceInput, turnPitch, circularSpeedAt, apoapsisSpeed,
+  guide, guidanceInput, turnPitch, timeToApoapsis, circularSpeedAt, apoapsisSpeed,
   circularisationDeltaV, TURN_START_ALTITUDE, TURN_END_ALTITUDE,
 } from './guidance';
 import {
   initialState, step, stageOff, jettisonFairing, telemetry, evaluate,
-  type FlightState,
+  type FlightState, eastAt,
 } from './ascent';
-import { normalize, scale, add, cross, vec } from './orbit';
+import { normalize, scale, add, vec, dot, propagate } from './orbit';
 import { R_EARTH, MU_EARTH } from './constants';
 import { vehicleFromParts } from '../flight/vehicle';
 import { PART_LIBRARY } from '../vab/parts';
@@ -23,7 +23,8 @@ import type { Vehicle } from './rocket';
  * that matters.
  */
 
-const TARGET = 180_000;
+/** Matches FlightPhase.TARGET_ORBIT: above the 200 km floor with margin. */
+const TARGET = 230_000;
 const part = (id: string) => PART_LIBRARY.find(p => p.id === id)!;
 
 function build(booster: string, upper: string, payload: string): Vehicle {
@@ -49,7 +50,7 @@ function fly(vehicle: Vehicle, maxSeconds = 6_000) {
     phases.add(command.phase);
 
     const up = normalize(state.position);
-    const east = normalize(cross(vec(0, 1, 0), state.position));
+    const east = eastAt(state.position);
     const attitude = normalize(add(
       scale(up, Math.sin(command.pitch)),
       scale(east, Math.cos(command.pitch)),
@@ -106,6 +107,43 @@ describe('orbital mechanics', () => {
   });
 });
 
+describe('time to apoapsis', () => {
+  it('solves Kepler’s equation rather than dividing by gravity', () => {
+    // At orbital speed the vehicle's sideways motion cancels most of gravity,
+    // so "vertical speed over g" is badly wrong. Here: a 7 600 m/s vehicle at
+    // 188 km climbing at 166 m/s, from the flight that exposed the bug.
+    const r = R_EARTH + 188_000;
+    const input = {
+      altitude: 188_000, apoapsis: 219_000, periapsis: -431_000,
+      verticalSpeed: 166, horizontalSpeed: 7_590, dynamicPressure: 0,
+      position: vec(r, 0, 0), velocity: vec(166, 0, 7_590),
+    };
+    const naive = 166 / (MU_EARTH / (r * r));
+    const kepler = timeToApoapsis(input);
+    // The naive figure was about 18 s; the true one is well over a minute.
+    expect(naive).toBeLessThan(20);
+    expect(kepler).toBeGreaterThan(100);
+
+    // Cross-check by propagating: the vehicle should be at the top of its arc
+    // (vertical speed through zero) after almost exactly that long.
+    let state = { position: input.position, velocity: input.velocity };
+    const dt = 0.5;
+    let t = 0;
+    while (t < kepler) { state = propagate(state, dt); t += dt; }
+    const climbing = dot(normalize(state.position), state.velocity);
+    expect(Math.abs(climbing)).toBeLessThan(2);
+  });
+
+  it('is zero once the vehicle is past the top of its arc', () => {
+    const r = R_EARTH + 200_000;
+    expect(timeToApoapsis({
+      altitude: 200_000, apoapsis: 210_000, periapsis: 0,
+      verticalSpeed: -50, horizontalSpeed: 7_700, dynamicPressure: 0,
+      position: vec(r, 0, 0), velocity: vec(-50, 0, 7_700),
+    })).toBe(0);
+  });
+});
+
 describe('the pitch programme', () => {
   it('starts vertical and ends horizontal', () => {
     expect(turnPitch(0)).toBeCloseTo(Math.PI / 2, 6);
@@ -150,9 +188,12 @@ describe('guidance phases', () => {
   it('cuts the engines once apoapsis reaches the target', () => {
     // The single most important rule in the plan: burning on past this point
     // raises apoapsis, costs propellant, and buys nothing.
+    // Position and velocity must agree with the speeds quoted: the time to
+    // apoapsis is now solved from the actual orbit, not from vertical speed.
     const command = guide({
       ...base, altitude: 100_000, apoapsis: TARGET, periapsis: -1_000_000,
       verticalSpeed: 400, horizontalSpeed: 5_000, dynamicPressure: 0,
+      position: vec(R_EARTH + 100_000, 0, 0), velocity: vec(400, 0, 5_000),
     }, TARGET);
     expect(command.phase).toBe('coast');
     expect(command.throttle).toBe(0);
@@ -160,20 +201,21 @@ describe('guidance phases', () => {
 
   it('burns horizontally at apoapsis, not on the way up', () => {
     const command = guide({
-      ...base, altitude: 179_000, apoapsis: TARGET, periapsis: -1_000_000,
+      ...base, altitude: TARGET - 1_000, apoapsis: TARGET, periapsis: -1_000_000,
       verticalSpeed: 2, horizontalSpeed: 7_000, dynamicPressure: 0,
-      position: vec(R_EARTH + 179_000, 0, 0),
+      position: vec(R_EARTH + TARGET - 1_000, 0, 0), velocity: vec(2, 0, 7_000),
     }, TARGET);
     expect(command.phase).toBe('circularise');
-    // All of the thrust into speed, none into height.
-    expect(command.pitch).toBe(0);
+    // Thrust into horizontal speed: the nose holds vertical speed near zero,
+    // which at 2 m/s of climb means a hair below the horizon.
+    expect(Math.abs(command.pitch)).toBeLessThan(0.01);
     expect(command.throttle).toBe(1);
     expect(command.instruction).toMatch(/\d+ m\/s/);
   });
 
   it('shuts down once the orbit is made', () => {
     const command = guide({
-      ...base, altitude: 180_000, apoapsis: 182_000, periapsis: 178_000,
+      ...base, altitude: TARGET, apoapsis: TARGET + 2_000, periapsis: TARGET - 2_000,
       verticalSpeed: 0, horizontalSpeed: 7_800, dynamicPressure: 0,
     }, TARGET);
     expect(command.phase).toBe('orbit');

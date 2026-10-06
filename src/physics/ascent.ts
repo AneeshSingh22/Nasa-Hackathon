@@ -1,6 +1,6 @@
 import { G0, MU_EARTH, R_EARTH } from './constants';
 import { density, dynamicPressure, speedOfSound } from './atmosphere';
-import { magnitude, normalize, scale, add, sub, dot, vec, type Vec3 } from './orbit';
+import { magnitude, normalize, scale, add, sub, dot, vec, cross, type Vec3 } from './orbit';
 import { massFlowRate, type Stage, type Vehicle } from './rocket';
 
 /**
@@ -118,17 +118,16 @@ export const MAX_ANGLE_OF_ATTACK = 0.35;
 export const AERO_STRESS_THRESHOLD = 8_000;
 
 /**
- * The altitude a stable orbit must clear. m
+ * The altitude a stable orbit must clear, matching the contract's brief. m
  *
- * 160 km, the conventional minimum for an orbit that will not decay within an
- * orbit or two. It was 200 km, which left the vehicle with essentially no
- * margin: headless simulation showed a 2% change in vacuum thrust, or 2.5% in
- * sea-level specific impulse, flipping a successful ascent to a stranded one.
- * A player flying by hand is far more than 2% off an optimal profile, so the
- * phase was close to unwinnable. Dropping the bar by 40 km costs roughly
- * 1 200 m/s and leaves room for an imperfect but competent flight.
+ * This was briefly lowered to 160 km because the ascent appeared to have no
+ * margin: a 2% change in thrust flipped orbit into a stranded vehicle. The real
+ * cause was that every ascent launched west, against the planet's rotation
+ * (see `eastAt`), throwing away roughly 930 m/s. Launching east, 17 of the 24
+ * buildable vehicles reach 200 km under guidance, and the ones that do not are
+ * the ones the build phase warns about — a heavy payload on a small stage.
  */
-export const MIN_ORBIT_ALTITUDE = 160_000;
+export const MIN_ORBIT_ALTITUDE = 200_000;
 
 /**
  * Thrust at a given altitude.
@@ -223,6 +222,22 @@ function acceleration(
   }
 
   return total;
+}
+
+/**
+ * Local east: the direction the planet's rotation carries the surface.
+ *
+ * Launching east adds the surface's 465 m/s to the vehicle for free, which is
+ * why launch sites sit as near the equator as geography allows and why they
+ * face east over the sea. Every steering calculation used to build "east" as
+ * cross(Y, r), which with this module's +Y rotation axis points *west*: every
+ * ascent, autopilot and test fought the rotation and threw away roughly
+ * 930 m/s. That is what made the vehicles look marginal. East is defined here,
+ * once, as the direction of the rotating surface, and `ascent.test.ts` pins it
+ * to `atmosphereVelocity`, which is what the planet is actually doing.
+ */
+export function eastAt(position: Vec3): Vec3 {
+  return normalize(cross(position, vec(0, 1, 0)));
 }
 
 /** Velocity of the atmosphere at a point, from the planet's rotation. */
@@ -457,9 +472,14 @@ export function evaluate(
   // Out of propellant everywhere, still not orbital: the flight is over even
   // though the vehicle is intact, and saying so is kinder than letting the
   // player coast to the ground wondering.
+  //
+  // Any altitude, once the vehicle is past the top of its arc. This used to
+  // require being below 120 km, so a vehicle that ran dry in a stable but
+  // too-low orbit — 150 by 400 km, say — never ended the flight at all and the
+  // player was left in the cockpit indefinitely.
   const anyPropellantLeft = state.propellant > 0
     || state.stage < vehicle.stages.length - 1;
-  if (!anyPropellantLeft && readings.verticalSpeed < 0 && readings.altitude < 120_000) {
+  if (!anyPropellantLeft && readings.verticalSpeed < 0) {
     return { kind: 'stranded', apoapsis: readings.apoapsis ?? readings.altitude };
   }
 

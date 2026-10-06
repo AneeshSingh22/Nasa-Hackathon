@@ -901,119 +901,350 @@ kbd {
 }
 #win-launch:hover { filter: brightness(1.1); }
 
-/* ---------------- flight HUD ----------------
-   Instruments left, vehicle status right, guidance across the bottom. The
-   cockpit fills the screen, so the panels sit in the corners and stay out of
-   the window the player is flying by. */
-#flight { position: absolute; inset: 0; pointer-events: none; }
-
-#flight-instruments, #flight-stage {
+/* ---------------- flight deck ----------------
+   A cockpit frame around a wide windshield, after the reference art: angled
+   pillars, an overhead bar of lamps, and a dashboard of glass screens and
+   backlit switches across the bottom. The 3D canvas is the view through the
+   glass. Everything is pointer-transparent except the dashboard, so dragging
+   on the glass reaches the canvas to look around. */
+#flight {
   position: absolute;
-  top: 16px;
-  width: 196px;
-  padding: 10px 12px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--panel);
-  backdrop-filter: blur(10px);
+  inset: 0;
+  pointer-events: none;
+  --deck: #0b1022;
+  --deck-2: #131a33;
+  --deck-edge: #2a3560;
+  --glow: #52d9ec;
+  --glow-soft: rgba(82, 217, 236, 0.35);
+  --violet-glow: #9b7cff;
+  --go: #5fd99a;
+  --caution: #ffb400;
+  --warning: #ff5f4a;
 }
-#flight-instruments { left: 16px; border-top: 2px solid var(--cyan); }
-#flight-stage { right: 16px; border-top: 2px solid var(--violet); }
+#flight .cockpit { position: absolute; inset: 0; overflow: hidden; }
 
-#flight .inst, #flight .stage-row {
+/* ---- frame ---- */
+#flight .cp-frame { position: absolute; inset: -30px; transition: transform 0.08s linear; }
+
+#flight .cp-overhead {
+  position: absolute;
+  left: 0; right: 0; top: 0;
+  height: calc(30px + 7.5vh);
+  padding: 30px 40px 0;
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  background: linear-gradient(180deg, #050814 0%, var(--deck) 60%, var(--deck-2) 100%);
+  border-bottom: 2px solid var(--deck-edge);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.55), inset 0 -1px 0 rgba(155, 124, 255, 0.35);
+}
+#flight .cp-lamps { display: flex; gap: 6px; }
+#flight .cp-lamp {
+  width: 9px; height: 9px; border-radius: 2px;
+  background: currentColor; opacity: 0.85;
+  box-shadow: 0 0 8px currentColor;
+}
+#flight .cp-lamp.tone-go { color: var(--go); }
+#flight .cp-lamp.tone-info { color: var(--glow); }
+#flight .cp-lamp.tone-caution { color: var(--caution); opacity: 0.5; }
+#flight .cp-title {
+  margin-left: auto;
+  font: 600 11px var(--mono);
+  letter-spacing: 0.22em;
+  color: rgba(155, 124, 255, 0.85);
+}
+#flight .cp-clock {
+  font: 700 18px var(--mono);
+  letter-spacing: 0.06em;
+  color: var(--glow);
+  text-shadow: 0 0 12px var(--glow-soft);
+  min-width: 112px;
+  text-align: right;
+}
+#flight .cp-clock.warp { color: var(--violet-glow); }
+
+#flight .cp-pillar {
+  position: absolute;
+  top: 0; bottom: 0;
+  width: 13vw;
+  background: linear-gradient(90deg, #060a18, var(--deck) 55%, var(--deck-2));
+}
+#flight .cp-left { left: 0; clip-path: polygon(0 0, 55% 0, 100% 100%, 0 100%); }
+#flight .cp-right {
+  right: 0;
+  transform: scaleX(-1);
+  clip-path: polygon(0 0, 55% 0, 100% 100%, 0 100%);
+}
+
+/* The glass: a faint reflection and an inner shadow where it meets the frame. */
+#flight .cp-glass {
+  position: absolute;
+  left: 7vw; right: 7vw;
+  top: calc(30px + 5vh);
+  bottom: 30%;
+  border-radius: 18px 18px 0 0;
+  box-shadow: inset 0 0 70px rgba(0, 0, 0, 0.55), inset 0 0 0 2px rgba(42, 53, 96, 0.8);
+  background:
+    linear-gradient(115deg, transparent 30%, rgba(255, 255, 255, 0.045) 42%, transparent 52%),
+    linear-gradient(115deg, transparent 58%, rgba(255, 255, 255, 0.03) 64%, transparent 70%);
+}
+
+/* ---- HUD text on the glass ---- */
+#flight .cp-guidance {
+  position: absolute;
+  left: 50%;
+  top: calc(30px + 9.5vh);
+  transform: translateX(-50%);
+  max-width: min(640px, 70vw);
+  padding: 8px 18px;
+  border: 1px solid rgba(82, 217, 236, 0.45);
+  border-radius: 6px;
+  background: rgba(5, 12, 28, 0.55);
+  backdrop-filter: blur(4px);
+  font: 500 14px/1.45 var(--body);
+  color: #dff8ff;
+  text-align: center;
+  text-shadow: 0 0 10px rgba(82, 217, 236, 0.45);
+}
+#flight .cp-guidance.warn {
+  border-color: rgba(255, 95, 74, 0.8);
+  color: #ffd9d3;
+  text-shadow: 0 0 10px rgba(255, 95, 74, 0.6);
+}
+#flight .cp-hover {
+  position: absolute;
+  left: 50%;
+  bottom: calc(30% + 14px);
+  transform: translateX(-50%);
+  max-width: min(560px, 70vw);
+  padding: 7px 14px;
+  border-radius: 5px;
+  background: rgba(10, 14, 32, 0.92);
+  border: 1px solid var(--deck-edge);
+  font: 12px/1.45 var(--body);
+  color: var(--ink);
+}
+#flight .cp-countdown {
+  position: absolute;
+  left: 50%;
+  top: 34%;
+  transform: translate(-50%, -50%);
+  font: 800 clamp(48px, 9vw, 120px) var(--display);
+  letter-spacing: 0.04em;
+  color: #fff;
+  text-shadow: 0 0 30px rgba(82, 217, 236, 0.8), 0 4px 0 rgba(0, 0, 0, 0.5);
+}
+
+/* ---- dashboard ---- */
+#flight .cp-dash {
+  position: absolute;
+  left: 0; right: 0; bottom: 0;
+  height: 30%;
+  min-height: 230px;
+  padding: 14px 3vw 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  pointer-events: auto;
+  cursor: default;
+  background: linear-gradient(180deg, #1a2244 0px, var(--deck-2) 6px, var(--deck) 40%, #060914 100%);
+  border-top: 2px solid #3b4a85;
+  box-shadow: 0 -18px 40px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(155, 124, 255, 0.4);
+}
+/* The glare shield: a raised lip along the top edge of the dash. */
+#flight .cp-dash::before {
+  content: "";
+  position: absolute;
+  left: 18%; right: 18%; top: -16px;
+  height: 16px;
+  border-radius: 12px 12px 0 0;
+  background: linear-gradient(180deg, #232d55, #151c38);
+  border: 1px solid #3b4a85;
+  border-bottom: none;
+}
+
+#flight .cp-screens {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr 1fr;
+  gap: 12px;
+}
+#flight .cp-screen {
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: 8px;
+  border: 1px solid #2c3866;
+  background:
+    radial-gradient(120% 90% at 50% 0%, rgba(82, 217, 236, 0.10), transparent 60%),
+    linear-gradient(180deg, #071226, #050a17);
+  box-shadow: inset 0 0 22px rgba(82, 217, 236, 0.12), 0 0 0 3px #0a0f22, 0 0 0 4px #27305a;
+  overflow: hidden;
+}
+#flight .cp-screen-title {
+  padding: 4px 10px;
+  font: 700 10px var(--mono);
+  letter-spacing: 0.2em;
+  color: var(--violet-glow);
+  border-bottom: 1px solid rgba(82, 217, 236, 0.15);
+}
+#flight .cp-screen-body {
+  flex: 1;
+  min-height: 0;
+  padding: 6px 10px 8px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 1px;
+}
+#flight .cp-row {
   display: flex;
   justify-content: space-between;
   align-items: baseline;
   gap: 10px;
-  padding: 3px 0;
-  font: 11px/1.5 var(--mono);
-  color: var(--dim);
+  font: 11px/1.55 var(--mono);
+  color: rgba(180, 220, 235, 0.65);
 }
-#flight .inst b, #flight .stage-row b {
-  font: 600 13px/1.4 var(--mono);
-  color: var(--ink);
+#flight .cp-value {
+  font: 700 13px/1.4 var(--mono);
+  color: #c9fbff;
+  text-shadow: 0 0 8px rgba(82, 217, 236, 0.45);
 }
-
-#flight .stage-bar {
-  height: 4px;
-  margin: 2px 0 7px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.08);
+#flight .cp-bar {
+  height: 5px;
+  margin: 1px 0 5px;
+  border-radius: 3px;
+  background: rgba(82, 217, 236, 0.1);
   overflow: hidden;
 }
-#flight .stage-bar i {
+#flight .cp-bar-fill {
   display: block;
   height: 100%;
-  width: 100%;
-  background: var(--cyan);
-  transition: width 0.12s linear;
+  width: 0;
+  background: var(--glow);
+  box-shadow: 0 0 8px var(--glow);
+  transition: width 0.1s linear;
 }
-#fs-prop-bar { background: var(--green); }
+#flight .cp-bar-prop .cp-bar-fill { background: var(--go); box-shadow: 0 0 8px var(--go); }
+#flight .cp-bar-fill.warn { background: var(--caution); box-shadow: 0 0 8px var(--caution); }
+#flight .cp-bar-fill.danger { background: var(--warning); box-shadow: 0 0 10px var(--warning); }
 
-/* The guidance line is the teaching surface: it says what to do and why. */
-#flight-guidance {
-  position: absolute;
-  left: 50%;
-  bottom: 68px;
-  transform: translateX(-50%);
-  max-width: min(620px, calc(100vw - 48px));
-  padding: 9px 16px;
-  border: 1px solid var(--line);
-  border-left: 2px solid var(--cyan);
-  border-radius: 4px;
-  background: var(--panel);
-  backdrop-filter: blur(8px);
-  font: 13px/1.5 var(--body);
-  color: var(--ink);
-  text-align: center;
+/* Attitude indicator and orbit diagram sit beside their readouts, so the
+   diagram gets the full height of the screen instead of a sliver above it. */
+#flight .cp-screen-body.split {
+  flex-direction: row;
+  align-items: center;
+  gap: 10px;
 }
-#flight-guidance.warn { border-left-color: var(--burn); color: var(--burn); }
-
-/* Names the control under the cursor. Sits just above the guidance line so
-   the two read as one column rather than competing. */
-#flight-control-label {
-  position: absolute;
-  left: 50%;
-  bottom: 108px;
-  transform: translateX(-50%);
-  max-width: min(560px, calc(100vw - 48px));
-  padding: 7px 14px;
-  border: 1px solid var(--cyan);
-  border-radius: 4px;
-  background: var(--panel-2);
-  font: 12px/1.45 var(--body);
-  color: var(--ink);
-  text-align: center;
-  pointer-events: none;
+#flight .cp-rows { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+#flight .cp-adi, #flight .cp-orbit {
+  flex: 0 0 auto;
+  height: 100%;
+  max-height: 150px;
+  aspect-ratio: 1;
 }
+#flight .adi-sky { fill: #2e6fc7; }
+#flight .adi-ground { fill: #7a4f2a; }
+#flight .adi-horizon { stroke: #fff; stroke-width: 1.5; }
+#flight .adi-ladder { stroke: rgba(255, 255, 255, 0.75); stroke-width: 1; }
+#flight .adi-label { fill: rgba(255, 255, 255, 0.8); font: 7px var(--mono); }
+#flight .adi-rim { fill: none; stroke: #2c3866; stroke-width: 4; }
+#flight .adi-symbol { fill: none; stroke: #ffd34d; stroke-width: 3; stroke-linejoin: round; }
+#flight .adi-target path { fill: var(--glow); }
 
-/* The cursor is a tool in the cockpit, so it stays visible. */
-#flight { cursor: crosshair; }
+#flight .orbit-earth { fill: #1d5fa8; stroke: #6fb6ff; stroke-width: 0.8; }
+#flight .orbit-atmosphere { fill: none; stroke: rgba(111, 182, 255, 0.35); stroke-width: 1; stroke-dasharray: 2 2; }
+#flight .orbit-target { fill: none; stroke: rgba(95, 217, 154, 0.55); stroke-width: 0.8; stroke-dasharray: 4 3; }
+#flight .orbit-path { fill: none; stroke: var(--caution); stroke-width: 1.6; }
+#flight .orbit-path.suborbital { stroke: var(--warning); }
+#flight .orbit-path.stable { stroke: var(--go); }
+#flight .orbit-note { fill: rgba(180, 220, 235, 0.4); font: 7px var(--mono); text-anchor: middle; }
 
-#flight-controls {
-  position: absolute;
-  left: 50%;
-  bottom: 18px;
-  transform: translateX(-50%);
+/* ---- switches ---- */
+#flight .cp-switches {
   display: flex;
-  flex-wrap: wrap;
   justify-content: center;
-  gap: 14px;
-  font: 11px var(--mono);
-  color: var(--faint);
+  gap: 20px;
+  flex-wrap: wrap;
 }
-#flight-controls kbd {
-  margin-right: 4px;
-  padding: 1px 5px;
-  border: 1px solid var(--line);
-  border-radius: 3px;
-  background: var(--panel-2);
-  color: var(--dim);
+#flight .cp-cluster {
+  display: flex;
+  gap: 6px;
+  padding: 5px;
+  border-radius: 8px;
+  background: #070b1a;
+  border: 1px solid #222b52;
+  box-shadow: inset 0 2px 6px rgba(0, 0, 0, 0.6);
+}
+#flight .cp-switch {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 3px;
+  min-width: 78px;
+  padding: 6px 10px 5px;
+  border-radius: 6px;
+  border: 1px solid #3a4677;
+  background: linear-gradient(180deg, #2a3462, #18204a 55%, #121a3c);
+  box-shadow: 0 3px 0 #080c1c, 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+  color: #e6ecff;
+  font: 700 11px var(--mono);
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  user-select: none;
+  touch-action: none;
+  transition: transform 0.05s, box-shadow 0.05s, filter 0.1s;
+}
+#flight .cp-switch:hover:not(:disabled) { filter: brightness(1.25); }
+#flight .cp-switch.pressed {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #080c1c, inset 0 2px 5px rgba(0, 0, 0, 0.5);
+}
+#flight .cp-switch:disabled { opacity: 0.38; cursor: default; filter: saturate(0.4); }
+#flight .cp-switch.gone { display: none; }
+#flight .cp-switch-lamp {
+  width: 26px; height: 4px; border-radius: 2px;
+  background: currentColor; opacity: 0.25;
+}
+#flight .cp-switch.tone-go { color: var(--go); }
+#flight .cp-switch.tone-caution { color: var(--caution); }
+#flight .cp-switch.tone-warning { color: var(--warning); }
+#flight .cp-switch.tone-info { color: var(--glow); }
+#flight .cp-switch.lit .cp-switch-lamp { opacity: 1; box-shadow: 0 0 10px currentColor; }
+#flight .cp-switch-label { color: #e6ecff; }
+#flight .cp-switch-key {
+  font: 9px var(--mono);
+  color: rgba(200, 210, 255, 0.5);
+  letter-spacing: 0;
 }
 
-@media (max-width: 900px) {
-  #flight-instruments, #flight-stage { width: 150px; font-size: 10px; }
-  #flight-controls { gap: 8px; font-size: 10px; }
+/* IGNITION and STAGE are the big decisions, so they are the big buttons. */
+#flight .cp-launch, #flight .cp-stage {
+  min-width: 132px;
+  font-size: 13px;
+  padding: 8px 14px 6px;
+}
+#flight .cp-launch:not(:disabled) {
+  background: linear-gradient(180deg, #1f7a52, #135a3b);
+  border-color: #5fd99a;
+  animation: cp-ready 1.4s ease-in-out infinite;
+}
+#flight .cp-stage:not(:disabled) {
+  background: linear-gradient(180deg, #8a2a1f, #5e1a12);
+  border-color: #ff8a73;
+}
+@keyframes cp-ready {
+  0%, 100% { box-shadow: 0 3px 0 #080c1c, 0 0 0 rgba(95, 217, 154, 0); }
+  50% { box-shadow: 0 3px 0 #080c1c, 0 0 22px rgba(95, 217, 154, 0.65); }
+}
+
+@media (max-height: 760px) {
+  #flight .cp-dash { min-height: 200px; padding-top: 10px; gap: 6px; }
+  #flight .cp-row { font-size: 10px; line-height: 1.4; }
+  #flight .cp-value { font-size: 12px; }
+  #flight .cp-switch { min-width: 64px; padding: 4px 8px; }
 }
 
 /* ---------------- HUD density ----------------

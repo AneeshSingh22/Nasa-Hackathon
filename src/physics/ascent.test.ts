@@ -3,9 +3,10 @@ import {
   initialState, step, stageOff, jettisonFairing, telemetry, evaluate,
   thrustAt, ispAt, currentMass, gravityTurnPitch,
   MAX_DYNAMIC_PRESSURE, MIN_ORBIT_ALTITUDE, EARTH_ROTATION_SPEED,
-  type FlightState,
+  type FlightState, eastAt, atmosphereVelocity,
 } from './ascent';
-import { normalize, scale, add, cross, vec } from './orbit';
+import { normalize, scale, add, vec, dot } from './orbit';
+import { R_EARTH } from './constants';
 import type { Vehicle } from './rocket';
 
 /**
@@ -72,7 +73,7 @@ function flyGravityTurn(options: {
       state = { ...state, attitude: normalize(state.velocity) };
     } else {
       const up = normalize(state.position);
-      const east = normalize(cross(vec(0, 1, 0), state.position));
+      const east = eastAt(state.position);
       const target = gravityTurnPitch(readings.altitude) + (options.pitchBias ?? 0);
       const attitude = normalize(add(scale(up, Math.sin(target)), scale(east, Math.cos(target))));
       state = { ...state, attitude };
@@ -105,6 +106,21 @@ describe('powered flight', () => {
     expect(readings.speed).toBeCloseTo(EARTH_ROTATION_SPEED, 1);
     // But relative to the air it is stationary, so there is no drag on the pad.
     expect(readings.airspeed).toBeLessThan(1);
+  });
+
+  it('launches east, with the planet’s rotation rather than against it', () => {
+    // Every steering calculation once built "east" with the cross product the
+    // wrong way round, so every ascent and every test launched west and threw
+    // away roughly 930 m/s. Nothing failed: the vehicles just looked marginal.
+    // East is defined as the direction the surface actually moves.
+    for (const position of [vec(R_EARTH, 0, 0), vec(0, 0, R_EARTH), vec(-R_EARTH, 1e5, 2e6)]) {
+      const east = eastAt(position);
+      const surface = atmosphereVelocity(position);
+      expect(dot(east, normalize(surface))).toBeGreaterThan(0.99);
+    }
+    // And the pad's starting velocity, which is the rotation, points east.
+    const pad = initialState(VEHICLE);
+    expect(dot(normalize(pad.velocity), eastAt(pad.position))).toBeGreaterThan(0.99);
   });
 
   it('produces more thrust in vacuum than at sea level', () => {
@@ -211,7 +227,7 @@ describe('powered flight', () => {
       const readings = telemetry(VEHICLE, state);
       // Once there is real air, yaw 90 degrees off prograde.
       if (readings.altitude > 3_000) {
-        const east = normalize(cross(vec(0, 1, 0), state.position));
+        const east = eastAt(state.position);
         state = { ...state, attitude: east };
       } else {
         state = { ...state, attitude: normalize(state.position) };

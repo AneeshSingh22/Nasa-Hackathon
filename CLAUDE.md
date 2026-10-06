@@ -548,6 +548,57 @@ product.
   at a switch. Pointer lock suits a first-person walk and actively fights a
   seated pilot operating a panel.
 
+- **Every rocket launched west, and nothing failed.** Steering built "east" as
+  `cross(Y, r)`, which with the planet's +Y rotation axis points west, so every
+  ascent, autopilot and orbit test fought the 465 m/s surface rotation and threw
+  away about 930 m/s. Nothing broke: the vehicles just looked marginal, a 2%
+  thrust change flipped orbit into failure, and the orbit floor was lowered to
+  160 km to compensate. East is now defined once, in `ascent.ts` as `eastAt`,
+  and `ascent.test.ts` pins it to `atmosphereVelocity` — the direction the
+  ground actually moves. Only that test catches a westward launch: every orbit
+  test still passed with it. With the fix, 18 of 24 buildable vehicles reach
+  the contract's 200 km, and the six that do not are heavy payloads on small
+  stages, which is what the build phase warns about.
+- **Time to apoapsis is Kepler's equation, not vertical speed over g.** Near
+  orbital speed the vehicle's sideways motion cancels most of gravity: at
+  7 600 m/s effective gravity is about 0.4 m/s^2. The naive formula said
+  apoapsis was 11 s away when it was 250 s away, and the autopilot flicked
+  between coasting and burning for minutes. `guidance.ts` now solves the orbit,
+  and its test cross-checks against the independent propagator.
+- **A burn that moves its own trigger needs a latch.** Circularisation was
+  re-decided every step on a threshold the burn itself shifted. `FlightPhase`
+  latches it once started.
+- **Downrange is measured against the rotating ground.** Accumulated in the
+  inertial frame, a vehicle sitting on the pad "travelled" 465 m/s and was out
+  over the ocean eight seconds after lift-off. `groundDistance` takes the
+  vehicle's angle round the planet minus the pad's.
+- **A cockpit is a frame round a window, so build it as one.** Three modelled
+  3D cockpits failed the same way — dark boxes, a camera inside the geometry,
+  controls nobody could find. The flight deck is now DOM (`ui/CockpitPanel.ts`)
+  over a 3D view of only the outside world (`flight/OutsideView.ts`): crisp,
+  lit, clickable, and testable in jsdom. The window looks downrange rather than
+  along the nose, because a vertical climb seen along the nose is featureless
+  sky; the attitude indicator shows the nose instead.
+- **Look at what you build.** Headless Edge renders WebGL:
+  `msedge --headless=new --use-angle=swiftshader --enable-unsafe-swiftshader
+  --screenshot=out.png --window-size=1600,900 --virtual-time-budget=3000 URL`.
+  `?flight`, `?flight&auto` and `?flight&auto&at=SECONDS` drop straight into
+  the cockpit at any point of the ascent. Every visual bug in this list was
+  found that way, after three rounds of building blind.
+- **A backdrop near the far plane gets clipped.** A sky dome at 36 000 km was
+  cut by 32-bit depth precision into black shapes. Backdrops are small and
+  drawn first with depth testing off.
+- **Transparent objects ignore renderOrder against opaque ones.** Three.js
+  draws all transparent objects after all opaque ones, so transparent stars
+  landed on top of the Earth. Stars are opaque with additive blending.
+- **A finished flight must end.** "Stranded" required being below 120 km, so a
+  vehicle that ran dry in a stable-but-too-low orbit kept the player in the
+  cockpit forever. Out of propellant and past the top of the arc is enough.
+- **The engine cannot be left at idle on the pad.** A player who opened the
+  throttle to 32% saw it clamp to the 40% minimum, produce less thrust than the
+  vehicle weighs, and sit there with nothing saying why. IGNITION runs a
+  countdown and lights at full thrust, as every real launch does.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should
