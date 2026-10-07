@@ -1,5 +1,6 @@
 import type { PartDefinition } from '../vab/parts';
 import type { StackAnalysis } from '../vab/Assembly';
+import type { Readiness } from '../game/readiness';
 import { SLOT_LABELS, optionsFor, BUILD_ORDER } from './catalog';
 
 /**
@@ -31,6 +32,14 @@ export class RocketPalette {
   private readonly buttons = new Map<string, HTMLButtonElement>();
   private readonly slotSections = new Map<string, HTMLElement>();
   private readonly undo = document.createElement('button');
+  /** Mission Control's call, the thing every part choice moves. */
+  readonly verdict = document.createElement('section');
+  private readonly verdictHeadline = document.createElement('strong');
+  private readonly verdictDetail = document.createElement('span');
+  private readonly verdictGauge = document.createElement('i');
+  private readonly parLine = document.createElement('span');
+  private lastVerdict: Readiness['verdict'] | null = null;
+  private readonly chromeElement: HTMLElement;
   private readonly launch = document.createElement('button');
   private selectedId: string | null = null;
 
@@ -98,7 +107,20 @@ export class RocketPalette {
     this.readout.setAttribute('aria-label', 'Vehicle analysis');
     this.status.className = 'workshop-status';
     this.status.setAttribute('role', 'status');
-    chrome.append(this.element, this.readout, this.status);
+    // The verdict sits top-centre, where the eye goes after placing a part.
+    this.verdict.className = 'mission-verdict';
+    this.verdict.setAttribute('role', 'status');
+    this.verdict.setAttribute('aria-label', 'Mission Control verdict');
+    const label = document.createElement('small');
+    label.textContent = 'MISSION CONTROL';
+    const gauge = document.createElement('div');
+    gauge.className = 'verdict-gauge';
+    gauge.append(this.verdictGauge);
+    this.parLine.className = 'verdict-par';
+    this.verdict.append(label, this.verdictHeadline, this.verdictDetail, gauge, this.parLine);
+
+    this.chromeElement = chrome;
+    chrome.append(this.element, this.readout, this.status, this.verdict);
   }
 
   /** Reflect what may be fitted now. */
@@ -147,7 +169,10 @@ export class RocketPalette {
   }
 
   /** The engineering line: what this vehicle can actually do. */
-  update(analysis: StackAnalysis, spent: number): void {
+  update(
+    analysis: StackAnalysis, spent: number, readiness?: Readiness, par?: number | null,
+  ): void {
+    if (readiness) this.showVerdict(readiness, spent, par ?? null);
     const fields = [
       `Spent ${millions(spent)}`,
       `Mass ${(analysis.liftoffMass / 1000).toFixed(1)} t`,
@@ -159,9 +184,56 @@ export class RocketPalette {
     this.readout.classList.toggle('good', analysis.verdictLevel === 'good');
   }
 
+  private showVerdict(readiness: Readiness, spent: number, par: number | null): void {
+    this.verdict.dataset.verdict = readiness.verdict;
+    this.verdictHeadline.textContent = readiness.headline;
+    this.verdictDetail.textContent = readiness.detail;
+    this.verdictGauge.style.width = `${(readiness.gauge * 100).toFixed(1)}%`;
+    if (par !== null) {
+      const under = spent <= par;
+      this.parLine.textContent = `Par $${par}M · spent $${Math.round(spent)}M`;
+      this.parLine.classList.toggle('over', !under);
+    } else {
+      this.parLine.textContent = '';
+    }
+    // Pulse when the call changes, so a part that flips NO-GO to GO is felt.
+    if (this.lastVerdict !== null && this.lastVerdict !== readiness.verdict) {
+      this.verdict.classList.remove('changed');
+      void this.verdict.offsetWidth;
+      this.verdict.classList.add('changed');
+    }
+    this.lastVerdict = readiness.verdict;
+  }
+
+  /** The verdict that was last shown, for sound cues. */
+  get currentVerdict(): Readiness['verdict'] | null {
+    return this.lastVerdict;
+  }
+
+  /**
+   * Float a cost up off the readout: "-$148M" in red, or a refund in green.
+   * The budget figure changing is easy to miss; money leaving is not.
+   */
+  flashCost(amount: number): void {
+    if (amount === 0) return;
+    const tag = document.createElement('span');
+    tag.className = `cost-float ${amount < 0 ? 'spend' : 'refund'}`;
+    tag.textContent = `${amount < 0 ? '−' : '+'}$${Math.abs(Math.round(amount))}M`;
+    this.chromeElement.append(tag);
+    window.setTimeout(() => tag.remove(), 1_500);
+  }
+
+  /** Jolt the panel, for a refusal. */
+  shake(): void {
+    this.element.classList.remove('shake');
+    void this.element.offsetWidth;
+    this.element.classList.add('shake');
+  }
+
   dispose(): void {
     this.element.remove();
     this.readout.remove();
     this.status.remove();
+    this.verdict.remove();
   }
 }

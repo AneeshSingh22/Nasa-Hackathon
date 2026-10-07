@@ -24,7 +24,13 @@ import {
   stationFor,
   isOnGantry,
 } from './game/workzone';
-import { CONTRACT_FIRST_ORBIT, evaluate } from './game/contract';
+import { evaluate } from './game/contract';
+import {
+  CAMPAIGN, isUnlocked, loadRecord, saveRecord, recordResult, rate,
+  type CampaignContract, type StarRecord,
+} from './game/campaign';
+import { MissionBoard } from './ui/MissionBoard';
+import { play, setSoundMuted } from './ui/sfx';
 import { adviseOn } from './game/advice';
 import { ELEVATOR_X, ELEVATOR_Z } from './vab/Elevator';
 import { stationNear, type StationDefinition } from './vab/stations';
@@ -34,7 +40,22 @@ import { deltaV } from './physics/rocket';
 import { WorkshopStation } from './vab/WorkshopStation';
 import { WorkshopSession } from './workshop/session';
 
-const contract = CONTRACT_FIRST_ORBIT;
+/**
+ * The contract being flown, chosen on the mission board.
+ *
+ * Defaults to the next unlocked contract the player has not won yet, so
+ * finishing a mission puts them in front of the next thing to do.
+ */
+let starRecord: StarRecord = loadRecord();
+let contract: CampaignContract = defaultContract(starRecord);
+
+function defaultContract(record: StarRecord): CampaignContract {
+  const open = CAMPAIGN.filter((_, index) => isUnlocked(index, record));
+  // Forward first: the next contract not yet won, then any not yet perfect.
+  return open.find(entry => (record[entry.id] ?? 0) === 0)
+    ?? open.find(entry => (record[entry.id] ?? 0) < 3)
+    ?? open.at(-1) ?? CAMPAIGN[0]!;
+}
 // Preserve the prototype handlers for migration, but no playable input or
 // station HUD may reach them. Assembly belongs exclusively in Workshop.
 const LEGACY_ASSEMBLY_ENABLED = false;
@@ -48,6 +69,7 @@ function contractStatus() {
     liftoffTWR: analysis.liftoffTWR,
     hasPayload: assembly.parts.some((p) => p.kind === 'payload'),
     isComplete: assembly.isComplete(),
+    payloadId: assembly.parts.find((p) => p.kind === 'payload')?.id,
   });
 }
 
@@ -268,7 +290,9 @@ const workshop = new WorkshopSession(player, env.assemblyRoot, canvas, hud,
     // else, so an expensive stack can bankrupt the programme mid-build.
     charge: part => mission.fitPart(part.cost),
     refund: part => { mission.removePart(part.cost); },
-    spent: () => MISSION_2_START.budget - mission.status.budget,
+    spent: () => mission.startingBudget - mission.status.budget,
+    available: () => mission.status.budget,
+    par: () => contract.par,
     changed: () => { refreshReadout(); refreshContract(); },
     refuse: message => say(message),
     // Leave the Workshop and fly what was just built.
@@ -405,6 +429,8 @@ narrator.onLine = (text) => {
   if (el.capcom) el.capcom.textContent = text;
 };
 narrator.onEnabledChange = (enabled) => {
+  // One mute for everything: voice and sound effects together.
+  setSoundMuted(!enabled);
   el.voiceButton?.setAttribute('aria-pressed', String(enabled));
   if (el.voiceLabel) el.voiceLabel.textContent = enabled ? 'Voice on' : 'Voice off';
 };
@@ -1769,7 +1795,38 @@ window.addEventListener('keydown', (e) => {
 
 // --------------------------------------------------------------- start up
 
+/**
+ * The mission board lives on the start overlay. Choosing a card selects the
+ * contract; the start button accepts it.
+ */
+const startCard = startOverlay.querySelector<HTMLElement>('.start-card') ?? startOverlay;
+const board = new MissionBoard(startCard, {
+  onSelect: (chosen) => {
+    contract = chosen;
+    play('select');
+    labelStartButton();
+  },
+}, starRecord, contract.id);
+
+function labelStartButton(): void {
+  startButton.textContent = `Accept · ${contract.title}`;
+}
+labelStartButton();
+
+/** Seed the programme for the chosen contract: its budget, its brief. */
+function beginContract(): void {
+  mission.restart({
+    budget: contract.budget,
+    daysRemaining: MISSION_2_START.daysRemaining,
+    confidence: MISSION_2_START.confidence,
+  });
+  refreshContract();
+  refreshReadout();
+  refreshResources(mission.status);
+}
+
 startButton.addEventListener('click', () => {
+  beginContract();
   started = true;
   startOverlay.classList.add('hidden');
   hud.classList.remove('hidden');
@@ -1835,7 +1892,8 @@ if (!narrator.available) {
 
 function restartMission(): void {
   assembly.clear();
-  mission.reset();
+  // Re-seed from the contract, so a retry starts with that contract's budget.
+  beginContract();
   removeLineIndex = 0;
   rolledOut = false;
   spokenIntro = false;
@@ -1843,13 +1901,17 @@ function restartMission(): void {
   saidPayloadChoice = false;
   el.failure?.classList.add('hidden');
   el.success?.classList.add('hidden');
+  // The flight disables the walking controller and hides the bay HUD; a retry
+  // has to hand both back, or the player is frozen in place with no HUD.
+  player.setEnabled(true);
+  hud.classList.remove('hidden');
   refreshReadout();
   refreshResources(mission.status);
   player.requestLock(canvas);
   runIntro();
 }
 
-el.winAgain?.addEventListener('click', () => restartMission());
+el.winAgain?.addEventListener('click', () => showMissionBoard());
 
 // ------------------------------------------------------------------ flight
 
@@ -1907,8 +1969,18 @@ function startFlight(): void {
 
 function endFlight(): void {
   if (!flight) return;
-  const report = outcomeReport(flight.snapshot.outcome);
+  const outcome = flight.snapshot.outcome;
+  const report = outcomeReport(outcome);
   const peak = flight.peakDynamicPressure;
+  const spent = mission.startingBudget - mission.status.budget;
+  const rating = rate(contract, {
+    reachedOrbit: outcome.kind === 'orbit',
+    spent,
+    handFlown: flight.handFlown,
+  });
+  const previousBest = starRecord[contract.id] ?? 0;
+  starRecord = recordResult(starRecord, contract.id, rating.stars);
+  saveRecord(starRecord);
 
   panel?.dispose();
   headLook?.dispose();
@@ -1930,10 +2002,98 @@ function endFlight(): void {
   }
   const heading = document.querySelector<HTMLElement>('#success h1');
   if (heading) heading.textContent = report.title;
+  const eyebrow = document.querySelector<HTMLElement>('#success .win-eyebrow');
+  if (eyebrow) eyebrow.textContent = `${contract.title} · ${contract.customer}`;
+  showRating(rating, spent, outcome.kind === 'orbit', rating.stars > previousBest);
   el.success?.classList.remove('hidden');
   // The flight is over; there is nothing to fly again from here.
   document.querySelector<HTMLButtonElement>('#win-launch')?.classList.add('hidden');
 }
+
+/**
+ * Paint the star rating onto the results card, one star at a time with a chime
+ * for each earned. The rating is the reason to replay a contract that has
+ * already been won, so it is the loudest thing on the card.
+ */
+function showRating(
+  rating: ReturnType<typeof rate>, spent: number, paid: boolean, newBest: boolean,
+): void {
+  if (!el.winStats) return;
+  el.winStats.replaceChildren();
+  el.winStats.classList.add('rating');
+
+  const stars = document.createElement('div');
+  stars.className = 'rating-stars';
+  rating.criteria.forEach((criterion, index) => {
+    const row = document.createElement('div');
+    row.className = 'rating-row';
+    const star = document.createElement('i');
+    star.textContent = '★';
+    const label = document.createElement('span');
+    label.textContent = criterion.label;
+    row.append(star, label);
+    stars.append(row);
+    if (criterion.earned) {
+      window.setTimeout(() => {
+        row.classList.add('earned');
+        play('star');
+      }, 500 + index * 450);
+    }
+  });
+
+  const money = document.createElement('div');
+  money.className = 'rating-money';
+  const items: Array<[string, string]> = [
+    ['Paid', paid ? `$${contract.payment}M` : '$0M'],
+    ['Spent', `$${Math.round(spent)}M`],
+    ['Par', `$${contract.par}M`],
+  ];
+  for (const [label, value] of items) {
+    const cell = document.createElement('div');
+    cell.className = 'fail-stat';
+    const l = document.createElement('span');
+    l.textContent = label;
+    const v = document.createElement('b');
+    v.textContent = value;
+    cell.append(l, v);
+    money.append(cell);
+  }
+  el.winStats.append(stars, money);
+
+  if (el.winNote) {
+    el.winNote.textContent = newBest
+      ? `New best: ${rating.stars} of 3 stars.`
+      : rating.stars === 3
+        ? 'A perfect mission.'
+        : 'Retry to earn the stars you missed, or take the next contract.';
+  }
+}
+
+/** Back to the contract board, with the result recorded. */
+function showMissionBoard(): void {
+  assembly.clear();
+  mission.reset();
+  started = false;
+  spokenIntro = false;
+  el.success?.classList.add('hidden');
+  el.failure?.classList.add('hidden');
+  hud.classList.add('hidden');
+  player.releaseLock();
+  // Re-enable walking for when the next contract is accepted; the flight
+  // switched it off.
+  player.setEnabled(true);
+  contract = defaultContract(starRecord);
+  board.render(starRecord);
+  board.select(contract.id);
+  labelStartButton();
+  startOverlay.classList.remove('hidden');
+}
+
+document.querySelector<HTMLButtonElement>('#win-retry')
+  ?.addEventListener('click', () => {
+    el.success?.classList.add('hidden');
+    restartMission();
+  });
 
 document.querySelector<HTMLButtonElement>('#win-launch')
   ?.addEventListener('click', () => startFlight());
@@ -1986,7 +2146,14 @@ function runIntro(): void {
   if (spokenIntro) return;
   spokenIntro = true;
 
-  script.INTRO.forEach((line, i) => {
+  // A briefing with stakes, not a build order. The palette shows the slots and
+  // the verdict says whether the vehicle will fly; reading the steps aloud is
+  // what made the build phase feel like a tutorial.
+  const briefing = [
+    `${contract.customer}. ${contract.briefing}`,
+    'The workshop is at the cyan marker. Mission Control will call it as you build.',
+  ];
+  briefing.forEach((line, i) => {
     const id = window.setTimeout(() => {
       if (!mission.hasFailed) say(line);
     }, i * 7200);
@@ -2107,6 +2274,21 @@ syncWorkHeight();
  * of the flight, which is how the flight deck's look is checked.
  */
 const devParams = new URLSearchParams(location.search);
+if (devParams.has('play') || devParams.has('workshop')) {
+  // ?play skips the start card; ?workshop also walks into the builder.
+  beginContract();
+  started = true;
+  startOverlay.classList.add('hidden');
+  hud.classList.remove('hidden');
+  if (devParams.has('workshop')) {
+    workshop.enter([workshopSign]);
+    // &build=id,id fits parts through the real builder, for screenshots.
+    for (const id of (devParams.get('build') ?? '').split(',').filter(Boolean)) {
+      const part = PART_LIBRARY.find(entry => entry.id === id);
+      if (part) workshop.builder?.fit(part);
+    }
+  }
+}
 if (devParams.has('flight')) {
   started = true;
   startOverlay.classList.add('hidden');

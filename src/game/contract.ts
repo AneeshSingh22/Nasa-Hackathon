@@ -31,6 +31,11 @@ export interface Contract {
     threshold: number;
     payment: number;
   };
+  /**
+   * A specific payload the customer insists on, by part id. A crew contract
+   * is not satisfied by a telescope that happens to return enough science.
+   */
+  requiredPayload?: string;
 }
 
 /**
@@ -78,6 +83,8 @@ export interface VehicleSummary {
   liftoffTWR: number;
   hasPayload: boolean;
   isComplete: boolean;
+  /** Part id of the fitted payload, if any. */
+  payloadId?: string;
 }
 
 /** Check a vehicle against a contract. */
@@ -88,7 +95,7 @@ export function evaluate(
   const margin = vehicle.totalDeltaV - contract.deltaVRequired;
   const bonusEarned = margin >= contract.marginBonus.threshold;
 
-  const checks = [
+  const checks: Array<{ label: string; met: boolean; detail: string }> = [
     {
       label: 'Stack complete',
       met: vehicle.isComplete,
@@ -114,6 +121,15 @@ export function evaluate(
     },
   ];
 
+  if (contract.requiredPayload) {
+    const carried = vehicle.payloadId === contract.requiredPayload;
+    checks.splice(1, 0, {
+      label: `Carries ${payloadName(contract.requiredPayload)}`,
+      met: carried,
+      detail: carried ? 'Aboard' : 'Required by the customer',
+    });
+  }
+
   const satisfied = checks.every((c) => c.met);
 
   return {
@@ -124,4 +140,15 @@ export function evaluate(
       : 0,
     bonusEarned: satisfied && bonusEarned,
   };
+}
+
+/** Display name for a payload id, without importing the 3D part library. */
+function payloadName(id: string): string {
+  const names: Record<string, string> = {
+    'comms-probe': 'comsat relay',
+    telescope: 'orbital telescope',
+    'crew-capsule': 'crew capsule',
+    'science-lab': 'science laboratory',
+  };
+  return names[id] ?? id;
 }

@@ -599,6 +599,43 @@ product.
   vehicle weighs, and sit there with nothing saying why. IGNITION runs a
   countdown and lights at full thrust, as every real launch does.
 
+- **A single contract with a read-aloud build order is a tutorial.** The build
+  phase had one goal, one obvious answer, and a narrator reading out "first
+  stage, second stage, payload, fairing". `game/campaign.ts` is a board of four
+  contracts with their own budgets and a golf-style par, and three stars each:
+  reach orbit, spend no more than par, and fly it by hand. The briefing now
+  states stakes, not steps.
+- **Design contracts against the flight model, not by feel.** Every buildable
+  vehicle was flown under the autopilot and each contract's budget and par set
+  from that table. `campaign.test.ts` re-flies the library and asserts every
+  contract still has at least two working builds, that par is beatable by
+  some but not all of them, and that difficulty and pay rise together. A part
+  retune that turns a puzzle into a dead end fails the suite.
+- **Mission Control's verdict is calibrated, and re-checked.** Every vehicle
+  at 9 386 m/s or more reached orbit and every one at 9 086 m/s or less did
+  not, so NO-GO sits in that gap (`game/readiness.ts`). `readiness.test.ts`
+  flies all 24 vehicles and asserts the call matches what actually happened. A
+  GO on a vehicle that cannot make orbit would be a lie the flight exposes.
+- **The affordability check never fired.** The charge hook always returned
+  true and let the budget go negative, which failed the whole mission instead
+  of refusing the part. The builder now checks `available()` first and refuses
+  with a buzz and a shake.
+- **Frame where parts will land, not where they are mid-fall.** With parts
+  dropping onto the stack, fitting quickly reframed the camera around parts
+  still in the air, and the bottom of the vehicle ended up below the frame.
+  The existing framing test caught it once the drop existed.
+- **Test the seams with the whole loop.** A flight disabled the walking
+  controller and hid the HUD, and nothing re-enabled either: after a retry the
+  player was frozen with no HUD. Every unit test passed. `tests/game-loop.test.ts`
+  plays board, workshop, flight, stars and back through the real `main.ts`, and
+  fails with the player moving 0 m if the fix is removed.
+- **Sound is procedural too.** `ui/sfx.ts` synthesises every cue with Web
+  Audio — no sample files — and degrades to silence where there is no audio
+  context. `V` mutes voice and effects together.
+- **`?play`, `?workshop` and `?workshop&build=id,id,...`** skip straight to the
+  bay or the Workshop with parts fitted through the real builder, for
+  screenshots and quick iteration.
+
 - **Never clear held keys on `pointerlockchange`.** Acquiring pointer lock
   moves focus off the start button, so clearing there drops keys the player is
   already holding. Clear on `window` `blur` instead. Workshop mode should

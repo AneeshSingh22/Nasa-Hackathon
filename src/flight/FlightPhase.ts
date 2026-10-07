@@ -106,6 +106,8 @@ export class FlightPhase {
    * moves. Without it the autopilot flicked between coasting and burning.
    */
   private circularising = false;
+  /** Set the first time the flight computer takes the controls. */
+  private autopilotUsed = false;
 
   constructor(private readonly vehicle: Vehicle) {
     this.state = initialState(vehicle);
@@ -117,6 +119,14 @@ export class FlightPhase {
 
   get peakDynamicPressure(): number {
     return this.peakQ;
+  }
+
+  /**
+   * True if the pilot flew the whole ascent themselves. The autopilot is a
+   * teaching tool, not a cheat, but flying it by hand earns a star of its own.
+   */
+  get handFlown(): boolean {
+    return !this.autopilotUsed;
   }
 
   get snapshot(): FlightSnapshot {
@@ -190,6 +200,7 @@ export class FlightPhase {
         break;
       case 'autopilot':
         this.autopilotOn = !this.autopilotOn;
+        if (this.autopilotOn) this.autopilotUsed = true;
         // Handing over on the pad means "fly it for me", which starts with
         // lighting the engines.
         if (this.autopilotOn && !this.launched) this.ignite();

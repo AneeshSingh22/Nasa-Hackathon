@@ -2017,3 +2017,198 @@ kbd {
 }
 #workshop .workshop-part:hover .workshop-tooltip,
 #workshop .workshop-part button:focus-visible + .workshop-tooltip { display: block; }
+
+/* ---------------- mission board ----------------
+   The start overlay is a board of contracts, not a page of instructions. */
+.start-card.board-card-shell {
+  max-width: 1040px;
+  width: min(1040px, calc(100vw - 32px));
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+.mission-board { display: flex; flex-direction: column; gap: 14px; margin-bottom: 18px; }
+.board-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 16px; }
+.board-header h1 { margin: 4px 0 0; }
+.board-total {
+  font: 700 18px var(--mono);
+  color: #ffd34d;
+  text-shadow: 0 0 14px rgba(255, 211, 77, 0.45);
+  white-space: nowrap;
+}
+.board-intro { margin: 0; color: var(--dim); font-size: 14px; line-height: 1.55; }
+.board-list {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.board-card {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 14px;
+  text-align: left;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: linear-gradient(180deg, rgba(82, 217, 236, 0.06), rgba(10, 14, 28, 0.6));
+  color: var(--ink);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.12s, box-shadow 0.12s;
+}
+.board-card:hover:not(:disabled) { transform: translateY(-2px); border-color: var(--cyan); }
+.board-card.selected {
+  border-color: var(--cyan);
+  box-shadow: 0 0 0 1px var(--cyan), 0 8px 28px rgba(82, 217, 236, 0.18);
+}
+.board-card:disabled { cursor: not-allowed; opacity: 0.5; filter: grayscale(0.6); }
+.card-top { display: flex; justify-content: space-between; gap: 8px; }
+.card-customer { font: 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.card-difficulty {
+  font: 700 9px var(--mono);
+  letter-spacing: 0.14em;
+  padding: 2px 6px;
+  border-radius: 3px;
+  border: 1px solid currentColor;
+  height: fit-content;
+}
+.card-difficulty[data-level="1"] { color: var(--green); }
+.card-difficulty[data-level="2"] { color: var(--cyan); }
+.card-difficulty[data-level="3"] { color: #ffb400; }
+.card-difficulty[data-level="4"] { color: var(--burn); }
+.card-title { font: 700 20px var(--display); color: #fff; }
+.card-tagline { font-size: 13px; line-height: 1.45; color: var(--dim); min-height: 38px; }
+.card-facts { display: flex; gap: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
+.card-facts span { display: flex; flex-direction: column; gap: 1px; }
+.card-facts small { font: 9px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.card-facts b { font: 700 13px var(--mono); color: var(--ink); }
+.card-stars { display: flex; gap: 4px; font-size: 20px; line-height: 1; }
+.card-stars i { font-style: normal; color: rgba(255, 255, 255, 0.14); }
+.card-stars i.earned { color: #ffd34d; text-shadow: 0 0 10px rgba(255, 211, 77, 0.6); }
+.controls.compact {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-bottom: 14px;
+}
+.controls.compact > div { display: flex; align-items: center; gap: 6px; }
+
+/* ---------------- Mission Control verdict ----------------
+   Right edge in the Workshop, over the gantry: top-centre covered the payload,
+   which is the very part the verdict is usually about. */
+#workshop .mission-verdict {
+  position: fixed;
+  top: 86px;
+  right: 16px;
+  width: 300px;
+  padding: 10px 18px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  border-top: 3px solid var(--dim);
+  background: var(--panel);
+  backdrop-filter: blur(10px);
+  text-align: center;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+#workshop .mission-verdict small {
+  font: 700 9px var(--mono);
+  letter-spacing: 0.22em;
+  color: var(--faint);
+}
+#workshop .mission-verdict strong {
+  font: 800 30px/1.05 var(--display);
+  letter-spacing: 0.06em;
+  color: var(--dim);
+}
+#workshop .mission-verdict span { font-size: 12px; line-height: 1.4; color: var(--dim); }
+#workshop .verdict-gauge {
+  height: 6px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+  margin-top: 2px;
+}
+#workshop .verdict-gauge i {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--dim);
+  transition: width 0.45s cubic-bezier(.2, .9, .3, 1.2), background 0.3s;
+}
+#workshop .verdict-par { font: 11px var(--mono); color: var(--green); }
+#workshop .verdict-par.over { color: var(--caution, #ffb400); }
+#workshop .mission-verdict[data-verdict="go"] { border-top-color: var(--green); }
+#workshop .mission-verdict[data-verdict="go"] strong { color: var(--green); text-shadow: 0 0 18px rgba(95, 217, 154, 0.5); }
+#workshop .mission-verdict[data-verdict="go"] .verdict-gauge i { background: var(--green); }
+#workshop .mission-verdict[data-verdict="marginal"] { border-top-color: #ffb400; }
+#workshop .mission-verdict[data-verdict="marginal"] strong { color: #ffb400; text-shadow: 0 0 18px rgba(255, 180, 0, 0.45); }
+#workshop .mission-verdict[data-verdict="marginal"] .verdict-gauge i { background: #ffb400; }
+#workshop .mission-verdict[data-verdict="nogo"] { border-top-color: var(--burn); }
+#workshop .mission-verdict[data-verdict="nogo"] strong { color: var(--burn); text-shadow: 0 0 18px rgba(255, 107, 61, 0.5); }
+#workshop .mission-verdict[data-verdict="nogo"] .verdict-gauge i { background: var(--burn); }
+#workshop .mission-verdict.changed { animation: verdict-pop 0.5s ease-out; }
+@keyframes verdict-pop {
+  0% { transform: scale(1); }
+  35% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+/* Money leaving the programme, floating off the readout. */
+#workshop .cost-float {
+  position: fixed;
+  top: 64px;
+  right: 120px;
+  font: 800 26px var(--mono);
+  pointer-events: none;
+  animation: cost-rise 1.4s ease-out forwards;
+}
+#workshop .cost-float.spend { color: var(--burn); text-shadow: 0 0 12px rgba(255, 107, 61, 0.6); }
+#workshop .cost-float.refund { color: var(--green); text-shadow: 0 0 12px rgba(95, 217, 154, 0.6); }
+@keyframes cost-rise {
+  0% { opacity: 0; transform: translateY(14px) scale(0.9); }
+  15% { opacity: 1; transform: translateY(0) scale(1.1); }
+  100% { opacity: 0; transform: translateY(-46px) scale(1); }
+}
+
+/* A refused part jolts the palette. */
+#workshop .rocket-palette.shake { animation: palette-shake 0.36s ease-in-out; }
+@keyframes palette-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-7px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(3px); }
+}
+
+/* ---------------- results rating ---------------- */
+#win-stats.rating { display: flex; flex-direction: column; gap: 14px; }
+.rating-stars { display: flex; flex-direction: column; gap: 8px; }
+.rating-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 600 15px var(--body);
+  color: var(--faint);
+  transition: color 0.3s;
+}
+.rating-row i {
+  font-style: normal;
+  font-size: 30px;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.12);
+  transition: color 0.3s, transform 0.3s, text-shadow 0.3s;
+}
+.rating-row.earned { color: var(--ink); }
+.rating-row.earned i {
+  color: #ffd34d;
+  transform: scale(1.15);
+  text-shadow: 0 0 18px rgba(255, 211, 77, 0.75);
+  animation: star-pop 0.45s ease-out;
+}
+@keyframes star-pop {
+  0% { transform: scale(0.3) rotate(-30deg); }
+  60% { transform: scale(1.4) rotate(8deg); }
+  100% { transform: scale(1.15) rotate(0); }
+}
+.rating-money { display: flex; gap: 10px; flex-wrap: wrap; }

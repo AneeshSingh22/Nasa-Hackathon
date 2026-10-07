@@ -85,6 +85,7 @@ export class WorkshopSession {
 
   update(): void {
     this.orbit.update();
+    this.builder?.tick();
   }
 
   exit(): void {

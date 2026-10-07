@@ -17,21 +17,14 @@
 
       <!-- Click-to-start overlay. Pointer lock requires a user gesture. -->
       <div id="start-overlay" class="overlay">
-        <div class="start-card">
-          <p class="eyebrow">Ad Astra Program · Mission 02</p>
-          <h1>Vehicle Assembly Building</h1>
-          <p class="blurb">
-            Explore the bay, then enter the workshop to build. Walk to the cyan
-            Workshop marker and press E to view your floating Command Pod.
-            Choose a tank or engine, then click a green attachment point to build.
-          </p>
-          <div class="controls">
-            <div><kbd>WASD</kbd><span>Walk (arrow keys also work)</span></div>
-            <div><kbd>Shift</kbd><span>Run</span></div>
+        <div class="start-card board-card-shell">
+          <!-- The mission board (ui/MissionBoard.ts) is inserted here. -->
+          <div class="controls compact">
+            <div><kbd>WASD</kbd><span>Walk</span></div>
             <div><kbd>Mouse</kbd><span>Look</span></div>
-            <div><kbd>E</kbd><span>Enter Workshop at the cyan marker</span></div>
-            <div><kbd>Esc</kbd><span>Leave Workshop / release cursor</span></div>
-            <div><kbd>T</kbd><span>Ask for advice</span></div>
+            <div><kbd>E</kbd><span>Enter workshop</span></div>
+            <div><kbd>T</kbd><span>Advice</span></div>
+            <div><kbd>V</kbd><span>Sound</span></div>
             <div><kbd>H</kbd><span>Controls</span></div>
           </div>
           <button id="start-button">Enter the building</button>
@@ -226,7 +219,8 @@
           <p class="win-note" id="win-note">—</p>
           <div class="win-buttons">
             <button id="win-launch">Fly it &rarr;</button>
-            <button id="win-again">Build another</button>
+            <button id="win-retry">Retry mission</button>
+            <button id="win-again">Mission board</button>
           </div>
         </div>
       </div>

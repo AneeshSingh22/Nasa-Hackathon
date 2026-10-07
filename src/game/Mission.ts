@@ -65,7 +65,7 @@ export const COSTS = {
 
 export class Mission {
   private state: MissionConstraints;
-  private readonly start: MissionConstraints;
+  private start: MissionConstraints;
   private failure: FailureReason = null;
   private failureMessage: string | null = null;
 
@@ -92,6 +92,23 @@ export class Mission {
 
   get hasFailed(): boolean {
     return this.failure !== null;
+  }
+
+  /** The budget this mission began with, millions. */
+  get startingBudget(): number {
+    return this.start.budget;
+  }
+
+  /**
+   * Begin a different contract, with its own budget.
+   *
+   * Each contract on the board sets its own starting money, so the same
+   * mission object is re-seeded rather than replaced: the HUD's listeners are
+   * wired to this instance.
+   */
+  restart(start: MissionConstraints): void {
+    this.start = { ...start };
+    this.reset();
   }
 
   reset(): void {

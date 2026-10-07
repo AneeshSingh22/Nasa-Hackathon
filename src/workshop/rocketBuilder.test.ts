@@ -25,6 +25,10 @@ function click(partId: string) {
 function readout() {
   return chrome.querySelector('.rocket-readout')!.textContent!;
 }
+/** Let any falling parts land, as a few frames of play would. */
+function settle(target: RocketBuilder = builder) {
+  target.tick(performance.now() + 10_000);
+}
 function enabled(partId: string) {
   return !chrome.querySelector<HTMLButtonElement>(`[data-part="${partId}"]`)!.disabled;
 }
@@ -121,11 +125,13 @@ describe('Workshop rocket builder', () => {
 
   it('puts the fitted part in the scene where the stack expects it', () => {
     click('solid-booster');
+    settle();
     const mesh = root.getObjectByName('solid-booster');
     expect(mesh).toBeDefined();
     expect(mesh!.position.y).toBe(0);
 
     click('upper-stage');
+    settle();
     const upper = root.getObjectByName('upper-stage')!;
     // The second stage sits on top of the booster, not inside it.
     const booster = PART_LIBRARY.find(part => part.id === 'solid-booster')!;
@@ -151,6 +157,7 @@ describe('changing your mind', () => {
     // Change the payload with the fairing already on: the whole point of a
     // swap is not having to tear the stack down.
     click('crew-capsule');
+    settle();
     expect(assembly.parts.map(p => p.id)).toEqual(
       ['core-booster', 'upper-stage', 'crew-capsule', 'fairing'],
     );
@@ -253,6 +260,7 @@ describe('framing', () => {
     for (const id of ['extended-booster', 'upper-stage', 'science-lab', 'fairing']) {
       builder2.fit(PART_LIBRARY.find(part => part.id === id)!);
     }
+    settle(builder2);
     const box = new THREE.Box3().setFromObject(root2);
     const size = box.getSize(new THREE.Vector3());
     // A mockup, not a 67 m rocket.
@@ -266,5 +274,69 @@ describe('framing', () => {
       const projected = corner.clone().project(camera);
       expect(Math.abs(projected.y)).toBeLessThan(1);
     }
+  });
+});
+
+describe('feel and feedback', () => {
+  function rig(start: number) {
+    let money = start;
+    const camera = new THREE.PerspectiveCamera(72, 1.5, 0.1, 400);
+    const shell = document.createElement('section');
+    document.body.append(shell);
+    const stackRoot = new THREE.Group();
+    const stack = new Assembly(stackRoot, createMaterials());
+    const built = new RocketBuilder(stack, stackRoot, camera, new OrbitCamera(camera), shell, {
+      charge: part => { money -= part.cost; return true; },
+      refund: part => { money += part.cost * 0.5; },
+      spent: () => start - money,
+      changed: () => {},
+      refuse: () => {},
+      launch: () => {},
+      available: () => money,
+      par: () => 240,
+    });
+    return { built, stack, stackRoot, shell, money: () => money };
+  }
+
+  it('refuses a part the budget cannot cover instead of going bankrupt', () => {
+    // The charge used to always succeed and drive the budget negative, which
+    // failed the whole mission rather than simply saying no.
+    const { built, stack, shell, money } = rig(100);
+    built.fit(PART_LIBRARY.find(p => p.id === 'core-booster')!); // $148M
+    expect(stack.parts).toHaveLength(0);
+    expect(money()).toBe(100);
+    expect(shell.querySelector('.rocket-palette')!.classList.contains('shake')).toBe(true);
+  });
+
+  it('drops a fitted part from above and lands it exactly on its seat', () => {
+    const { built, stackRoot } = rig(480);
+    built.fit(PART_LIBRARY.find(p => p.id === 'core-booster')!);
+    const mesh = stackRoot.getObjectByName('core-booster')!;
+    const start = performance.now();
+    expect(mesh.position.y).toBeGreaterThan(10);
+    built.tick(start + 200);
+    const midway = mesh.position.y;
+    expect(midway).toBeGreaterThan(0);
+    built.tick(start + 10_000);
+    expect(mesh.position.y).toBe(0);
+  });
+
+  it('floats the cost off the readout', () => {
+    const { built, shell } = rig(480);
+    built.fit(PART_LIBRARY.find(p => p.id === 'solid-booster')!);
+    const float = shell.querySelector('.cost-float.spend');
+    expect(float?.textContent).toMatch(/96/);
+  });
+
+  it('shows Mission Control\u2019s call and the par as the stack is built', () => {
+    const { built, shell } = rig(300);
+    const verdict = () => shell.querySelector<HTMLElement>('.mission-verdict')!;
+    expect(verdict().dataset.verdict).toBe('incomplete');
+    for (const id of ['solid-booster', 'kerolox-upper', 'comms-probe', 'fairing']) {
+      built.fit(PART_LIBRARY.find(p => p.id === id)!);
+    }
+    // 10 385 m/s on the cheapest relay build: comfortably GO.
+    expect(verdict().dataset.verdict).toBe('go');
+    expect(verdict().textContent).toMatch(/Par \$240M · spent \$236M/);
   });
 });
