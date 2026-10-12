@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { Mission, MISSION_2_START, COSTS } from './Mission';
+import { Mission, MISSION_2_START, COSTS, BUILD_SECONDS_PER_DAY } from './Mission';
 import { PART_LIBRARY } from '../vab/parts';
 
 /**
@@ -98,13 +98,7 @@ describe('Mission constraints', () => {
 
   it('scrubs the mission when the launch window closes', () => {
     const m = new Mission();
-    // Burn days without spending much money, using the cheapest part.
-    const cheap = cost('fairing');
-    for (let i = 0; i < 12; i++) {
-      if (m.status.failed) break;
-      m.removePart(cheap);
-      m.fitPart(cheap);
-    }
+    m.advanceBuildTime(MISSION_2_START.daysRemaining * BUILD_SECONDS_PER_DAY);
     expect(m.status.failed).toBe(true);
     expect(m.status.failureReason).toBe('schedule');
     expect(m.status.failureText).toContain('window');
@@ -235,4 +229,59 @@ describe('accidents', () => {
     expect(m.status.failureReason).toBeNull();
     expect(m.status.budget).toBe(MISSION_2_START.budget);
   });
+});
+
+describe('continuous build schedule', () => {
+  it('makes one day exactly 20 active seconds, independent of part actions', () => {
+    const mission = new Mission();
+    mission.advanceBuildTime(10);
+    expect(mission.status.daysRemaining).toBeCloseTo(23.5);
+    mission.fitPart(10);
+    mission.removePart(10);
+    mission.clearStand(0);
+    expect(mission.status.daysRemaining).toBeCloseTo(23.5);
+    mission.advanceBuildTime(10);
+    expect(mission.status.daysRemaining).toBeCloseTo(23);
+  });
+
+  it('warns once, expires at eight minutes, and freezes until reset', () => {
+    const mission = new Mission();
+    const warnings: string[] = [];
+    let failures = 0;
+    mission.onWarning = text => warnings.push(text);
+    mission.onFailure = () => { failures++; };
+    mission.advanceBuildTime(360);
+    mission.advanceBuildTime(10);
+    expect(warnings).toHaveLength(1);
+    expect(mission.hasFailed).toBe(false);
+    mission.advanceBuildTime(110);
+    expect(mission.status.daysRemaining).toBe(0);
+    expect(mission.status.failureReason).toBe('schedule');
+    mission.advanceBuildTime(100);
+    expect(failures).toBe(1);
+    expect(mission.status.daysRemaining).toBe(0);
+    mission.reset();
+    expect(mission.status.daysRemaining).toBe(24);
+  });
+
+  it('ignores invalid deltas and accumulates small steps without a phantom extra day', () => {
+    const mission = new Mission();
+    for (const dt of [NaN, Infinity, -1, 0]) mission.advanceBuildTime(dt);
+    expect(mission.status.daysRemaining).toBe(24);
+    for (let i = 0; i < 4800; i++) mission.advanceBuildTime(0.1);
+    expect(mission.status.daysRemaining).toBe(0);
+    expect(mission.status.failureReason).toBe('schedule');
+  });
+});
+
+
+it('returns Workshop hardware at full purchase price without a confidence penalty', () => {
+  const mission = new Mission();
+  const before = mission.status;
+  mission.fitPart(40);
+  expect(mission.returnHardware(40)).toBe(true);
+  expect(mission.status.budget).toBe(before.budget);
+  expect(mission.status.confidence).toBe(before.confidence);
+  expect(mission.returnHardware(-1)).toBe(false);
+  expect(mission.returnHardware(NaN)).toBe(false);
 });

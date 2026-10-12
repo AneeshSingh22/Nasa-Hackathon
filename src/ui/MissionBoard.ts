@@ -11,7 +11,7 @@ import {
  * are the reason to come back to one already finished.
  */
 
-const DIFFICULTY_NAMES = ['EASY', 'NORMAL', 'HARD', 'EXPERT'];
+const DIFFICULTY_NAMES = ['Easy', 'Normal', 'Hard', 'Expert'];
 
 export interface MissionBoardOptions {
   readonly onSelect: (contract: CampaignContract) => void;
@@ -32,12 +32,9 @@ export class MissionBoard {
     const header = document.createElement('header');
     header.className = 'board-header';
     const titles = document.createElement('div');
-    const eyebrow = document.createElement('p');
-    eyebrow.className = 'eyebrow';
-    eyebrow.textContent = 'Ad Astra Program · Contract board';
     const heading = document.createElement('h1');
     heading.textContent = 'Choose your mission';
-    titles.append(eyebrow, heading);
+    titles.append(heading);
     this.total = document.createElement('div');
     this.total.className = 'board-total';
     header.append(titles, this.total);

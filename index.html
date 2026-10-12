@@ -4,12 +4,6 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Ad Astra Program — Vehicle Assembly Building</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@400;600;700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;700&display=swap"
-      rel="stylesheet"
-    />
   </head>
   <body>
     <div id="app">
@@ -20,8 +14,7 @@
         <div class="start-card board-card-shell">
           <!-- The mission board (ui/MissionBoard.ts) is inserted here. -->
           <div class="controls compact">
-            <div><kbd>WASD</kbd><span>Walk</span></div>
-            <div><kbd>Mouse</kbd><span>Look</span></div>
+            <div><kbd>Click</kbd><span>Choose a mission</span></div>
             <div><kbd>E</kbd><span>Enter workshop</span></div>
             <div><kbd>T</kbd><span>Advice</span></div>
             <div><kbd>V</kbd><span>Sound</span></div>
@@ -32,14 +25,22 @@
       </div>
 
       <section id="workshop" class="hidden" aria-label="Workshop">
-        <div><strong>Workshop</strong><span>Vehicle assembly</span></div>
-        <p>Drag: orbit · Right / middle drag: pan · Scroll: zoom · <kbd>Q</kbd>: remove top part</p>
-        <button type="button">Return to bay <kbd>Esc</kbd></button>
+        <header class="workshop-heading"><button type="button" data-workshop-exit aria-label="Return to VAB hub">×</button><h1>Workshop</h1></header>
+        <div class="workshop-topbar">
+          <button type="button" id="workshop-contract-toggle" aria-expanded="false" aria-controls="workshop-contract-monitor">Contract <span aria-hidden="true">▾</span></button>
+          <div class="workshop-budget"><span>Budget</span><span id="workshop-budget"></span><b>M</b></div>
+          <div class="workshop-time"><span>Days</span><b id="workshop-build-days">24</b><small id="workshop-build-time">8:00</small></div>
+        </div>
+        <div id="workshop-contract-monitor" hidden aria-label="Mission contract monitor"></div>
       </section>
+
+      <button id="hub-launch-button" class="hidden" type="button" disabled aria-label="Launch rocket — not ready">
+        <span aria-hidden="true">↗</span><strong>Launch</strong><small>Not ready</small>
+      </button>
 
       <!-- In-game HUD -->
       <div id="hud" class="hidden">
-        <div id="crosshair"></div>
+        <button id="hub-build-button" type="button"><span>Vehicle assembly</span><strong>Build rocket <kbd>E</kbd></strong></button>
 
         <!-- Engineering readout, styled as a board on the VAB wall -->
         <section id="readout" class="hidden" aria-label="Vehicle engineering readout">
@@ -66,7 +67,7 @@
             <div class="budget-bar"><i id="budget-fill"></i></div>
           </div>
           <p id="verdict" class="verdict warn">
-            Walk to the assembly stand and press E to fit the first stage.
+            Enter the workshop to build your rocket.
           </p>
         </section>
 
@@ -85,16 +86,22 @@
         <!-- Mission resources: the three ways to lose -->
         <section id="resources" aria-label="Mission resources">
           <header>
-            <span class="panel-title">Programme Status</span>
-            <span id="res-mission" class="pill">Mission 02</span>
+            <span class="panel-title">Program Status</span>
           </header>
-          <div class="res-row">
-            <div class="res-head"><span>Budget</span><b id="res-budget">$480M</b></div>
-            <div class="res-bar"><i id="res-budget-bar" class="fill-budget"></i></div>
+          <div class="launch-instrument">
+            <div id="launch-dial" class="launch-dial" role="meter" aria-label="Build time remaining" aria-valuemin="0" aria-valuemax="24" aria-valuenow="24">
+              <svg viewBox="0 0 120 120" aria-hidden="true">
+                <circle class="dial-track" cx="60" cy="60" r="52" />
+                <circle id="res-days-bar" class="dial-progress" cx="60" cy="60" r="52" pathLength="100" />
+              </svg>
+              <div class="dial-face"><b id="res-days">24</b><span>days left</span><small id="res-time">8:00</small></div>
+            </div>
+            <span class="instrument-label">Build time remaining</span>
           </div>
-          <div class="res-row">
-            <div class="res-head"><span>Launch window</span><b id="res-days">24 days</b></div>
-            <div class="res-bar"><i id="res-days-bar" class="fill-days"></i></div>
+          <div class="budget-instrument">
+            <span class="instrument-label">Available budget</span>
+            <div class="budget-counter"><span class="budget-currency" aria-hidden="true">$</span><div id="res-budget" role="img" aria-label="480 million dollars"></div><span class="budget-unit" aria-hidden="true">M</span></div>
+            <span class="instrument-unit">Millions of dollars</span>
           </div>
           <div class="res-row">
             <div class="res-head"><span>Director confidence</span><b id="res-conf">80%</b></div>
@@ -144,15 +151,18 @@
 
         <!-- Next-action prompt -->
         <div id="prompt" class="prompt" data-key="E">
-          <kbd id="prompt-key">E</kbd><span id="prompt-text">Walk to the cyan Workshop marker to build</span>
+          <kbd id="prompt-key">E</kbd><span id="prompt-text">Enter the workshop to build</span>
         </div>
 
         <!-- CAPCOM dialogue -->
         <div id="capcom">
+          <div class="capcom-portrait-frame"><img class="capcom-portrait" src="/images/space-director.jpeg" alt="Elena Vásquez, flight director" width="88" height="108" /></div>
+          <div class="capcom-dialogue">
           <span class="capcom-who">Elena Vásquez · Flight Director</span>
           <p id="capcom-text">
-            Explore the bay, then enter the workshop at the cyan marker to build.
+            Your rocket is in the VAB. Select Build rocket to enter the workshop.
           </p>
+          </div>
         </div>
 
         <div id="build-log" aria-live="polite"></div>
@@ -178,25 +188,20 @@
           </header>
 
           <div class="help-body">
-            <h3>Explore the bay</h3>
+            <h3>VAB hub</h3>
             <dl class="keymap">
-              <dt><kbd>WASD</kbd> / arrow keys</dt><dd>Walk</dd>
-              <dt><kbd>Shift</kbd></dt><dd>Run</dd>
-              <dt>Mouse</dt><dd>Look around (drag if pointer lock is unavailable)</dd>
-              <dt><kbd>E</kbd> at the cyan marker</dt><dd>Enter the workshop to build</dd>
-              <dt><kbd>Esc</kbd></dt><dd>Release the cursor; click the view to take it back</dd>
+              <dt>Build rocket / <kbd>E</kbd></dt><dd>Enter the workshop from the platform</dd>
               <dt><kbd>H</kbd></dt><dd>Show or hide controls</dd>
-              <dt><kbd>T</kbd></dt><dd>Ask for advice</dd>
-              <dt><kbd>P</kbd></dt><dd>Graphics: full effects / fast</dd>
-              <dt><kbd>V</kbd></dt><dd>Mute or unmute the flight director</dd>
+              <dt><kbd>T</kbd></dt><dd>Ask Mission Control for advice</dd>
             </dl>
+
             <h3>Workshop camera</h3>
             <dl class="keymap">
               <dt>Left drag</dt><dd>Orbit the Command Pod</dd>
               <dt>Right / middle drag, or Shift + left drag</dt><dd>Pan</dd>
               <dt>Scroll</dt><dd>Zoom</dd>
               <dt><kbd>Q</kbd> / Backspace</dt><dd>Remove the last attached part</dd>
-              <dt><kbd>Esc</kbd></dt><dd>Cancel placement first; press again to return to the bay</dd>
+              <dt><kbd>Esc</kbd></dt><dd>Return to the VAB hub</dd>
             </dl>
             <p>Choose a tank or engine from the Workshop palette, move its ghost to
               an attachment sphere, then click to attach. Green means compatible;

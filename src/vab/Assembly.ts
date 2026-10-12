@@ -1,7 +1,12 @@
 import * as THREE from 'three';
 import { PART_LIBRARY, buildPartMesh, type Materials, type PartDefinition } from './parts';
+import { MODULAR_PARTS } from '../workshop/modularParts';
+import { attachmentAllowed, BUILD_ANCHOR_Y, insertionIndex, type Port } from '../workshop/attachments';
+import { modularAnalysis, modularComplete } from '../workshop/modularVehicle';
 import { G0 } from '../physics/constants';
 import { deltaV } from '../physics/rocket';
+import { LEO_DELTA_V_REQUIRED } from '../game/launchRequirements';
+export { LEO_DELTA_V_REQUIRED } from '../game/launchRequirements';
 
 /**
  * The assembled stack, and the live engineering readout derived from it.
@@ -23,11 +28,12 @@ export interface StackAnalysis {
   verdictLevel: 'good' | 'warn' | 'bad';
 }
 
-/** Delta-v needed for low Earth orbit including gravity and drag losses. */
-export const LEO_DELTA_V_REQUIRED = 9400;
 
 export class Assembly {
   private stack: PartDefinition[] = [];
+  private modular = false;
+  private instanceSequence = 0;
+  private anchorId: string | null = null;
   private meshes = new Map<string, THREE.Group>();
   private root: THREE.Object3D;
   private mats: Materials;
@@ -44,6 +50,84 @@ export class Assembly {
   /** The meshes of the fitted parts, for code that needs to show or hide them. */
   get meshObjects(): readonly THREE.Object3D[] {
     return [...this.meshes.values()];
+  }
+
+  preview(part: PartDefinition): THREE.Group { return buildPartMesh(part, this.mats); }
+
+  get lastInstalled(): PartDefinition | null {
+    const id = [...this.meshes.keys()].at(-1);
+    return this.stack.find(p => (p.instanceId ?? p.id) === id) ?? null;
+  }
+
+  get isModular(): boolean { return this.modular; }
+  enableModular(): void { if (!this.stack.length) this.modular = true; }
+  meshFor(instanceId: string): THREE.Object3D | undefined { return this.meshes.get(instanceId); }
+
+  attachModular(part: PartDefinition, port: Port): PartDefinition | null {
+    if (!this.modular || !attachmentAllowed(this.stack, part, port)) return null;
+    const index = insertionIndex(this.stack, port)!;
+    const installed: PartDefinition = { ...part, instanceId: `${part.id}:${++this.instanceSequence}`,
+      mount: part.kind === 'command' ? 'root' : part.kind === 'payload' ? 'payload' : part.kind === 'fairing' ? 'fairing' : 'lower' };
+    if (!this.stack.length) this.anchorId = installed.instanceId!;
+    this.stack.splice(index, 0, installed);
+    const mesh = buildPartMesh(part, this.mats);
+    mesh.userData.assemblyPartId = installed.instanceId;
+    this.meshes.set(installed.instanceId!, mesh); this.root.add(mesh);
+    this.layoutModular();
+    return installed;
+  }
+
+  /** Graph queries cannot rely on purchase order now that parts may be added above. */
+  dependentIds(instanceId: string): Set<string> {
+    const ids = new Set([instanceId]); let grew = true;
+    while (grew) {
+      grew = false;
+      for (const p of this.stack) if (p.parentId && ids.has(p.parentId) && !ids.has(p.instanceId!)) {
+        ids.add(p.instanceId!); grew = true;
+      }
+    }
+    return ids;
+  }
+
+  /** A sell removes only that object. A subtree return remains available for callers
+   * that explicitly want it; remaining parts reconnect and retain their full value. */
+  removeModular(instanceId: string, subtree = true): PartDefinition[] {
+    const ids = subtree ? this.dependentIds(instanceId) : new Set([instanceId]);
+    const removed = this.stack.filter(p => ids.has(p.instanceId ?? ''));
+    if (!removed.length) return [];
+    const oldIndex = this.stack.findIndex(p => p.instanceId === this.anchorId);
+    this.stack = this.stack.filter(p => !ids.has(p.instanceId ?? ''));
+    if (ids.has(this.anchorId ?? '')) this.anchorId = this.stack[Math.min(oldIndex, this.stack.length - 1)]?.instanceId ?? null;
+    for (const part of removed) {
+      const key = part.instanceId!; const mesh = this.meshes.get(key);
+      if (mesh) { this.root.remove(mesh); disposeGroup(mesh); this.meshes.delete(key); }
+    }
+    this.layoutModular();
+    return removed;
+  }
+
+  private layoutModular(): void {
+    const anchor = this.stack.findIndex(p => p.instanceId === this.anchorId);
+    if (anchor < 0) return;
+    const below = this.stack.slice(anchor + 1).reduce((sum, p) => sum + p.height, 0);
+    const above = this.stack.slice(0, anchor + 1).reduce((sum, p) => sum + p.height, 0);
+    // Keep any seed suspended, without sending tall engine-first builds into
+    // the ceiling or fairing-first builds through the stand.
+    const y = THREE.MathUtils.clamp(BUILD_ANCHOR_Y, below + 4, 76 - above);
+    this.meshes.get(this.anchorId!)!.position.y = y;
+    for (let i = anchor - 1; i >= 0; i--) {
+      const part = this.stack[i]!, under = this.stack[i + 1]!;
+      this.meshes.get(part.instanceId!)!.position.y = this.meshes.get(under.instanceId!)!.position.y + under.height;
+    }
+    for (let i = anchor + 1; i < this.stack.length; i++) {
+      const part = this.stack[i]!, over = this.stack[i - 1]!;
+      this.meshes.get(part.instanceId!)!.position.y = this.meshes.get(over.instanceId!)!.position.y - part.height;
+    }
+    for (let i = 0; i < this.stack.length; i++) {
+      const part = this.stack[i]!;
+      part.parentId = i === anchor ? undefined : this.stack[i < anchor ? i + 1 : i - 1]!.instanceId;
+    }
+    this.root.updateMatrixWorld(true);
   }
 
   /**
@@ -63,6 +147,7 @@ export class Assembly {
 
   /** The kind of part the next slot expects, or null when complete. */
   nextSlot(): PartDefinition['kind'] | null {
+    if (this.modular) return !this.stack.length ? 'tank' : this.isComplete() ? null : !this.stack.some(p => p.kind === 'payload') ? 'payload' : 'tank';
     return Assembly.SLOTS[this.stack.length] ?? null;
   }
 
@@ -70,7 +155,7 @@ export class Assembly {
   candidates(): PartDefinition[] {
     const kind = this.nextSlot();
     if (!kind) return [];
-    return PART_LIBRARY.filter((p) => p.kind === kind);
+    return (this.modular ? MODULAR_PARTS : PART_LIBRARY).filter((p) => p.kind === kind);
   }
 
   /**
@@ -116,7 +201,7 @@ export class Assembly {
   }
 
   isComplete(): boolean {
-    return this.stack.length === Assembly.SLOTS.length;
+    return this.modular ? modularComplete(this.stack) : this.stack.length === Assembly.SLOTS.length;
   }
 
   /**
@@ -203,6 +288,7 @@ export class Assembly {
 
   /** Remove the topmost part. */
   detachTop(): PartDefinition | null {
+    if (this.modular) { const last = this.stack.at(-1); return last ? this.removeModular(last.instanceId!)[0] ?? null : null; }
     const part = this.stack.pop();
     if (!part) return null;
     const mesh = this.meshes.get(part.id);
@@ -240,6 +326,7 @@ export class Assembly {
    * mass that every stage below them has to accelerate.
    */
   analyze(): StackAnalysis {
+    if (this.modular) return modularAnalysis(this.stack);
     const boosters = this.stack.filter((p) => p.kind === 'booster' || p.kind === 'upper');
     const deadMass = this.stack
       .filter((p) => p.kind === 'payload' || p.kind === 'fairing')

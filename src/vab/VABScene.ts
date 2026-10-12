@@ -15,6 +15,9 @@ import type { BlueprintState } from './blueprint';
 
 export const VAB_WIDTH = 60;
 export const VAB_DEPTH = 46;
+// Scenery extends beyond the old walkable footprint so orthographic viewport
+// corners always hit floor/wall geometry, including on ultrawide screens.
+export const VAB_SCENERY_EXTENT = 600;
 /**
  * Ceiling height.
  *
@@ -76,7 +79,7 @@ export function createVABScene(): VABEnvironment {
   // dragging heavy hardware around. A flat grey plane the size of the bay is
   // the largest single surface on screen, so it sets the tone for everything.
   const floorMaps = bayFloor();
-  if (floorMaps) setRepeat(floorMaps, 7, 6);
+  if (floorMaps) setRepeat(floorMaps, 70, 78);
   const concrete = new THREE.MeshStandardMaterial({
     color: 0x6f7885,
     roughness: 0.88,
@@ -92,7 +95,7 @@ export function createVABScene(): VABEnvironment {
   // The walls are clad in panels, which gives the bay its sense of scale: the
   // eye counts panels to judge how big the room is.
   const wallMaps = hullPlating(11);
-  if (wallMaps) setRepeat(wallMaps, 6, 9);
+  if (wallMaps) setRepeat(wallMaps, 60, 9);
   const wallMat = new THREE.MeshStandardMaterial({
     color: 0xa8b0bd,
     roughness: 0.8,
@@ -134,7 +137,7 @@ export function createVABScene(): VABEnvironment {
 
   // ---- floor ----
   const floor = new THREE.Mesh(
-    new THREE.PlaneGeometry(VAB_WIDTH, VAB_DEPTH),
+    new THREE.PlaneGeometry(VAB_SCENERY_EXTENT, VAB_SCENERY_EXTENT),
     concrete,
   );
   floor.rotation.x = -Math.PI / 2;
@@ -150,7 +153,7 @@ export function createVABScene(): VABEnvironment {
   scene.add(ring);
 
   // Floor grid lines, cheap and they sell the industrial scale.
-  const grid = new THREE.GridHelper(VAB_WIDTH, 23, 0x2c313c, 0x23272f);
+  const grid = new THREE.GridHelper(VAB_SCENERY_EXTENT, 230, 0x2c313c, 0x23272f);
   // Floor decal layers, well separated. Coplanar surfaces within a few
   // millimetres of each other z-fight and flicker as the camera moves, which
   // is what made the elevator deck and the floor markings shimmer.
@@ -168,7 +171,7 @@ export function createVABScene(): VABEnvironment {
     { w: VAB_DEPTH, h: VAB_HEIGHT, pos: [halfW, VAB_HEIGHT / 2, 0], rotY: -Math.PI / 2 },
   ];
   for (const spec of wallSpecs) {
-    const wall = new THREE.Mesh(new THREE.PlaneGeometry(spec.w, spec.h), wallMat);
+    const wall = new THREE.Mesh(new THREE.PlaneGeometry(VAB_SCENERY_EXTENT, spec.h), wallMat);
     wall.position.set(...spec.pos);
     wall.rotation.y = spec.rotY;
     scene.add(wall);
@@ -248,6 +251,9 @@ export function createVABScene(): VABEnvironment {
   // ---- vertical structural columns ----
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
+      // This near-left corner column projected directly over the assembly
+      // platform in the fixed hub view; omit it for a clear sightline.
+      if (sx === -1 && sz === 1) continue;
       const column = new THREE.Mesh(
         new THREE.BoxGeometry(1.2, VAB_HEIGHT, 1.2),
         steel,
@@ -728,6 +734,7 @@ export function createVABScene(): VABEnvironment {
   ];
   for (const sx of [-1, 1]) {
     for (const sz of [-1, 1]) {
+      if (sx === -1 && sz === 1) continue;
       structureObstacles.push({
         x: sx * (halfW - 1.4),
         z: sz * (halfD - 1.4),

@@ -1,3 +1,4 @@
+import { LEO_DELTA_V_REQUIRED } from './launchRequirements';
 /**
  * The mission contract: what the customer actually wants.
  *
@@ -54,7 +55,7 @@ export const CONTRACT_FIRST_ORBIT: Contract = {
     'Place an instrument package in a stable low orbit above 200 kilometres, returning at least 100 units of science. Vehicle design is at the contractor\u2019s discretion. Payment on orbital insertion.',
   minScience: 100,
   targetAltitude: 200_000,
-  deltaVRequired: 9400,
+  deltaVRequired: LEO_DELTA_V_REQUIRED,
   payment: 340,
   marginBonus: {
     threshold: 800,

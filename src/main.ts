@@ -13,7 +13,7 @@ import { PlayerController } from './vab/PlayerController';
 import { Assembly, LEO_DELTA_V_REQUIRED } from './vab/Assembly';
 import { PART_LIBRARY, buildPartMesh, type PartDefinition } from './vab/parts';
 import { Narrator } from './ui/Narrator';
-import { Mission, type FailureReason, type MissionStatus, MISSION_2_START } from './game/Mission';
+import { Mission, type FailureReason, type MissionStatus, MISSION_2_START, BUILD_SECONDS_PER_DAY } from './game/Mission';
 import * as script from './content/dialogue';
 import { syncWorkHeight as syncWorkSite } from './game/worksite';
 import {
@@ -30,6 +30,7 @@ import {
   type CampaignContract, type StarRecord,
 } from './game/campaign';
 import { MissionBoard } from './ui/MissionBoard';
+import { BudgetOdometer } from './ui/BudgetOdometer';
 import { play, setSoundMuted } from './ui/sfx';
 import { adviseOn } from './game/advice';
 import { ELEVATOR_X, ELEVATOR_Z } from './vab/Elevator';
@@ -38,7 +39,10 @@ import { drawPictogram } from './vab/placards';
 import { needsCrane, type CarriedPart } from './game/carry';
 import { deltaV } from './physics/rocket';
 import { WorkshopStation } from './vab/WorkshopStation';
+import { MODULAR_PARTS } from './workshop/modularParts';
 import { WorkshopSession } from './workshop/session';
+import { HubCamera } from './render/HubCamera';
+import { assessReadiness } from './game/readiness';
 
 /**
  * The contract being flown, chosen on the mission board.
@@ -210,8 +214,9 @@ function present(): void {
     renderer.render(outside.scene, camera);
     return;
   }
-  if (pipeline) pipeline.render();
-  else renderer.render(env.scene, camera);
+  const activeCamera = workshop.mode === 'workshop' ? camera : hub.camera;
+  if (pipeline) pipeline.render(activeCamera);
+  else renderer.render(env.scene, activeCamera);
 }
 
 pipeline = createPipeline(renderer, env.scene, camera, 'high');
@@ -278,10 +283,16 @@ const player = new PlayerController(camera, {
 });
 env.scene.add(player.yawObject);
 
-const detachInput = player.attach(canvas);
+// Retained for Workshop's shared perspective camera; the playable hub has no
+// walking or pointer-lock listeners.
+player.setEnabled(false);
+const hub = new HubCamera();
+const hubBuildButton = required<HTMLButtonElement>('#hub-build-button');
+const hubLaunchButton = required<HTMLButtonElement>('#hub-launch-button');
 const workshopStation = new WorkshopStation();
 const workshopSign = workshopStation.createMesh();
-env.scene.add(workshopSign);
+// The old cyan walking marker no longer participates in the hub.
+workshopSign.visible = false;
 const workshop = new WorkshopSession(player, env.assemblyRoot, canvas, hud,
   required<HTMLElement>('#workshop'),
   assembly,
@@ -289,11 +300,12 @@ const workshop = new WorkshopSession(player, env.assemblyRoot, canvas, hud,
     // Real money: fitting in the Workshop spends the same budget as anywhere
     // else, so an expensive stack can bankrupt the programme mid-build.
     charge: part => mission.fitPart(part.cost),
-    refund: part => { mission.removePart(part.cost); },
+    refund: part => { mission.returnHardware(part.cost); },
     spent: () => mission.startingBudget - mission.status.budget,
     available: () => mission.status.budget,
     par: () => contract.par,
-    changed: () => { refreshReadout(); refreshContract(); },
+    starterGuide: () => contract.id === 'relay',
+    changed: () => { refreshReadout(); refreshContract(); refreshHubLaunch(); },
     refuse: message => say(message),
     // Leave the Workshop and fly what was just built.
     launch: () => {
@@ -349,6 +361,49 @@ player.onFall = (distance) => {
   say('That was a fall. Safety will want a report.', true);
 };
 
+function updateHub(): void {
+  hub.frame(env.assemblyRoot, window.innerWidth, window.innerHeight);
+  const anchor = hub.platformPosition(window.innerWidth, window.innerHeight);
+  hubBuildButton.style.left = `${anchor.x}px`;
+  hubBuildButton.style.top = `${Math.min(window.innerHeight - 120, anchor.y)}px`;
+  hubBuildButton.disabled = mission.hasFailed || rolledOut;
+  refreshHubLaunch();
+}
+
+function canLaunchFromHub(): boolean {
+  if (!started || flight || mission.hasFailed || rolledOut) return false;
+  const analysis = assembly.analyze();
+  const readiness = assessReadiness({
+    complete: assembly.isComplete(),
+    totalDeltaV: analysis.totalDeltaV,
+    liftoffTWR: analysis.liftoffTWR,
+  });
+  return contractStatus().satisfied && (readiness.verdict === 'go' || readiness.verdict === 'marginal');
+}
+
+function refreshHubLaunch(): void {
+  const visible = started && !flight && !mission.hasFailed && !rolledOut;
+  hubLaunchButton.classList.toggle('hidden', !visible);
+  const ready = visible && canLaunchFromHub();
+  hubLaunchButton.disabled = !ready;
+  hubLaunchButton.dataset.ready = String(ready);
+  hubLaunchButton.setAttribute('aria-label', ready ? 'Launch rocket — ready' : 'Launch rocket — not ready');
+  hubLaunchButton.querySelector('small')!.textContent = ready ? 'Ready' : 'Not ready';
+  hubLaunchButton.title = ready ? 'Launch this rocket' : 'Complete the rocket and meet the contract requirements to launch';
+}
+
+hubLaunchButton.addEventListener('click', () => {
+  if (!canLaunchFromHub()) return;
+  if (workshop.mode === 'workshop') workshop.exit();
+  startFlight();
+});
+
+function enterWorkshop(): void {
+  if (!started || flight || mission.hasFailed || rolledOut) return;
+  workshop.enter([workshopSign, ...(craneLift ? [craneLift.mesh] : [])]);
+}
+hubBuildButton.addEventListener('click', enterWorkshop);
+
 function resize() {
   const w = window.innerWidth;
   const h = window.innerHeight;
@@ -358,8 +413,11 @@ function resize() {
   // The composer owns render targets at the old size; several passes hold
   // their own, so they must all be told or the effects drift out of register.
   pipeline?.setSize(w, h);
+  if (workshop.mode !== 'workshop') updateHub();
 }
-resize();
+// Flush time on visibility changes so an inactive tab cannot spend the build
+// window when requestAnimationFrame resumes after several minutes.
+document.addEventListener('visibilitychange', () => { clock.getDelta(); });
 window.addEventListener('resize', resize);
 
 // ---------------------------------------------------------------- HUD refs
@@ -384,7 +442,6 @@ const el = {
   capcom: document.querySelector<HTMLElement>('#capcom-text'),
   log: document.querySelector<HTMLElement>('#build-log'),
   resBudget: document.querySelector<HTMLElement>('#res-budget'),
-  resBudgetBar: document.querySelector<HTMLElement>('#res-budget-bar'),
   resDays: document.querySelector<HTMLElement>('#res-days'),
   resDaysBar: document.querySelector<HTMLElement>('#res-days-bar'),
   resConf: document.querySelector<HTMLElement>('#res-conf'),
@@ -459,6 +516,7 @@ let saidRolloutPrompt = false;
 let saidPayloadChoice = false;
 
 const KIND_LABEL: Record<PartDefinition['kind'], string> = {
+  command: 'Command', tank: 'Fuel tank', engine: 'Engine', decoupler: 'Decoupler',
   booster: 'First stage',
   upper: 'Second stage',
   payload: 'Payload',
@@ -792,13 +850,9 @@ let lastDrawnCarry: string | null = null;
 function updatePrompt(): void {
   if (!el.prompt || !el.promptText) return;
   if (!LEGACY_ASSEMBLY_ENABLED) {
-    const nearWorkshop = workshopStation.contains(player.position);
     el.prompt.style.opacity = mission.hasFailed || rolledOut ? '0' : '1';
-    el.prompt.classList.toggle('prompt-far', !nearWorkshop);
     if (el.promptKey) el.promptKey.textContent = 'E';
-    el.promptText.textContent = nearWorkshop
-      ? 'Enter the workshop to build'
-      : 'Walk to the cyan Workshop marker to build';
+    el.promptText.textContent = 'Enter the workshop to build';
     return;
   }
   if (mission.hasFailed || rolledOut) {
@@ -1001,19 +1055,29 @@ function paintResource(
   }
 }
 
+const budgetOdometer = el.resBudget ? new BudgetOdometer(el.resBudget) : null;
+const workshopBudgetOdometer = new BudgetOdometer(required<HTMLElement>('#workshop-budget'));
+const launchDial = document.querySelector<HTMLElement>('#launch-dial');
+
 function refreshResources(status: MissionStatus): void {
-  paintResource(
-    el.resBudget,
-    el.resBudgetBar,
-    `$${Math.max(0, status.budget).toFixed(0)}M`,
-    status.budget / 480,
-  );
-  paintResource(
-    el.resDays,
-    el.resDaysBar,
-    `${Math.max(0, status.daysRemaining)} days`,
-    status.daysRemaining / 24,
-  );
+  budgetOdometer?.setValue(status.budget);
+  workshopBudgetOdometer.setValue(status.budget);
+  required<HTMLElement>('#workshop-build-days').textContent = String(Math.ceil(Math.max(0, status.daysRemaining)));
+  const days = Math.max(0, status.daysRemaining);
+  const fraction = Math.max(0, Math.min(1, days / MISSION_2_START.daysRemaining));
+  const remainingSeconds = Math.ceil(days * BUILD_SECONDS_PER_DAY);
+  const countdown = `${Math.floor(remainingSeconds / 60)}:${String(remainingSeconds % 60).padStart(2, '0')}`;
+  if (el.resDays) el.resDays.textContent = String(Math.ceil(days));
+  const timer = document.querySelector<HTMLElement>('#res-time');
+  const workshopTimer = document.querySelector<HTMLElement>('#workshop-build-time');
+  if (timer) timer.textContent = countdown;
+  if (workshopTimer) workshopTimer.textContent = countdown;
+  if (el.resDaysBar) el.resDaysBar.style.strokeDashoffset = String(100 * (1 - fraction));
+  if (launchDial) {
+    launchDial.setAttribute('aria-valuenow', String(Math.min(MISSION_2_START.daysRemaining, days)));
+    launchDial.setAttribute('aria-valuetext', `${Math.ceil(days)} days remaining, ${countdown} of build time`);
+    launchDial.dataset.severity = fraction < 0.15 ? 'critical' : fraction < 0.35 ? 'low' : 'normal';
+  }
   paintResource(
     el.resConf,
     el.resConfBar,
@@ -1044,6 +1108,7 @@ function showFailure(reason: FailureReason, text: string): void {
 
   player.releaseLock();
   setHelp(false);
+  refreshHubLaunch();
 
   if (el.failReason) el.failReason.textContent = FAIL_EYEBROWS[reason] ?? 'Programme halted';
   if (el.failTitle) el.failTitle.textContent = FAIL_TITLES[reason] ?? 'Mission scrubbed';
@@ -1055,7 +1120,7 @@ function showFailure(reason: FailureReason, text: string): void {
     el.failStats.innerHTML = '';
     const stats: Array<[string, string, boolean]> = [
       ['Spent', `$${spent.toFixed(0)}M`, reason === 'budget'],
-      ['Days used', `${24 - status.daysRemaining}`, reason === 'schedule'],
+      ['Days used', `${(24 - status.daysRemaining).toFixed(1)}`, reason === 'schedule'],
       ['Confidence', `${Math.max(0, status.confidence).toFixed(0)}%`, reason === 'confidence'],
     ];
     for (const [label, value, highlight] of stats) {
@@ -1245,11 +1310,10 @@ function tryElevator(): boolean {
  */
 function interact(): void {
   if (workshop.mode !== 'explore' || mission.hasFailed || rolledOut) return;
-  if (workshopStation.contains(player.position)) {
-    workshop.enter([workshopSign, ...(craneLift ? [craneLift.mesh] : [])]);
+  if (!LEGACY_ASSEMBLY_ENABLED) {
+    enterWorkshop();
     return;
   }
-
   // The bay is for exploration; E has no pickup, fit, or elevator action.
   if (!LEGACY_ASSEMBLY_ENABLED) return;
 
@@ -1321,7 +1385,7 @@ function placeCarried(partDef: PartDefinition): void {
 function requestAdvice(): void {
   if (workshop.mode !== 'explore' || mission.hasFailed || rolledOut) return;
   if (!LEGACY_ASSEMBLY_ENABLED) {
-    say('Enter the workshop at the cyan marker to build. Choose a tank, move it to the pod’s bottom attachment point and click when it turns green. Add an engine below the tank. Q removes the last part.', true);
+    say('Select Build rocket on the platform to enter the workshop. Drag parts from the category palette onto green attachment nodes. Return parts for a full refund.', true);
     return;
   }
 
@@ -1685,7 +1749,7 @@ function rollOut(): void {
     el.winStats.innerHTML = '';
     const stats: Array<[string, string, boolean]> = [
       ['Budget left', `$${status.budget.toFixed(0)}M`, status.budget > 60],
-      ['Days to spare', `${status.daysRemaining}`, status.daysRemaining > 8],
+      ['Days to spare', `${Math.ceil(status.daysRemaining)}`, status.daysRemaining > 8],
       ['Confidence', `${status.confidence.toFixed(0)}%`, status.confidence >= 70],
     ];
     for (const [label, value, good] of stats) {
@@ -1815,6 +1879,8 @@ labelStartButton();
 
 /** Seed the programme for the chosen contract: its budget, its brief. */
 function beginContract(): void {
+  clock.getDelta();
+  rolledOut = false;
   mission.restart({
     budget: contract.budget,
     daysRemaining: MISSION_2_START.daysRemaining,
@@ -1830,17 +1896,11 @@ startButton.addEventListener('click', () => {
   started = true;
   startOverlay.classList.add('hidden');
   hud.classList.remove('hidden');
-  player.requestLock(canvas);
+  player.setEnabled(false);
+  updateHub();
   // Speech synthesis needs a user gesture on most browsers, so the briefing
   // starts here rather than on page load.
   runIntro();
-});
-
-// Clicking the viewport re-acquires pointer lock after Escape, which is what
-// players expect. The start overlay deliberately does not come back: losing
-// the cursor should not throw away the stack you have built.
-canvas.addEventListener('click', () => {
-  if (started && workshop.mode === 'explore' && !player.isLocked) player.requestLock(canvas);
 });
 
 // ------------------------------------------------------------ help panel
@@ -1866,7 +1926,7 @@ function toggleHelp(): void {
 helpButton?.addEventListener('click', () => toggleHelp());
 helpClose?.addEventListener('click', () => {
   setHelp(false);
-  if (started) player.requestLock(canvas);
+  player.setEnabled(false);
 });
 
 window.addEventListener('keydown', (e) => {
@@ -1880,8 +1940,8 @@ el.voiceButton?.addEventListener('click', () => narrator.toggle());
 document.querySelector<HTMLButtonElement>('#advice-button')
   ?.addEventListener('click', () => {
     requestAdvice();
-    // Hand the cursor back so the player can keep playing straight away.
-    if (started && workshop.mode === 'explore' && !player.isLocked) player.requestLock(canvas);
+    // Keep hub controls available without acquiring pointer lock.
+    player.setEnabled(false);
   });
 
 // Hide the voice control entirely where speech synthesis is unavailable,
@@ -1901,13 +1961,13 @@ function restartMission(): void {
   saidPayloadChoice = false;
   el.failure?.classList.add('hidden');
   el.success?.classList.add('hidden');
-  // The flight disables the walking controller and hides the bay HUD; a retry
-  // has to hand both back, or the player is frozen in place with no HUD.
-  player.setEnabled(true);
+  // A retry restores the hub HUD and platform action after flight.
+  player.setEnabled(false);
   hud.classList.remove('hidden');
   refreshReadout();
   refreshResources(mission.status);
-  player.requestLock(canvas);
+  player.setEnabled(false);
+  updateHub();
   runIntro();
 }
 
@@ -1937,6 +1997,7 @@ const flightHud = required<HTMLElement>('#flight');
 const savedCamera = { near: camera.near, far: camera.far, fov: camera.fov };
 
 function startFlight(): void {
+  if (mission.hasFailed) return;
   const vehicle = vehicleFromParts(assembly.parts);
   if (!vehicle) {
     say('The vehicle is not complete enough to fly.');
@@ -1944,6 +2005,8 @@ function startFlight(): void {
   }
 
   flight = new FlightPhase(vehicle);
+  rolledOut = true;
+  refreshHubLaunch();
   outside = createOutsideView();
   headLook = new HeadLook(canvas);
   panel = new CockpitPanel(flightHud, {
@@ -2074,14 +2137,14 @@ function showMissionBoard(): void {
   assembly.clear();
   mission.reset();
   started = false;
+  refreshHubLaunch();
   spokenIntro = false;
   el.success?.classList.add('hidden');
   el.failure?.classList.add('hidden');
   hud.classList.add('hidden');
   player.releaseLock();
-  // Re-enable walking for when the next contract is accepted; the flight
-  // switched it off.
-  player.setEnabled(true);
+  // The next contract returns to the hub with its cursor free.
+  player.setEnabled(false);
   contract = defaultContract(starRecord);
   board.render(starRecord);
   board.select(contract.id);
@@ -2119,15 +2182,8 @@ function updateFlight(dt: number): void {
 }
 
 el.failRetry?.addEventListener('click', () => {
-  assembly.clear();
-  mission.reset();
-  removeLineIndex = 0;
-  spokenIntro = false;
-  el.failure?.classList.add('hidden');
-  refreshReadout();
-  refreshResources(mission.status);
-  player.requestLock(canvas);
-  runIntro();
+  workshop.exit();
+  restartMission();
 });
 
 // ------------------------------------------------------- intro sequence
@@ -2151,7 +2207,7 @@ function runIntro(): void {
   // what made the build phase feel like a tutorial.
   const briefing = [
     `${contract.customer}. ${contract.briefing}`,
-    'The workshop is at the cyan marker. Mission Control will call it as you build.',
+    'Select Build rocket on the platform to enter the workshop. Mission Control will call it as you build.',
   ];
   briefing.forEach((line, i) => {
     const id = window.setTimeout(() => {
@@ -2164,12 +2220,19 @@ function runIntro(): void {
 // ------------------------------------------------------------- main loop
 
 const clock = new THREE.Clock();
-let inspectorTimer = 0;
 
 function frame(): void {
-  const dt = Math.min(0.05, clock.getDelta());
+  const frameSeconds = clock.getDelta();
+  const dt = Math.min(0.05, frameSeconds);
+  // UI follows elapsed time even when physics steps are capped on slow hardware.
+  budgetOdometer?.update(frameSeconds);
+  workshopBudgetOdometer.update(frameSeconds);
   const elapsed = clock.elapsedTime;
   watchFrameRate(dt);
+  if (started && !flight && !rolledOut && !mission.hasFailed && !document.hidden) {
+    mission.advanceBuildTime(frameSeconds);
+  }
+  refreshHubLaunch();
 
   // Flight owns everything while it runs: no bay update, no player movement,
   // no mission drain.
@@ -2199,60 +2262,19 @@ function frame(): void {
     return;
   }
 
-  // Tell the controller what it is standing on before it moves, so climbing
-  // and falling use this frame's geometry.
-  const pos = player.position;
-  // The elevator carries the player. Its deck is their support while aboard,
-  // and the car's own motion moves them with it.
-  const aboard = env.elevator.contains(pos.x, pos.z);
-  const wasMoving = env.elevator.state === 'rising' || env.elevator.state === 'descending';
-  const previousCarHeight = env.elevator.height;
-  env.elevator.update(dt);
-  const carDelta = env.elevator.height - previousCarHeight;
-
-  if (aboard) {
-    // Move with the car, then stand on its deck.
-    player.position.y += carDelta;
-    player.supportHeight = env.elevator.height;
-    // No ladder while riding — the elevator is the way up now.
-    player.onLadder = false;
-    player.ladderX = null;
-    player.atLadderRest = false;
-  } else {
-    player.supportHeight = env.supportHeightAt(pos.x, pos.z, player.feetHeight);
-  }
-  void wasMoving;
-
-  // Everything solid: the room's fixed structure plus the vehicle, which grows
-  // as it is built. Below the gantry platforms the player must walk round the
-  // rocket; above them the stack is beside you, not in the way.
-  const solid = [...env.staticObstacles];
-  if (assembly.parts.length > 0) {
-    solid.push({ x: 0, z: 0, radius: 3.6, top: assembly.topWorldY() });
-  }
-  player.obstacles = solid;
-
-  // Carrying no longer slows the player down. The intent was to make the cost
-  // of mass physical, but the payloads are heavy enough that it just made
-  // crossing the bay tedious, and the delta-v figures already teach it.
-  player.speedFactor = 1;
-
-  player.update(dt);
-  env.update(elapsed);
-  if (LEGACY_ASSEMBLY_ENABLED) updateCrane(dt);
-
-  // Raycasting every frame is wasteful for a static stack; 12 Hz is plenty
-  // for a panel the player reads.
-  inspectorTimer += dt;
-  if (inspectorTimer > 1 / 12) {
-    inspectorTimer = 0;
-    updateInspector();
-    updatePrompt();
+  // The hub owns this view. No walking, falls, carry loop or pointer lock.
+  player.setEnabled(false);
+  if (LEGACY_ASSEMBLY_ENABLED) {
+    // Kept for prototype migration; the hub never runs this path.
+    updateCrane(dt);
     updateAltitude();
-    updateGhost();
     refreshOptions();
+    updateInspector();
+    updateGhost();
+    updatePrompt();
   }
-
+  env.update(elapsed);
+  updateHub();
   present();
   requestAnimationFrame(frame);
 }
@@ -2268,23 +2290,24 @@ syncWorkHeight();
  *   ?flight&auto       autopilot engaged, countdown running
  *   ?flight&auto&at=90 fast-forwarded 90 seconds into the ascent
  *
- * Reaching the cockpit through the game takes a walk, a workshop session and
+ * Reaching the cockpit through the game takes a hub visit, a workshop session and
  * four parts, which makes iterating on the flight deck slow for anyone on the
  * team. It also lets a headless browser screenshot the cockpit at any moment
  * of the flight, which is how the flight deck's look is checked.
  */
 const devParams = new URLSearchParams(location.search);
 if (devParams.has('play') || devParams.has('workshop')) {
-  // ?play skips the start card; ?workshop also walks into the builder.
+  // ?play opens the hub; ?workshop opens the builder.
   beginContract();
   started = true;
   startOverlay.classList.add('hidden');
   hud.classList.remove('hidden');
+  updateHub();
   if (devParams.has('workshop')) {
     workshop.enter([workshopSign]);
     // &build=id,id fits parts through the real builder, for screenshots.
     for (const id of (devParams.get('build') ?? '').split(',').filter(Boolean)) {
-      const part = PART_LIBRARY.find(entry => entry.id === id);
+      const part = MODULAR_PARTS.find(entry => entry.id === id);
       if (part) workshop.builder?.fit(part);
     }
   }
@@ -2308,13 +2331,13 @@ if (devParams.has('flight')) {
   }
 }
 
+resize();
 frame();
 
 // Vite HMR: drop the input listeners so reloads do not stack handlers.
 if (import.meta.hot) {
   import.meta.hot.dispose(() => {
     workshop.dispose();
-    detachInput();
     renderer.dispose();
   });
 }

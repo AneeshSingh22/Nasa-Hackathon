@@ -1,30 +1,23 @@
-/*
- * Mission-console visual identity: dark instrument panels, cyan telemetry,
- * amber caution, burnt-orange for thrust. Type is Chakra Petch for display,
- * Inter for reading, JetBrains Mono for anything numeric.
- */
-
+/* Neutral industrial consoles. SF Pro is supplied by macOS via system fonts;
+   other platforms use their native sans-serif without a web-font download. */
 :root {
   color-scheme: dark;
-
-  --void: #06090f;
-  --panel: rgba(16, 23, 37, 0.92);
-  --panel-solid: #101725;
-  --panel-2: #18202f;
-  --line: #293450;
-  --ink: #e9eef6;
-  --dim: #94a2bd;
-  --faint: #5f6d88;
-
-  --cyan: #52d9ec;
-  --amber: #ffbc4d;
-  --burn: #ff6b3d;
-  --green: #5fd99a;
-  --violet: #a292f7;
-
-  --display: 'Chakra Petch', 'Segoe UI', system-ui, sans-serif;
-  --body: 'Inter', 'Segoe UI', system-ui, sans-serif;
-  --mono: 'JetBrains Mono', ui-monospace, 'Cascadia Mono', monospace;
+  --void: #101112;
+  --panel: rgba(27, 28, 30, 0.94);
+  --panel-solid: #202123;
+  --panel-2: #2a2b2d;
+  --line: #454649;
+  --ink: #f2f2f0;
+  --dim: #b7b8b9;
+  --faint: #96989b;
+  --cyan: #c5d6da;
+  --amber: #dfb66d;
+  --burn: #dc826e;
+  --green: #a8c4ad;
+  --violet: #b7b8b9;
+  --display: -apple-system, BlinkMacSystemFont, system-ui, 'SF Pro Display', 'Helvetica Neue', Arial, sans-serif;
+  --body: -apple-system, BlinkMacSystemFont, system-ui, 'SF Pro Text', 'Helvetica Neue', Arial, sans-serif;
+  --mono: var(--body);
 }
 
 * {
@@ -117,8 +110,8 @@ kbd {
 .eyebrow {
   font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--cyan);
   margin: 0 0 14px;
 }
@@ -172,7 +165,7 @@ kbd {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--void);
   background: var(--cyan);
   border: 0;
@@ -238,8 +231,8 @@ kbd {
   font-family: var(--display);
   font-size: 11.5px;
   font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
 }
 
 .pill {
@@ -247,7 +240,7 @@ kbd {
   font-family: var(--mono);
   font-size: 9.5px;
   letter-spacing: 0.07em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--faint);
   border: 1px solid var(--line);
   border-radius: 2px;
@@ -294,8 +287,8 @@ kbd {
   justify-content: space-between;
   font-family: var(--mono);
   font-size: 9.5px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--faint);
   margin-bottom: 5px;
 }
@@ -357,7 +350,7 @@ kbd {
   font-family: var(--mono);
   font-size: 9.5px;
   letter-spacing: 0.14em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--cyan);
 }
 
@@ -465,8 +458,8 @@ kbd {
   font-family: var(--display);
   font-size: 12px;
   font-weight: 600;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
   color: var(--cyan);
   margin: 0 0 10px;
 }
@@ -546,8 +539,8 @@ kbd {
 .capcom-who {
   font-family: var(--mono);
   font-size: 9.5px;
-  letter-spacing: 0.13em;
-  text-transform: uppercase;
+  letter-spacing: 0.01em;
+  text-transform: none;
   color: var(--violet);
 }
 
@@ -658,8 +651,8 @@ kbd {
   align-items: baseline;
   font-family: var(--mono);
   font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--faint);
   margin-bottom: 5px;
 }
@@ -732,7 +725,7 @@ kbd {
   font-family: var(--mono);
   font-size: 11px;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--dim);
   background: var(--panel);
   backdrop-filter: blur(8px);
@@ -775,122 +768,9 @@ kbd {
    Every option for the active slot is visible at once, because a choice the
    player cannot see is not a choice. Inactive slots dim rather than vanish so
    the shape of the whole build stays legible. */
-#workshop .rocket-palette {
-  position: fixed;
-  top: 74px;
-  left: 16px;
-  bottom: 16px;
-  width: 232px;
-  overflow-y: auto;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 5px;
-  background: var(--panel);
-  backdrop-filter: blur(10px);
-  pointer-events: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-#workshop .palette-slot {
-  display: flex;
-  flex-direction: column;
-  gap: 5px;
-  opacity: 0.4;
-  transition: opacity 0.2s ease;
-}
-#workshop .palette-slot.active { opacity: 1; }
-#workshop .palette-slot.done { opacity: 0.62; }
-
-#workshop .palette-slot h3 {
-  margin: 0;
-  font: 600 10px/1 var(--mono);
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cyan);
-}
-
-#workshop .palette-part {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 1px 8px;
-  text-align: left;
-  padding: 7px 9px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel-2);
-  color: var(--ink);
-  cursor: pointer;
-}
-#workshop .palette-part b { font: 600 12px/1.3 var(--body); }
-#workshop .palette-part small {
-  grid-column: 1 / -1;
-  font: 10px/1.4 var(--mono);
-  color: var(--dim);
-}
-#workshop .palette-cost {
-  font: 600 11px/1.3 var(--mono);
-  color: var(--green);
-}
-#workshop .palette-part:hover:not(:disabled) { border-color: var(--cyan); }
-#workshop .palette-part:disabled { opacity: 0.45; cursor: default; }
-#workshop .palette-part.fitted {
-  border-color: var(--green);
-  background: rgba(95, 217, 154, 0.12);
-}
 
 /* The launch button is the end of the build phase, so it reads as the
    primary action rather than another part button. */
-#workshop .palette-launch {
-  margin-top: 8px;
-  padding: 10px;
-  border: 1px solid var(--cyan);
-  border-radius: 4px;
-  background: var(--cyan);
-  color: #06121a;
-  font: 600 13px var(--body);
-  cursor: pointer;
-  pointer-events: auto;
-}
-#workshop .palette-launch:hover:not(:disabled) { filter: brightness(1.12); }
-#workshop .palette-launch:disabled {
-  background: transparent;
-  border-color: var(--line);
-  color: var(--dim);
-  font-size: 11px;
-  cursor: default;
-}
-
-#workshop .palette-note {
-  font: 10px/1.5 var(--mono);
-  color: var(--dim);
-}
-
-#workshop .palette-undo {
-  margin-top: auto;
-  padding: 7px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel-2);
-  color: var(--ink);
-  font: 11px var(--mono);
-  cursor: pointer;
-  pointer-events: auto;
-}
-#workshop .palette-undo:disabled { opacity: 0.4; cursor: default; }
-
-#workshop .rocket-readout {
-  font: 12px var(--mono);
-  color: var(--ink);
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--panel);
-  padding: 8px 12px;
-  white-space: nowrap;
-}
-#workshop .rocket-readout.bad { border-color: var(--burn); color: var(--burn); }
-#workshop .rocket-readout.good { border-color: var(--green); }
 
 /* The launch button is the primary action on the roll-out screen. */
 #win-launch {
@@ -1085,7 +965,7 @@ kbd {
 #flight .cp-screen-title {
   padding: 4px 10px;
   font: 700 10px var(--mono);
-  letter-spacing: 0.2em;
+  letter-spacing: 0.02em;
   color: var(--violet-glow);
   border-bottom: 1px solid rgba(82, 217, 236, 0.15);
 }
@@ -1191,7 +1071,7 @@ kbd {
   box-shadow: 0 3px 0 #080c1c, 0 4px 10px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.12);
   color: #e6ecff;
   font: 700 11px var(--mono);
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   cursor: pointer;
   user-select: none;
   touch-action: none;
@@ -1315,8 +1195,8 @@ kbd {
 .fail-eyebrow {
   font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--burn);
   margin: 0 0 14px;
 }
@@ -1360,7 +1240,7 @@ kbd {
   font-family: var(--mono);
   font-size: 9.5px;
   letter-spacing: 0.1em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--faint);
   margin-bottom: 4px;
 }
@@ -1394,7 +1274,7 @@ kbd {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--void);
   background: var(--amber);
   border: 0;
@@ -1444,8 +1324,8 @@ kbd {
 .win-eyebrow {
   font-family: var(--mono);
   font-size: 11px;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   color: var(--green);
   margin: 0 0 14px;
 }
@@ -1491,7 +1371,7 @@ kbd {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: 0.06em;
-  text-transform: uppercase;
+  text-transform: none;
   color: var(--void);
   background: var(--green);
   border: 0;
@@ -1714,7 +1594,7 @@ kbd {
   transform: translateX(-50%);
   font-family: var(--mono);
   font-size: 12px;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.02em;
   color: var(--amber);
   background: var(--panel);
   backdrop-filter: blur(8px);
@@ -1948,75 +1828,11 @@ kbd {
   padding-left: 10px;
 }
 
-/* Workshop keeps the viewport clear while the legacy HUD is suspended. */
-#workshop {
-  position: absolute;
-  top: 16px;
-  left: 16px;
-  right: 16px;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 18px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-top: 2px solid var(--cyan);
-  pointer-events: none;
-}
-#workshop strong { display: block; font-family: var(--display); color: var(--cyan); }
-#workshop span, #workshop p { font-size: 12px; color: var(--dim); }
-#workshop p { margin: 0; }
-#workshop button { pointer-events: auto; cursor: pointer; }
 
-/* Phase 3 uses only the two Propulsion stubs; detailed stats stay on hover. */
-#workshop .workshop-palette {
-  position: absolute;
-  top: calc(100% + 12px);
-  left: 0;
-  width: 190px;
-  padding: 14px;
-  background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  pointer-events: auto;
-}
-#workshop .workshop-palette h2 { margin: 0 0 12px; font: 600 15px var(--display); }
-#workshop .workshop-palette button {
-  display: block; width: 100%; margin: 8px 0; padding: 12px 8px;
-  color: var(--ink); background: var(--panel-2); border: 1px solid var(--line);
-  border-radius: 4px; font: 13px var(--body); text-align: left;
-}
-#workshop .workshop-palette button[aria-pressed="true"] { border-color: var(--cyan); color: var(--cyan); }
-#workshop button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
-#workshop .workshop-palette button:disabled { opacity: 0.4; cursor: default; }
-#workshop .workshop-palette small { display: block; color: var(--dim); font-size: 11px; line-height: 1.5; }
-#workshop .workshop-readout {
-  font: 12px var(--mono); color: var(--ink);
-  border: 1px solid var(--line); border-radius: 4px; background: var(--panel);
-  padding: 8px 12px; white-space: nowrap;
-}
-#workshop .workshop-status {
-  position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%);
-  max-width: calc(100vw - 32px); width: max-content;
-  border: 1px solid var(--line); border-radius: 4px; background: var(--panel);
-  padding: 12px 18px; color: var(--ink); text-align: center;
-}
-@media (max-width: 600px) {
-  #workshop .workshop-palette { width: 146px; padding: 9px; }
-  #workshop .workshop-status { bottom: 12px; font-size: 11px; }
-}
 
-#workshop .workshop-part { position: relative; }
-#workshop .workshop-tooltip {
-  display: none; position: absolute; left: calc(100% + 10px); top: 0;
-  width: 240px; padding: 12px; background: var(--panel-solid); color: var(--ink);
-  border: 1px solid var(--cyan); border-radius: 4px;
-  white-space: pre-line; font: 12px/1.5 var(--body); pointer-events: none;
-}
-#workshop .workshop-part:hover .workshop-tooltip,
-#workshop .workshop-part button:focus-visible + .workshop-tooltip { display: block; }
+
+
+
 
 /* ---------------- mission board ----------------
    The start overlay is a board of contracts, not a page of instructions. */
@@ -2061,7 +1877,7 @@ kbd {
 }
 .board-card:disabled { cursor: not-allowed; opacity: 0.5; filter: grayscale(0.6); }
 .card-top { display: flex; justify-content: space-between; gap: 8px; }
-.card-customer { font: 10px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--dim); }
+.card-customer { font: 10px var(--mono); letter-spacing: 0.02em; text-transform: none; color: var(--dim); }
 .card-difficulty {
   font: 700 9px var(--mono);
   letter-spacing: 0.14em;
@@ -2078,7 +1894,7 @@ kbd {
 .card-tagline { font-size: 13px; line-height: 1.45; color: var(--dim); min-height: 38px; }
 .card-facts { display: flex; gap: 10px; border-top: 1px solid var(--line); padding-top: 8px; }
 .card-facts span { display: flex; flex-direction: column; gap: 1px; }
-.card-facts small { font: 9px var(--mono); letter-spacing: 0.08em; text-transform: uppercase; color: var(--faint); }
+.card-facts small { font: 9px var(--mono); letter-spacing: 0.02em; text-transform: none; color: var(--faint); }
 .card-facts b { font: 700 13px var(--mono); color: var(--ink); }
 .card-stars { display: flex; gap: 4px; font-size: 20px; line-height: 1; }
 .card-stars i { font-style: normal; color: rgba(255, 255, 255, 0.14); }
@@ -2091,63 +1907,8 @@ kbd {
 }
 .controls.compact > div { display: flex; align-items: center; gap: 6px; }
 
-/* ---------------- Mission Control verdict ----------------
-   Right edge in the Workshop, over the gantry: top-centre covered the payload,
-   which is the very part the verdict is usually about. */
-#workshop .mission-verdict {
-  position: fixed;
-  top: 86px;
-  right: 16px;
-  width: 300px;
-  padding: 10px 18px 12px;
-  border-radius: 8px;
-  border: 1px solid var(--line);
-  border-top: 3px solid var(--dim);
-  background: var(--panel);
-  backdrop-filter: blur(10px);
-  text-align: center;
-  pointer-events: none;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-#workshop .mission-verdict small {
-  font: 700 9px var(--mono);
-  letter-spacing: 0.22em;
-  color: var(--faint);
-}
-#workshop .mission-verdict strong {
-  font: 800 30px/1.05 var(--display);
-  letter-spacing: 0.06em;
-  color: var(--dim);
-}
-#workshop .mission-verdict span { font-size: 12px; line-height: 1.4; color: var(--dim); }
-#workshop .verdict-gauge {
-  height: 6px;
-  border-radius: 3px;
-  background: rgba(255, 255, 255, 0.08);
-  overflow: hidden;
-  margin-top: 2px;
-}
-#workshop .verdict-gauge i {
-  display: block;
-  height: 100%;
-  width: 0;
-  background: var(--dim);
-  transition: width 0.45s cubic-bezier(.2, .9, .3, 1.2), background 0.3s;
-}
-#workshop .verdict-par { font: 11px var(--mono); color: var(--green); }
-#workshop .verdict-par.over { color: var(--caution, #ffb400); }
-#workshop .mission-verdict[data-verdict="go"] { border-top-color: var(--green); }
-#workshop .mission-verdict[data-verdict="go"] strong { color: var(--green); text-shadow: 0 0 18px rgba(95, 217, 154, 0.5); }
-#workshop .mission-verdict[data-verdict="go"] .verdict-gauge i { background: var(--green); }
-#workshop .mission-verdict[data-verdict="marginal"] { border-top-color: #ffb400; }
-#workshop .mission-verdict[data-verdict="marginal"] strong { color: #ffb400; text-shadow: 0 0 18px rgba(255, 180, 0, 0.45); }
-#workshop .mission-verdict[data-verdict="marginal"] .verdict-gauge i { background: #ffb400; }
-#workshop .mission-verdict[data-verdict="nogo"] { border-top-color: var(--burn); }
-#workshop .mission-verdict[data-verdict="nogo"] strong { color: var(--burn); text-shadow: 0 0 18px rgba(255, 107, 61, 0.5); }
-#workshop .mission-verdict[data-verdict="nogo"] .verdict-gauge i { background: var(--burn); }
-#workshop .mission-verdict.changed { animation: verdict-pop 0.5s ease-out; }
+
+
 @keyframes verdict-pop {
   0% { transform: scale(1); }
   35% { transform: scale(1.08); }
@@ -2212,3 +1973,257 @@ kbd {
   100% { transform: scale(1.15) rotate(0); }
 }
 .rating-money { display: flex; gap: 10px; flex-wrap: wrap; }
+
+/* Pre-workshop chrome: machined charcoal, soft metal highlights, one cool
+   selection accent. Flight instruments retain their operational colours. */
+#start-overlay {
+  background: radial-gradient(ellipse at 50% 0%, rgba(255,255,255,.06), transparent 65%), rgba(16,17,18,.94);
+}
+.start-card { border-radius: 14px; background: linear-gradient(160deg, #2b2c2e, #1b1c1e); }
+.start-card h1 { font-weight: 650; letter-spacing: -.035em; }
+.eyebrow, .panel-title { color: var(--ink); font-weight: 600; }
+#start-button { letter-spacing: 0; border-radius: 7px; background: #ececea; color: #202123; }
+#start-button:hover { background: #fff; }
+.board-card { background: linear-gradient(160deg, #303133, #242527); border-radius: 9px; }
+.board-card.selected { box-shadow: inset 0 0 0 1px var(--cyan), 0 4px 16px rgba(0,0,0,.22); }
+.card-title { font-weight: 600; letter-spacing: -.02em; }
+.card-difficulty[data-level] { color: var(--dim); font-weight: 500; letter-spacing: 0; }
+.board-total, .card-stars i.earned { color: var(--ink); text-shadow: none; }
+.card-customer, .card-facts small { letter-spacing: 0; font-size: 11px; }
+.card-facts b { font-weight: 600; font-variant-numeric: tabular-nums; }
+#resources { top: 20px; width: 268px; border-radius: 10px; background: linear-gradient(145deg, #323335, #202123); box-shadow: 0 10px 30px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.08); }
+#resources header { background: rgba(0,0,0,.15); padding: 12px 15px; }
+#resources .panel-title { font-size: 14px; letter-spacing: 0; }
+#resources .pill { font-size: 11px; letter-spacing: 0; }
+.launch-instrument { display: flex; flex-direction: column; align-items: center; gap: 9px; padding: 18px 15px 14px; }
+.launch-dial { position: relative; width: 132px; height: 132px; border-radius: 50%; background: linear-gradient(135deg, #a5a7aa, #363739 45%, #141516 65%, #737579); box-shadow: 0 4px 9px rgba(0,0,0,.45); }
+.launch-dial svg { position: absolute; inset: 3px; width: calc(100% - 6px); height: calc(100% - 6px); transform: rotate(-90deg); }
+.dial-track, .dial-progress { fill: none; stroke-width: 5; }
+.dial-track { stroke: #141516; }
+.dial-progress { stroke: var(--cyan); stroke-linecap: round; stroke-dasharray: 100; stroke-dashoffset: 0; transition: stroke-dashoffset .6s ease, stroke .3s; }
+.launch-dial[data-severity="low"] .dial-progress { stroke: var(--amber); }
+.launch-dial[data-severity="critical"] .dial-progress { stroke: var(--burn); }
+.dial-face { position: absolute; inset: 17px; border-radius: 50%; display: flex; flex-direction: column; align-items: center; justify-content: center; background: radial-gradient(circle at 32% 22%, #686a6d, #36383b 46%, #1b1c1e 83%); box-shadow: inset 0 1px 2px rgba(255,255,255,.3), inset 0 -5px 10px rgba(0,0,0,.35), 0 2px 4px #111; }
+.dial-face b { font-size: 34px; line-height: 1.15; font-weight: 600; font-variant-numeric: tabular-nums; letter-spacing: -.04em; }
+.dial-face span { color: #d0d1d2; font-size: 11px; }
+.instrument-label { color: var(--dim); font-size: 12px; font-weight: 500; }
+.budget-instrument { display: flex; flex-direction: column; align-items: center; gap: 8px; border-top: 1px solid var(--line); padding: 14px 12px; }
+.budget-counter { display: flex; align-items: center; gap: 7px; }
+.budget-currency, .budget-unit { font-size: 22px; color: var(--dim); font-weight: 500; }
+.instrument-unit { color: var(--faint); font-size: 10px; }
+.odometer { display: flex; gap: 3px; padding: 5px; border-radius: 5px; background: #121314; box-shadow: inset 0 2px 4px #000, 0 1px 0 rgba(255,255,255,.15); }
+.drum-slot { position: relative; width: 30px; height: 40px; overflow: hidden; border-radius: 2px; color: #171819; background: #f1f0ea; }
+.drum-strip { position: absolute; inset: 0 0 auto; will-change: transform; }
+.drum-strip span { display: block; height: 40px; line-height: 40px; text-align: center; font-size: 30px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.drum-slot::after { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(180deg, rgba(0,0,0,.28), transparent 33%, transparent 64%, rgba(0,0,0,.2)); box-shadow: inset 0 1px 0 rgba(255,255,255,.6); }
+#resources .res-row { padding: 11px 15px 15px; border-top: 1px solid var(--line); }
+#resources .res-head { font-size: 12px; letter-spacing: 0; }
+#resources .res-head span { display: inline; }
+#resources .res-bar { background: #161719; height: 4px; border: 0; }
+#resources .fill-conf { background: #b5b8ba; }
+@media (prefers-reduced-motion: reduce) { .dial-progress { transition: none; } }
+@media (max-height: 600px) {
+  .launch-instrument { flex-direction: row; justify-content: center; padding: 10px; }
+  .launch-dial { width: 100px; height: 100px; }
+  .dial-face { inset: 14px; }
+  .dial-face b { font-size: 27px; }
+  .budget-instrument { padding: 10px; }
+}
+
+/* VAB hub: a platform action and a recessed contract monitor. */
+.board-total, .card-stars i.earned { color: #edc45f; text-shadow: 0 1px 2px rgba(0,0,0,.45); }
+.card-stars i:not(.earned) { color: #8e793e; }
+#hub-build-button {
+  position: absolute; z-index: 5; transform: translateX(-50%); pointer-events: auto;
+  padding: 12px 22px; min-width: 185px; cursor: pointer; color: #202123;
+  border: 1px solid #d6d5cd; border-radius: 8px;
+  background: linear-gradient(#f6f5ee, #cecec7);
+  box-shadow: inset 0 1px 0 #fff, 0 3px 0 #656664, 0 8px 16px rgba(0,0,0,.35);
+  font-family: var(--body); text-align: left;
+}
+#hub-build-button > span { display: block; font-size: 10px; color: #5a5c5e; margin-bottom: 3px; }
+#hub-build-button strong { display: flex; gap: 18px; align-items: center; font-size: 16px; font-weight: 600; }
+#hub-build-button kbd { background: #deded7; border-color: #a8a9a5; color: #454646; }
+#hub-build-button:hover { background: linear-gradient(#fff, #e1e1d8); }
+#hub-build-button:active { margin-top: 2px; box-shadow: inset 0 2px 4px rgba(0,0,0,.2); }
+#hub-build-button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 5px; }
+#hub-build-button:disabled { opacity: .4; cursor: default; }
+#prompt, #altitude { display: none; }
+#hud #contract {
+  width: 370px; top: 20px; right: 20px; transform: none;
+  padding: 23px 19px 37px; border: 1px solid #646568; border-radius: 20px;
+  background: linear-gradient(145deg, #57595c, #303235 42%, #1e2022);
+  box-shadow: inset 0 2px 1px rgba(255,255,255,.25), inset 0 -2px 2px #131415, 0 14px 35px rgba(0,0,0,.35);
+  overflow: hidden;
+}
+#contract::before { content: none; }
+#contract::after { content: ''; position: absolute; bottom: 15px; right: 24px; width: 6px; height: 6px; border-radius: 50%; background: #a8c4ad; box-shadow: 0 0 6px rgba(168,196,173,.45); }
+#contract header {
+  padding: 15px 15px 12px; background: #141b1a;
+  border: 2px solid #101314; border-bottom: 1px solid #34413d;
+  border-radius: 10px 10px 0 0; box-shadow: inset 0 3px 8px #060a09;
+}
+#contract .panel-title { font-size: 15px; font-weight: 600; color: #d2ded3; letter-spacing: 0; }
+#contract .pill { font-size: 12px; color: #b5c4b9; border-color: #46544c; }
+#contract .contract-body {
+  padding: 15px; border: 2px solid #101314; border-top: 0; border-radius: 0 0 12px 12px;
+  background: repeating-linear-gradient(0deg, rgba(255,255,255,.015) 0px, rgba(255,255,255,.015) 1px, transparent 1px, transparent 3px), radial-gradient(ellipse at top, #222e28, #101715);
+  box-shadow: inset 0 -3px 12px #060a09;
+}
+#contract #contract-brief { color: #d0dbd2; font-size: 14px; line-height: 1.65; }
+#contract #contract-checks { font-size: 12px; margin-top: 18px; }
+#contract #contract-checks li { gap: 8px; padding: 8px 0; color: #c1cfc4; }
+#contract #contract-checks li small { font-size: 11px; color: #95a99d; }
+#hud-buttons { bottom: 20px; }
+@media (max-width: 900px) {
+  #hud #contract { width: 255px; padding: 16px 12px 30px; right: 12px; }
+  #contract #contract-brief { font-size: 12px; }
+  #contract #contract-checks li { font-size: 10px; }
+  #resources { --hud-scale: .65; left: 12px; }
+}
+@media (max-height: 650px) {
+  #hud #contract { max-height: calc(100vh - 90px); overflow-y: auto; }
+}
+
+/* Active build schedule and the corner launch switch. */
+.dial-face small { margin-top: 3px; color: #bfc2c3; font-size: 10px; font-variant-numeric: tabular-nums; }
+
+#contract { padding-bottom: 23px !important; }
+#contract::after { bottom: 8px; }
+#capcom { display: flex; align-items: flex-start; gap: 14px; padding: 10px; max-width: 490px; border-left-width: 1px; border-radius: 9px; }
+.capcom-portrait { display: block; flex: 0 0 88px; width: 88px; height: 108px; object-fit: cover; object-position: 50% 20%; border: 2px solid #151617; border-radius: 5px; box-shadow: inset 0 1px 4px #000, 0 1px 0 rgba(255,255,255,.12); }
+.capcom-dialogue { padding: 3px 3px 2px 0; min-width: 0; }
+.capcom-who { font-size: 11px; font-weight: 600; color: var(--dim); }
+#capcom-text { font-size: 13px; line-height: 1.5; }
+#hub-launch-button {
+  position: absolute; right: 0; bottom: 0; z-index: 35;
+  width: 200px; height: 200px; border: 0; cursor: pointer;
+  clip-path: polygon(100% 0, 100% 100%, 0 100%);
+  background: linear-gradient(135deg, #afc9b4 49%, #80ac8c 51%, #4d795a);
+  color: #102519; font-family: var(--body); text-align: center;
+  box-shadow: inset -3px -3px 8px rgba(0,0,0,.3);
+}
+#hub-launch-button > span { position: absolute; right: 40px; bottom: 75px; font-size: 32px; font-weight: 500; }
+#hub-launch-button strong { position: absolute; right: 23px; bottom: 44px; width: 90px; font-size: 19px; font-weight: 650; }
+#hub-launch-button small { position: absolute; right: 23px; bottom: 24px; width: 90px; font-size: 11px; }
+#hub-launch-button:disabled { cursor: default; color: #a5a9a7; background: linear-gradient(135deg, #737876 49%, #3c4340 51%, #282e2b); }
+#hub-launch-button:hover:not(:disabled) { filter: brightness(1.12); }
+#hub-launch-button:active:not(:disabled) { filter: brightness(.92); }
+#hub-launch-button:focus-visible { background: linear-gradient(135deg, #fff 49%, #a7d5b4 53%, #649573); }
+@media (max-height: 650px) {
+  #hub-launch-button { width: 160px; height: 160px; }
+  #hub-launch-button > span { bottom: 66px; right: 30px; font-size: 26px; }
+  #hub-launch-button strong { right: 12px; bottom: 38px; font-size: 17px; }
+  #hub-launch-button small { right: 12px; bottom: 20px; }
+}
+
+.capcom-portrait-frame { flex: 0 0 88px; width: 88px; height: 108px; overflow: hidden; border: 2px solid #151617; border-radius: 5px; }
+.capcom-portrait-frame .capcom-portrait { width: 100%; height: 100%; border: 0; border-radius: 0; transform: scale(1.6); transform-origin: 50% 25%; }
+
+/* Compact charcoal-steel workbench, sharing the home screen's neutral palette. */
+#workshop { position: fixed; inset: 0; display: block; padding: 0; border: 0; background: none; pointer-events: none; z-index: 40; font-family: var(--body); }
+#workshop [hidden] { display: none !important; }
+#workshop button { pointer-events: auto; cursor: pointer; font-family: var(--body); }
+#workshop button:focus-visible { outline: 2px solid var(--cyan); outline-offset: 3px; }
+#workshop .workshop-heading { position: absolute; left: 12px; top: 12px; display: flex; align-items: center; gap: 10px; }
+#workshop .workshop-heading h1 { margin: 0; color: var(--ink); font: 500 19px var(--body); text-shadow: 0 2px 3px #000; }
+#workshop .workshop-heading button { width: 32px; height: 32px; color: var(--ink); font-size: 24px; border: 1px solid #64666a; border-radius: 4px; background: linear-gradient(#45474a, #26282b); box-shadow: inset 0 1px #717378, 0 2px 4px #0008; }
+#workshop .workshop-topbar { position: absolute; left: 50%; top: 0; transform: translateX(-50%); display: flex; gap: 14px; align-items: center; padding: 10px 22px 12px; color: var(--ink); background: linear-gradient(110deg, #28292c, #3a3b3e, #242528); border: 1px solid #55575b; border-top: 0; border-radius: 0 0 13px 13px; box-shadow: inset 0 -2px 3px #17181a, 0 5px 10px #0008; pointer-events: auto; }
+#workshop .workshop-topbar span { color: var(--dim); font-size: 12px; }
+#workshop #workshop-contract-toggle { padding: 7px 10px; white-space: nowrap; font: 500 12px var(--body); color: var(--ink); background: linear-gradient(#494b4f, #2a2c30); border: 1px solid #707277; border-radius: 3px; box-shadow: inset 0 1px #7d7f84, 0 2px 3px #0007; }
+#workshop #workshop-contract-toggle[aria-expanded="true"] { box-shadow: inset 0 2px 5px #0008; }
+#workshop .workshop-budget, #workshop .workshop-time { display: flex; align-items: center; gap: 6px; white-space: nowrap; }
+#workshop .workshop-budget { border-inline: 1px solid #191a1d; padding-inline: 14px; }
+#workshop .workshop-budget > b { font-size: 12px; font-weight: 500; }
+#workshop .workshop-time b { font-size: 18px; font-weight: 500; font-variant-numeric: tabular-nums; }
+#workshop .workshop-time small { color: var(--faint); font: 11px var(--body); font-variant-numeric: tabular-nums; }
+#workshop .odometer { padding: 3px; gap: 2px; }
+#workshop .odometer span { font-size: inherit; color: #141414; }
+#workshop .odometer .drum-slot { width: 23px; height: 28px; }
+#workshop .odometer .drum-strip > span { font-size: 15px; }
+#workshop .rocket-palette { position: absolute; left: 10px; top: 76px; max-height: calc(100vh - 154px); width: 246px; display: flex; flex-direction: row; align-items: flex-start; gap: 8px; pointer-events: none; }
+#workshop .category-rail { display: flex; flex-direction: column; gap: 8px; width: 40px; flex: 0 0 40px; pointer-events: auto; }
+#workshop .category-rail button { width: 40px; height: 46px; padding: 9px; background: linear-gradient(#414348, #24262a); border: 1px solid #5e6066; border-radius: 4px; color: var(--dim); box-shadow: inset 0 1px #666970, 0 3px 6px #0008; }
+#workshop .category-rail button[aria-pressed="true"] { color: var(--ink); border-color: #9da6ae; background: linear-gradient(#555960, #33363b); box-shadow: inset 0 0 0 1px #1b1d20, 0 3px 6px #0008; }
+#workshop svg { width: 100%; height: 100%; }
+#workshop .parts-drawer { flex: 1; min-width: 0; max-height: calc(100vh - 154px); display: flex; flex-direction: column; padding: 10px; background: linear-gradient(120deg, #2d2f33, #1c1e21); border: 1px solid #51545a; border-radius: 4px; box-shadow: inset 0 1px #63666b, 0 6px 15px #0008; pointer-events: auto; }
+#workshop .parts-drawer h3 { margin: 0 0 9px; color: var(--dim); font: 500 12px var(--body); }
+#workshop .parts-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; overflow-y: auto; align-content: start; scrollbar-width: thin; scrollbar-color: #555961 #17191c; }
+#workshop .palette-part { display: flex; justify-content: center; align-items: center; aspect-ratio: 1; min-height: 0; width: 100%; padding: 4px; margin: 0; border: 1px solid #50545c; border-radius: 3px; background: radial-gradient(ellipse at 50% 40%, #373c44, #1b1e23); box-shadow: inset 0 2px 4px #101215, 0 1px #55585f; color: #b9c3ce; cursor: grab; position: relative; }
+#workshop .palette-part img { width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+#workshop .palette-part svg { width: 70%; height: 70%; }
+#workshop .palette-part:hover { border-color: #b0bbc6; }
+#workshop .palette-part[aria-pressed="true"] { outline: 2px solid #b6cbdc; outline-offset: -3px; }
+#workshop .palette-part.fitted::after { content: ''; position: absolute; right: 6px; bottom: 6px; width: 4px; height: 4px; border-radius: 50%; background: #bbc6d0; }
+#workshop .palette-part.planned { opacity: .4; cursor: help; }
+#workshop .collapsed .parts-drawer { display: none; }
+/* Right-edge chassis and pull tab remain separate from the recessed CRT screen. */
+#workshop .workshop-specs { position: absolute; top: 88px; right: 0; width: 214px; padding: 10px 0 12px 10px; color: var(--ink); background: linear-gradient(120deg, #424448, #292b2e); border: 1px solid #686a70; border-right: 0; border-radius: 9px 0 0 9px; box-shadow: inset 2px 1px 2px #75777b, -4px 6px 16px #0008; pointer-events: auto; transition: transform .2s ease; }
+#workshop .specs-screen { padding: 13px; max-height: calc(100vh - 260px); overflow-y: auto; border: 2px solid #080b10; border-radius: 6px 0 0 6px; background: repeating-linear-gradient(0deg, #ffffff02 0px, #ffffff02 1px, transparent 1px, transparent 3px), radial-gradient(ellipse, #141c27, #090e15); box-shadow: inset 0 0 18px #000b, 0 1px #72757b; scrollbar-width: thin; }
+#workshop .workshop-specs h3 { margin: 0 0 10px; font: 500 13px var(--body); color: #d9e2ed; }
+#workshop .specs-toggle { position: absolute; left: -24px; top: 24px; height: 66px; width: 24px; font-size: 24px; color: #c7ced5; background: linear-gradient(90deg, #3a3d43, #282b2f); border: 1px solid #62656b; border-radius: 5px 0 0 5px; box-shadow: -3px 3px 6px #0007; }
+#workshop .specs-collapsed { transform: translateX(100%); }
+#workshop .rocket-readout { display: block; }
+#workshop .rocket-readout div { display: flex; align-items: baseline; justify-content: space-between; padding: 7px 0; border-bottom: 1px solid #2d3745; gap: 6px; }
+#workshop .rocket-readout div:last-child { border: 0; }
+#workshop .rocket-readout span { font: 11px var(--body); color: #91a0b1; }
+#workshop .rocket-readout b { font: 500 13px var(--body); color: #d2deeb; font-variant-numeric: tabular-nums; }
+#workshop .mission-verdict { margin-top: 10px; padding-top: 12px; border-top: 1px solid #424d5d; }
+#workshop .mission-verdict strong { font: 500 16px var(--body); color: #d7dfe8; }
+#workshop .mission-verdict p { margin: 6px 0; font: 11px/1.5 var(--body); color: #97a5b6; }
+#workshop .mission-verdict small { font: 10px var(--body); color: #7d8a9b; }
+#workshop .mission-verdict[data-verdict="go"] strong { color: var(--green); }
+#workshop .mission-verdict[data-verdict="marginal"] strong { color: var(--amber); }
+#workshop .mission-verdict[data-verdict="nogo"] strong { color: var(--burn); }
+#workshop .part-tooltip, #workshop .installed-part-info { position: fixed; width: 266px; padding: 14px; border: 1px solid #737982; border-radius: 5px; background: linear-gradient(#33373e, #20242b); box-shadow: inset 0 1px #7b8089, 0 9px 22px #000b; z-index: 60; color: var(--dim); max-height: calc(100vh - 90px); overflow-y: auto; }
+#workshop .part-tooltip h3, #workshop .installed-part-info h3 { color: var(--ink); margin: 0 0 8px; font: 500 14px var(--body); }
+#workshop .part-tooltip strong { font: 500 12px var(--body); color: #d2dce7; }
+#workshop .part-tooltip p, #workshop .installed-part-info p { margin: 10px 0 0; font: 11px/1.6 var(--body); color: #a8b2bf; }
+#workshop .part-facts { display: grid; grid-template-columns: 1fr auto; gap: 5px 12px; margin: 10px 0; font-size: 11px; }
+#workshop .part-facts dt { color: #99a4b2; }
+#workshop .part-facts dd { margin: 0; color: #d5deea; font-variant-numeric: tabular-nums; }
+#workshop .installed-part-info { pointer-events: auto; }
+#workshop .installed-part-info header { display: flex; gap: 12px; align-items: flex-start; justify-content: space-between; }
+#workshop .part-info-close { padding: 0; width: 20px; height: 20px; flex: 0 0 20px; border: 0; background: none; color: var(--dim); font-size: 19px; }
+#workshop .sell-part { width: 100%; margin-top: 12px; padding: 8px; font-size: 12px; color: var(--ink); background: linear-gradient(#4c525d, #30353e); border: 1px solid #737b88; border-radius: 3px; box-shadow: inset 0 1px #818a98; }
+#workshop .sell-part:hover { filter: brightness(1.15); }
+#workshop .workshop-return { position: absolute; bottom: 18px; left: 58px; width: 112px; padding: 9px; font-size: 12px; color: var(--dim); background: linear-gradient(#3d424a, #25292f); border: 1px solid #646a74; border-radius: 4px; box-shadow: inset 0 1px #737a86, 0 3px 6px #0008; }
+#workshop .workshop-return:disabled { opacity: .4; }
+#workshop .workshop-return.drop-active { outline: 2px solid #bdcbd9; color: var(--ink); }
+#workshop .workshop-status { position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%); max-width: 360px; width: max-content; margin: 0; padding: 7px 11px; background: #171a1ee8; border: 1px solid #4c535e; border-radius: 3px; color: #b3becb; text-align: center; font: 11px/1.4 var(--body); }
+#workshop .attachment-targets { position: absolute; inset: 0; pointer-events: none; z-index: 0; }
+#workshop .attachment-targets button { position: absolute; transform: translate(-50%, -50%); width: 24px; height: 24px; border-radius: 50%; padding: 0; border: 0; background: none; }
+#workshop .attachment-targets button:focus-visible { outline: 2px solid #d5ffc3; background: #5eff8f22; }
+#workshop-contract-monitor { position: absolute; top: 65px; left: 50%; transform: translateX(-50%); width: min(420px, 50vw); max-height: calc(100vh - 155px); overflow-y: auto; pointer-events: auto; z-index: 50; border-radius: 6px; box-shadow: 0 12px 26px #000b; }
+#workshop #contract { position: static; width: 100%; max-width: none; max-height: none; margin: 0; padding: 17px; color: #aebdce; background: #101720; border: 9px solid #373a3f; border-radius: 6px; box-shadow: inset 0 0 18px #000, inset 0 0 0 2px #080c12; }
+#workshop #contract header { border-bottom: 1px solid #4a5462; padding-bottom: 10px; margin-bottom: 10px; }
+#workshop #contract .panel-title, #workshop #contract #contract-brief { color: #cbd7e6; font-size: 12px; }
+#workshop #contract .pill { color: #b5c2d2; border-color: #4a5462; }
+#workshop #contract #contract-checks { margin-top: 12px; font-size: 11px; }
+#workshop #contract #contract-checks li { padding: 6px 0; color: #b5c2d2; }
+#workshop #contract #contract-checks li small { color: #8897a9; font-size: 10px; }
+#workshop .rocket-palette, #workshop .workshop-specs, #workshop .workshop-topbar,
+#workshop .workshop-heading, #workshop .workshop-return, #workshop .workshop-status { z-index: 2; }
+@media (max-width: 1000px) {
+  #workshop .workshop-topbar { left: auto; right: 12px; transform: none; gap: 10px; padding-inline: 14px; }
+  #workshop .rocket-palette { width: 218px; }
+  #workshop .workshop-specs { width: 190px; }
+}
+@media (max-width: 700px) {
+  #workshop .workshop-heading h1, #workshop .workshop-time small { display: none; }
+  #workshop .workshop-topbar { padding-inline: 9px; gap: 8px; }
+  #workshop .workshop-budget { padding-inline: 8px; }
+  #workshop .rocket-palette { width: 186px; }
+  #workshop .category-rail { width: 32px; flex-basis: 32px; }
+  #workshop .category-rail button { width: 32px; height: 40px; padding: 7px; }
+  #workshop .workshop-specs { width: 176px; }
+}
+@media (prefers-reduced-motion: reduce) { #workshop .workshop-specs { transition: none; } }
+
+/* Keep beginner help tucked away until requested, inside the existing monitor. */
+#workshop .workshop-build-guide { margin-top: 12px; border-top: 1px solid #424d5d; padding-top: 10px; font: 11px/1.5 var(--body); color: #b2bdcb; }
+#workshop .workshop-build-guide summary { cursor: pointer; color: #d9e2ed; }
+#workshop .workshop-build-guide p { margin: 8px 0; }
+#workshop .workshop-build-guide ol { padding-left: 17px; margin: 8px 0; }
+#workshop .workshop-build-guide li { margin: 4px 0; }
+#workshop .workshop-build-guide .starter-result { color: var(--green); }

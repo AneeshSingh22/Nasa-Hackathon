@@ -1,342 +1,263 @@
 // @vitest-environment jsdom
-import { beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as THREE from 'three';
 import { Assembly } from '../vab/Assembly';
-import { PART_LIBRARY, createMaterials, DISPLAY_SCALE } from '../vab/parts';
+import { createMaterials, DISPLAY_SCALE } from '../vab/parts';
 import { OrbitCamera } from '../render/OrbitCamera';
 import { RocketBuilder } from './rocketBuilder';
-import { optionsFor } from './catalog';
+import { MODULAR_PARTS } from './modularParts';
+import { BUILD_ANCHOR_Y, ATTACHMENT_RADIUS } from './attachments';
+import { vehicleFromParts } from '../flight/vehicle';
+import { totalDeltaV } from '../physics/rocket';
 
-/**
- * The Workshop is the build phase, so these assert the things that make it a
- * game: real options, real money, and a vehicle that survives being left.
- */
-
-let assembly: Assembly;
-let root: THREE.Group;
-let chrome: HTMLElement;
-let builder: RocketBuilder;
-let budget: number;
-let refusals: string[];
-
-function click(partId: string) {
-  chrome.querySelector<HTMLButtonElement>(`[data-part="${partId}"]`)!.click();
+let assembly: Assembly, root: THREE.Group, chrome: HTMLElement, canvas: HTMLElement, builder: RocketBuilder;
+let camera: THREE.PerspectiveCamera, budget: number;
+const part = (id: string) => MODULAR_PARTS.find(p => p.id === id)!;
+const build = (...ids: string[]) => ids.forEach(id => builder.fit(part(id)));
+function pointer(target: EventTarget, type: string, x: number, y: number, id = 1) {
+  const e = new MouseEvent(type, { clientX: x, clientY: y, button: 0, bubbles: true, cancelable: true });
+  Object.defineProperty(e, 'pointerId', { value: id }); target.dispatchEvent(e);
 }
-function readout() {
-  return chrome.querySelector('.rocket-readout')!.textContent!;
+function node(port: string) {
+  const b = chrome.querySelector<HTMLButtonElement>(`[data-port="${port}"]`)!;
+  return { x: parseFloat(b.style.left), y: parseFloat(b.style.top), b };
 }
-/** Let any falling parts land, as a few frames of play would. */
-function settle(target: RocketBuilder = builder) {
-  target.tick(performance.now() + 10_000);
-}
-function enabled(partId: string) {
-  return !chrome.querySelector<HTMLButtonElement>(`[data-part="${partId}"]`)!.disabled;
-}
-
 beforeEach(() => {
-  budget = 480;
-  refusals = [];
-  root = new THREE.Group();
-  chrome = document.createElement('section');
-  document.body.replaceChildren(chrome);
-  assembly = new Assembly(root, createMaterials());
-  const camera = new THREE.PerspectiveCamera(72, 1.5, 0.1, 400);
+  vi.spyOn(HTMLCanvasElement.prototype, 'getContext').mockReturnValue(null);
+  budget = 480; root = new THREE.Group(); root.scale.setScalar(DISPLAY_SCALE);
+  chrome = document.createElement('section'); canvas = document.createElement('canvas');
+  document.body.replaceChildren(canvas, chrome); assembly = new Assembly(root, createMaterials());
+  camera = new THREE.PerspectiveCamera(72, innerWidth / innerHeight, .1, 400);
   builder = new RocketBuilder(assembly, root, camera, new OrbitCamera(camera), chrome, {
-    charge: part => { budget -= part.cost; return true; },
-    refund: part => { budget += part.cost * 0.5; },
-    spent: () => 480 - budget,
-    changed: () => {},
-    refuse: message => refusals.push(message),
-    launch: () => {},
+    charge: p => { budget -= p.cost; return true; }, refund: p => { budget += p.cost; },
+    spent: () => 480 - budget, changed: () => {}, refuse: () => {}, launch: () => {}, available: () => budget, par: () => 240, starterGuide: () => true,
+  }, canvas);
+});
+afterEach(() => { builder.dispose(); vi.restoreAllMocks(); });
+describe('Workshop palette and transactions', () => {
+  it('shows image-only category tiles and reveals price, mass and details on hover/focus', () => {
+    chrome.querySelector<HTMLButtonElement>('[data-category="command"]')!.click();
+    const tile = chrome.querySelector<HTMLElement>('[data-part="command-pod"]')!;
+    expect(tile.textContent).toBe(''); expect(tile.querySelector('svg, img')).not.toBeNull();
+    tile.dispatchEvent(new Event('pointerenter'));
+    const tooltip = chrome.querySelector<HTMLElement>('[role="tooltip"]')!;
+    expect(tooltip.hidden).toBe(false); expect(tooltip.textContent).toContain('$8M'); expect(tooltip.textContent).toContain('1.6 t');
+    tile.dispatchEvent(new Event('pointerleave')); expect(tooltip.hidden).toBe(true);
+    tile.focus(); expect(tooltip.hidden).toBe(false);
+    chrome.querySelector<HTMLButtonElement>('[data-category="propulsion"]')!.click();
+    expect(tile.hidden).toBe(true); expect(chrome.querySelector<HTMLElement>('[data-part="core-tank"]')!.hidden).toBe(false);
+    expect(chrome.querySelectorAll('[data-kind="tank"]')).toHaveLength(5);
+    expect(chrome.querySelectorAll('[data-kind="engine"]')).toHaveLength(5);
+  });
+  it('picks on keyboard activation without buying, then commits at the chosen node', () => {
+    chrome.querySelector<HTMLButtonElement>('[data-part="probe-core"]')!.click();
+    expect(builder.isDragging).toBe(true); expect(assembly.parts).toHaveLength(0); expect(budget).toBe(480);
+    node('root').b.click(); expect(assembly.parts[0]!.id).toBe('probe-core'); expect(budget).toBe(476);
+  });
+  it('charges once on pointer release onto a compatible world node', () => {
+    const tile = chrome.querySelector<HTMLElement>('[data-part="probe-core"]')!;
+    pointer(tile, 'pointerdown', 20, 20); const target = node('root');
+    pointer(window, 'pointermove', target.x, target.y); expect(target.b.dataset.compatible).toBe('true');
+    pointer(window, 'pointerup', target.x, target.y);
+    expect(budget).toBe(476); expect(assembly.parts).toHaveLength(1); expect(builder.isDragging).toBe(false);
+    pointer(window, 'pointerup', target.x, target.y); expect(budget).toBe(476);
+  });
+  it.each(['compact-tank', 'swift-engine', 'comms-probe', 'fairing', 'probe-core'])('seeds an empty bay with %s without hitting the origin sphere', id => {
+    const target = node('root'); const x = target.x + 120, y = target.y + 80;
+    pointer(chrome.querySelector(`[data-part="${id}"]`)!, 'pointerdown', 20, 20);
+    pointer(window, 'pointermove', x, y); pointer(window, 'pointerup', x, y);
+    expect(assembly.parts.map(p => p.id)).toEqual([id]);
+    expect(budget).toBe(480 - part(id).cost);
+    expect(assembly.meshObjects[0]!.position.y).toBe(BUILD_ANCHOR_Y);
+  });
+  it('still requires an attachment node after the first part', () => {
+    build('swift-engine'); const target = node('upper');
+    pointer(chrome.querySelector('[data-part="compact-tank"]')!, 'pointerdown', 20, 20);
+    pointer(window, 'pointerup', target.x + 120, target.y + 80);
+    expect(assembly.parts).toHaveLength(1); expect(budget).toBe(424);
+  });
+  it('keeps the starter guide collapsed and shows a derived, affordable recipe on demand', () => {
+    const guide = chrome.querySelector<HTMLDetailsElement>('.workshop-build-guide')!;
+    expect(guide.open).toBe(false);
+    expect(guide.querySelector('summary')!.textContent).toBe('Build guide');
+    const names = [...guide.querySelectorAll('li')].map(el => el.textContent);
+    expect(names[0]).toBe('Swift booster engine');
+    expect(names[1]).toBe('Compact fuel tank');
+    expect(names.at(-1)).toBe('Payload Fairing');
+    expect(guide.textContent).toContain('$240M');
+  });
+  it('marks incompatible nodes red and rejects release without spending', () => {
+    build('probe-core');
+    pointer(chrome.querySelector('[data-part="command-pod"]')!, 'pointerdown', 20, 20);
+    const target = node('lower'); pointer(window, 'pointermove', target.x, target.y);
+    expect(target.b.dataset.compatible).toBe('false');
+    const sphere = root.getObjectByName('attachment-lower') as THREE.Mesh<THREE.SphereGeometry, THREE.MeshBasicMaterial>;
+    expect(sphere.material.color.getHex()).toBe(0xf26356);
+    pointer(window, 'pointerup', target.x, target.y); expect(budget).toBe(476); expect(assembly.parts).toHaveLength(1);
+  });
+  it('does not snap to a node covered by UI even if it projects at the cursor', () => {
+    const target = node('root');
+    const panel = document.createElement('aside'); panel.className = 'workshop-specs';
+    Object.defineProperty(document, 'elementFromPoint', { configurable: true, value: () => panel });
+    pointer(chrome.querySelector('[data-part="probe-core"]')!, 'pointerdown', 10, 10);
+    pointer(window, 'pointerup', target.x, target.y);
+    expect(assembly.parts).toHaveLength(0); expect(budget).toBe(480);
+    delete (document as Partial<Document>).elementFromPoint;
+  });
+  it('cancels a return drag by restoring installed geometry and money', () => {
+    build('probe-core'); const mesh = assembly.meshObjects[0]!;
+    const world = root.localToWorld(mesh.position.clone().add(new THREE.Vector3(0, 1, 0))).project(camera);
+    pointer(canvas, 'pointerdown', (world.x + 1) * innerWidth / 2, (1 - world.y) * innerHeight / 2);
+    pointer(window, 'pointermove', (world.x + 1) * innerWidth / 2 + 10, (1 - world.y) * innerHeight / 2);
+    expect(mesh.visible).toBe(false); window.dispatchEvent(new Event('pointercancel'));
+    expect(mesh.visible).toBe(true); expect(assembly.parts).toHaveLength(1); expect(budget).toBe(476);
+  });
+  it('invalid drops, blur, cancellation and leaving never purchase a preview', () => {
+    builder.pick(part('probe-core')); expect(builder.cancelDrag()).toBe(true); expect(builder.cancelDrag()).toBe(false);
+    pointer(chrome.querySelector('[data-part="probe-core"]')!, 'pointerdown', 10, 10);
+    pointer(window, 'pointerup', -100, -100); expect(assembly.parts).toHaveLength(0);
+    builder.pick(part('probe-core')); window.dispatchEvent(new Event('blur')); expect(builder.isDragging).toBe(false);
+    builder.pick(part('probe-core')); builder.dispose(); expect(root.getObjectByName('workshop-preview')).toBeUndefined(); expect(budget).toBe(480);
+  });
+  it('rejects unaffordable parts and the planned decoupler', () => {
+    budget = 2; build('command-pod'); expect(assembly.parts).toHaveLength(0); expect(budget).toBe(2);
+    expect(chrome.querySelector('.rocket-palette')!.classList.contains('shake')).toBe(true);
+    builder.pick(part('stack-decoupler')); expect(builder.isDragging).toBe(false);
+  });
+  it('refunds a whole dependent subtree and leaves independent payloads in place', () => {
+    build('probe-core', 'kerolox-tank', 'kerolox-engine', 'compact-tank', 'swift-engine', 'comms-probe', 'fairing');
+    expect(budget).toBe(240);
+    const upper = assembly.parts.find(p => p.id === 'kerolox-tank')!;
+    builder.returnPart(upper.instanceId!);
+    expect(budget).toBe(400); expect(assembly.parts.map(p => p.id)).toEqual(['fairing', 'comms-probe', 'probe-core']);
+    builder.returnPart(assembly.parts.find(p => p.kind === 'command')!.instanceId!); expect(budget).toBe(480); expect(assembly.parts).toHaveLength(0);
+  });
+  it('returns a part by raycasting the installed mesh and dragging to the tray', () => {
+    build('probe-core'); const mesh = assembly.meshObjects[0]!;
+    const world = root.localToWorld(mesh.position.clone().add(new THREE.Vector3(0, 1, 0))).project(camera);
+    const x = (world.x + 1) * innerWidth / 2, y = (1 - world.y) * innerHeight / 2;
+    vi.spyOn(builder.palette.returnTray, 'getBoundingClientRect').mockReturnValue({ left: 10, right: 200, top: 600, bottom: 700, width: 190, height: 100 } as DOMRect);
+    pointer(canvas, 'pointerdown', x, y); expect(builder.isDragging).toBe(true);
+    pointer(window, 'pointermove', x + 10, y); expect(mesh.visible).toBe(false);
+    pointer(window, 'pointermove', 100, 650); pointer(window, 'pointerup', 100, 650);
+    expect(assembly.parts).toHaveLength(0); expect(budget).toBe(480);
+  });
+});
+describe('modular craft', () => {
+  it('supports repeat tanks with unique identities, all seated immediately without falling', () => {
+    build('command-pod', 'kerolox-tank', 'kerolox-tank', 'kerolox-engine');
+    const tanks = assembly.parts.filter(p => p.kind === 'tank'); expect(tanks).toHaveLength(2);
+    expect(tanks[0]!.instanceId).not.toBe(tanks[1]!.instanceId);
+    expect(assembly.meshFor(tanks[0]!.instanceId!)!.position.y).toBe(BUILD_ANCHOR_Y - 8);
+    const before = assembly.meshObjects.map(m => m.position.y); builder.tick(); expect(assembly.meshObjects.map(m => m.position.y)).toEqual(before);
+    expect(root.localToWorld(new THREE.Vector3(0, BUILD_ANCHOR_Y, 0)).y).toBeGreaterThan(15);
+  });
+  it('does not count unfed tanks as propulsion', () => {
+    build('probe-core', 'compact-tank'); const analysis = assembly.analyze();
+    expect(analysis.totalDeltaV).toBe(0); expect(analysis.liftoffTWR).toBe(0); expect(analysis.stageCount).toBe(0);
+    expect(vehicleFromParts(assembly.parts)).toBeNull();
+  });
+  it('derives the readout and launched vehicle from the same tank and engine stages', () => {
+    build('probe-core', 'kerolox-tank', 'kerolox-engine', 'compact-tank', 'swift-engine', 'comms-probe', 'fairing');
+    const vehicle = vehicleFromParts(assembly.parts)!;
+    expect(vehicle.stages).toHaveLength(2); expect(vehicle.stages[0]!.thrustSeaLevel).toBe(6800000);
+    expect(vehicle.stages[0]!.propellantMass).toBe(240000);
+    expect(assembly.analyze().totalDeltaV).toBeCloseTo(totalDeltaV(vehicle), 8);
+    expect(chrome.querySelector<HTMLElement>('.mission-verdict')!.dataset.verdict).toBe('go');
+    expect(chrome.querySelector('.mission-verdict')!.textContent).toContain('Par $240M');
+    for (const mesh of assembly.meshObjects) {
+      const box = new THREE.Box3().setFromObject(mesh);
+      for (const v of [box.min, box.max]) expect(Math.abs(v.clone().project(camera).y)).toBeLessThan(1);
+    }
+    const paid = budget; builder.dispose(); expect(assembly.parts).toHaveLength(7); expect(budget).toBe(paid);
+  });
+  it('preserves paid parts across reopening and does not duplicate pointer handlers', () => {
+    build('probe-core'); builder.dispose();
+    builder = new RocketBuilder(assembly, root, camera, new OrbitCamera(camera), chrome, {
+      charge: p => { budget -= p.cost; return true; }, refund: p => { budget += p.cost; }, spent: () => 480 - budget,
+      changed: () => {}, refuse: () => {}, launch: () => {},
+    }, canvas);
+    const target = node('lower'); pointer(chrome.querySelector('[data-part="kerolox-tank"]')!, 'pointerdown', 20, 20);
+    pointer(window, 'pointerup', target.x, target.y); expect(budget).toBe(436); expect(assembly.parts).toHaveLength(2);
   });
 });
 
-describe('Workshop rocket builder', () => {
-  it('offers every option the library holds for each slot', () => {
-    // One part per step is not a decision. The library has three boosters,
-    // two upper stages and four payloads, and all of them must be offered.
-    expect(optionsFor('booster')).toHaveLength(3);
-    expect(optionsFor('payload')).toHaveLength(4);
-    for (const part of PART_LIBRARY) {
-      expect(chrome.querySelector(`[data-part="${part.id}"]`), part.id).not.toBeNull();
-    }
+
+describe('flexible build and inspection', () => {
+  it('builds the same flight vehicle from the engine up or the command down', () => {
+    build('probe-core', 'kerolox-tank', 'kerolox-engine', 'compact-tank', 'swift-engine', 'comms-probe', 'fairing');
+    const original = vehicleFromParts(assembly.parts)!;
+    assembly.clear(); builder.refresh();
+    for (const id of ['swift-engine', 'compact-tank', 'kerolox-engine', 'kerolox-tank', 'probe-core', 'comms-probe', 'fairing']) builder.fit(part(id), assembly.parts.length ? 'upper' : 'root');
+    const reversed = vehicleFromParts(assembly.parts)!;
+    expect(assembly.parts.map(p => p.id)).toEqual(['fairing', 'comms-probe', 'probe-core', 'kerolox-tank', 'kerolox-engine', 'compact-tank', 'swift-engine']);
+    expect(reversed.stages.map(s => s.name)).toEqual(original.stages.map(s => s.name));
+    expect(totalDeltaV(reversed)).toBeCloseTo(totalDeltaV(original), 8);
+    const bounds = new THREE.Box3(); for (const mesh of assembly.meshObjects) bounds.expandByObject(mesh);
+    expect(bounds.min.y).toBeGreaterThan(1); expect(bounds.max.y).toBeLessThan(30);
   });
-
-  it('enables only the slot the stack is ready for', () => {
-    expect(enabled('core-booster')).toBe(true);
-    // The payload cannot be fitted before the stages under it exist.
-    expect(enabled('telescope')).toBe(false);
-
-    click('core-booster');
-    // The booster slot stays live so the player can compare and swap.
-    expect(enabled('core-booster')).toBe(true);
-    expect(enabled('solid-booster')).toBe(true);
-    expect(enabled('upper-stage')).toBe(true);
-    expect(enabled('telescope')).toBe(false);
-
-    click('upper-stage');
-    expect(enabled('telescope')).toBe(true);
+  it('starts with payload or fairing and adds control later', () => {
+    build('fairing', 'comms-probe', 'probe-core', 'kerolox-tank', 'kerolox-engine');
+    expect(assembly.isComplete()).toBe(true); expect(assembly.parts.map(p => p.kind)).toEqual(['fairing', 'payload', 'command', 'tank', 'engine']);
   });
-
-  it('spends real money and refunds only half on removal', () => {
-    click('core-booster'); // $148M
-    expect(budget).toBe(332);
-    expect(readout()).toContain('Spent $148M');
-
-    builder.removeLast();
-    // Half back: rebuilding is never free, which is what makes the choice cost
-    // something.
-    expect(budget).toBe(406);
+  it('does not treat an unfed engine or a craft without control as launchable', () => {
+    build('swift-engine'); expect(assembly.analyze().stageCount).toBe(0); expect(assembly.isComplete()).toBe(false);
+    expect(vehicleFromParts(assembly.parts)).toBeNull(); expect(chrome.querySelector('.mission-verdict')!.textContent).toContain('Control');
   });
-
-  it('builds a different vehicle for a different payload', () => {
-    click('core-booster'); click('upper-stage'); click('comms-probe');
-    const cheap = assembly.analyze();
-
-    builder.removeLast();
-    click('science-lab');
-    const heavy = assembly.analyze();
-
-    // The laboratory is 11 tonnes heavier, so it buys less delta-v. If these
-    // ever match, the payload choice has stopped mattering.
-    expect(heavy.liftoffMass).toBeGreaterThan(cheap.liftoffMass);
-    expect(heavy.totalDeltaV).toBeLessThan(cheap.totalDeltaV);
+  it('clicks a fitted part without lifting it, then sells only that object at its full price', () => {
+    build('probe-core', 'compact-tank'); const control = assembly.parts.find(p => p.kind === 'command')!;
+    const mesh = assembly.meshFor(control.instanceId!)!;
+    const world = root.localToWorld(mesh.position.clone().add(new THREE.Vector3(0, 1, 0))).project(camera);
+    const x = (world.x + 1) * innerWidth / 2, y = (1 - world.y) * innerHeight / 2;
+    pointer(canvas, 'pointerdown', x, y); pointer(window, 'pointerup', x, y);
+    expect(mesh.visible).toBe(true); expect(builder.isDragging).toBe(false);
+    const info = chrome.querySelector<HTMLElement>('.installed-part-info')!;
+    expect(info.hidden).toBe(false); expect(info.textContent).toContain('Unmanned control unit');
+    expect(info.textContent).toContain('0.3 t'); expect(info.textContent).toContain('Sell · $4M');
+    info.querySelector<HTMLButtonElement>('.sell-part')!.click();
+    expect(budget).toBe(440); expect(assembly.parts.map(p => p.id)).toEqual(['compact-tank']);
+    expect(assembly.meshObjects[0]!.visible).toBe(true); expect(info.hidden).toBe(true); expect(assembly.isComplete()).toBe(false);
   });
-
-  it('refuses a part the programme cannot pay for, and fits nothing', () => {
-    const poor = new Assembly(new THREE.Group(), createMaterials());
-    const camera = new THREE.PerspectiveCamera(72, 1.5, 0.1, 400);
-    const denied: string[] = [];
-    const bankrupt = new RocketBuilder(poor, new THREE.Group(), camera,
-      new OrbitCamera(camera), document.createElement('section'), {
-        charge: () => false,
-        refund: () => {},
-        spent: () => 0,
-        changed: () => {},
-        refuse: message => denied.push(message),
-        launch: () => {},
-      });
-    bankrupt.fit(PART_LIBRARY.find(part => part.id === 'extended-booster')!);
-
-    expect(poor.parts).toHaveLength(0);
-    expect(denied).toHaveLength(1);
-    expect(denied[0]).toMatch(/cannot cover/);
+  it('sells the seed without orphaning the remaining parts or refunding them', () => {
+    build('swift-engine'); builder.fit(part('compact-tank'), 'upper'); builder.fit(part('probe-core'), 'upper');
+    const seed = assembly.parts.find(p => p.kind === 'engine')!; builder.sellPart(seed.instanceId!);
+    expect(budget).toBe(436); expect(assembly.parts).toHaveLength(2);
+    expect(assembly.parts.filter(p => !p.parentId)).toHaveLength(1);
+    for (const p of assembly.parts) if (p.parentId) expect(assembly.parts.some(other => other.instanceId === p.parentId)).toBe(true);
   });
-
-  it('puts the fitted part in the scene where the stack expects it', () => {
-    click('solid-booster');
-    settle();
-    const mesh = root.getObjectByName('solid-booster');
-    expect(mesh).toBeDefined();
-    expect(mesh!.position.y).toBe(0);
-
-    click('upper-stage');
-    settle();
-    const upper = root.getObjectByName('upper-stage')!;
-    // The second stage sits on top of the booster, not inside it.
-    const booster = PART_LIBRARY.find(part => part.id === 'solid-booster')!;
-    expect(upper.position.y).toBeCloseTo(booster.height, 5);
+  it('replaces a sold middle tank through a selected engine interface, preserving the rest', () => {
+    build('probe-core', 'kerolox-tank', 'kerolox-engine', 'compact-tank', 'swift-engine', 'comms-probe', 'fairing');
+    const originalDeltaV = assembly.analyze().totalDeltaV;
+    const tank = assembly.parts.find(p => p.id === 'kerolox-tank')!;
+    builder.sellPart(tank.instanceId!);
+    expect(budget).toBe(280); expect(assembly.parts).toHaveLength(6);
+    expect(assembly.isComplete()).toBe(false);
+    const engine = assembly.parts.find(p => p.id === 'kerolox-engine')!;
+    const mesh = assembly.meshFor(engine.instanceId!)!;
+    const world = root.localToWorld(mesh.position.clone().add(new THREE.Vector3(0, engine.height / 2, 0))).project(camera);
+    const x = (world.x + 1) * innerWidth / 2, y = (1 - world.y) * innerHeight / 2;
+    pointer(canvas, 'pointerdown', x, y); pointer(window, 'pointerup', x, y);
+    const port = `above:${engine.instanceId}`;
+    expect(node(port).b).not.toBeNull();
+    builder.pick(part('kerolox-tank')); node(port).b.click();
+    expect(budget).toBe(240); expect(assembly.parts).toHaveLength(7);
+    expect(assembly.parts.map(p => p.id)).toEqual(['fairing', 'comms-probe', 'probe-core', 'kerolox-tank', 'kerolox-engine', 'compact-tank', 'swift-engine']);
+    expect(assembly.isComplete()).toBe(true);
+    expect(assembly.analyze().totalDeltaV).toBeCloseTo(originalDeltaV, 8);
+    for (const p of assembly.parts) if (p.parentId) expect(assembly.parts.some(other => other.instanceId === p.parentId)).toBe(true);
   });
-
-  it('reports a vehicle that cannot leave the pad', () => {
-    // Every part fitted, then check the verdict is derived rather than assumed.
-    click('extended-booster'); click('kerolox-upper'); click('science-lab'); click('fairing');
-    const analysis = assembly.analyze();
-    expect(readout()).toContain(`TWR ${analysis.liftoffTWR.toFixed(2)}`);
-    expect(readout()).toContain(`${Math.round(analysis.totalDeltaV).toLocaleString('en-US')} m/s`);
+  it('collapses the right-edge monitor and keeps its analysis current while hidden', () => {
+    const toggle = chrome.querySelector<HTMLButtonElement>('.specs-toggle')!;
+    const screen = chrome.querySelector<HTMLElement>('.specs-screen')!;
+    toggle.click(); expect(screen.hidden).toBe(true); expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    expect(toggle.getAttribute('aria-label')).toBe('Expand rocket specs');
+    build('probe-core'); expect(screen.textContent).toContain('0.3 t');
+    toggle.click(); expect(screen.hidden).toBe(false); expect(toggle.getAttribute('aria-expanded')).toBe('true');
   });
-});
-
-describe('changing your mind', () => {
-  it('swaps a fitted part without disturbing the parts above it', () => {
-    click('core-booster'); click('upper-stage'); click('telescope'); click('fairing');
-    expect(assembly.parts.map(p => p.id)).toEqual(
-      ['core-booster', 'upper-stage', 'telescope', 'fairing'],
-    );
-
-    // Change the payload with the fairing already on: the whole point of a
-    // swap is not having to tear the stack down.
-    click('crew-capsule');
-    settle();
-    expect(assembly.parts.map(p => p.id)).toEqual(
-      ['core-booster', 'upper-stage', 'crew-capsule', 'fairing'],
-    );
-    expect(root.getObjectByName('crew-capsule')).toBeDefined();
-    expect(root.getObjectByName('telescope')).toBeUndefined();
-    // The fairing moved with it rather than being left floating.
-    const fairing = root.getObjectByName('fairing')!;
-    const expectedBase = PART_LIBRARY.find(p => p.id === 'core-booster')!.height
-      + PART_LIBRARY.find(p => p.id === 'upper-stage')!.height
-      + PART_LIBRARY.find(p => p.id === 'crew-capsule')!.height;
-    expect(fairing.position.y).toBeCloseTo(expectedBase, 5);
-  });
-
-  it('charges only the difference when swapping, and refunds it going cheaper', () => {
-    click('core-booster'); // $148M
-    expect(budget).toBe(332);
-
-    // Up to the $196M extended core: pay the $48M difference, not $196M.
-    click('extended-booster');
-    expect(budget).toBe(284);
-
-    // Back down to the $96M solid. The refund is half, as everywhere else in
-    // the programme: reversing a decision always costs something, which is
-    // what stops swapping being free experimentation.
-    click('solid-booster');
-    expect(budget).toBe(334);
-  });
-
-  it('says so and changes nothing when the same part is clicked again', () => {
-    click('core-booster');
-    const before = budget;
-    click('core-booster');
-    expect(budget).toBe(before);
-    expect(assembly.parts).toHaveLength(1);
-  });
-});
-
-describe('reaching the launch', () => {
-  it('offers a launch button that is disabled until the vehicle is complete', () => {
-    // The flight phase was unreachable for a whole session: the only route to
-    // it was a roll-out screen behind a key the Workshop disables. A build
-    // phase with no way out is not a game, and nothing failed to say so.
-    const button = () => chrome.querySelector<HTMLButtonElement>('.palette-launch')!;
-    expect(button()).not.toBeNull();
-    expect(button().disabled).toBe(true);
-    // And it says what is missing rather than sitting there inert.
-    expect(button().textContent).toMatch(/booster/i);
-
-    click('core-booster');
-    expect(button().disabled).toBe(true);
-    click('upper-stage');
-    click('telescope');
-    expect(button().disabled).toBe(true);
-    click('fairing');
-
-    expect(button().disabled).toBe(false);
-    expect(button().textContent).toMatch(/launch/i);
-  });
-
-  it('calls the launch hook when the finished vehicle is sent to the pad', () => {
-    let launched = 0;
-    const camera = new THREE.PerspectiveCamera(72, 1.5, 0.1, 400);
-    const chrome2 = document.createElement('section');
-    document.body.append(chrome2);
-    const root2 = new THREE.Group();
-    const assembly2 = new Assembly(root2, createMaterials());
-    const builder2 = new RocketBuilder(assembly2, root2, camera,
-      new OrbitCamera(camera), chrome2, {
-        charge: () => true, refund: () => {}, spent: () => 0,
-        changed: () => {}, refuse: () => {},
-        launch: () => { launched++; },
-      });
-    for (const id of ['core-booster', 'upper-stage', 'telescope', 'fairing']) {
-      builder2.fit(PART_LIBRARY.find(p => p.id === id)!);
-    }
-    chrome2.querySelector<HTMLButtonElement>('.palette-launch')!.click();
-    expect(launched).toBe(1);
-  });
-});
-
-describe('framing', () => {
-  it('keeps the camera inside the building for every stack it can build', () => {
-    // The camera once had to back out through the wall to frame a full-size
-    // rocket, and the bay read as a doll's house around it. The vehicle is a
-    // scale mockup now, so every stack must be viewable from indoors.
-    const VAB_HALF_DEPTH = 23;
-    const camera = new THREE.PerspectiveCamera(72, 1.9, 0.1, 400);
-    const orbit = new OrbitCamera(camera);
-    const chrome2 = document.createElement('section');
-    const root2 = new THREE.Group();
-    root2.scale.setScalar(DISPLAY_SCALE);
-    const assembly2 = new Assembly(root2, createMaterials());
-    const builder2 = new RocketBuilder(assembly2, root2, camera, orbit, chrome2, {
-      charge: () => true, refund: () => {}, spent: () => 0,
-      changed: () => {}, refuse: () => {},
-      launch: () => {},
-    });
-
-    // The tallest vehicle in the library.
-    for (const id of ['extended-booster', 'upper-stage', 'science-lab', 'fairing']) {
-      builder2.fit(PART_LIBRARY.find(part => part.id === id)!);
-    }
-    settle(builder2);
-    const box = new THREE.Box3().setFromObject(root2);
-    const size = box.getSize(new THREE.Vector3());
-    // A mockup, not a 67 m rocket.
-    expect(size.y).toBeLessThan(30);
-
-    orbit.update();
-    expect(Math.abs(camera.position.z)).toBeLessThan(VAB_HALF_DEPTH);
-    expect(Math.abs(camera.position.x)).toBeLessThan(VAB_HALF_DEPTH);
-    // And the whole vehicle is actually in shot.
-    for (const corner of [box.min, box.max]) {
-      const projected = corner.clone().project(camera);
-      expect(Math.abs(projected.y)).toBeLessThan(1);
-    }
-  });
-});
-
-describe('feel and feedback', () => {
-  function rig(start: number) {
-    let money = start;
-    const camera = new THREE.PerspectiveCamera(72, 1.5, 0.1, 400);
-    const shell = document.createElement('section');
-    document.body.append(shell);
-    const stackRoot = new THREE.Group();
-    const stack = new Assembly(stackRoot, createMaterials());
-    const built = new RocketBuilder(stack, stackRoot, camera, new OrbitCamera(camera), shell, {
-      charge: part => { money -= part.cost; return true; },
-      refund: part => { money += part.cost * 0.5; },
-      spent: () => start - money,
-      changed: () => {},
-      refuse: () => {},
-      launch: () => {},
-      available: () => money,
-      par: () => 240,
-    });
-    return { built, stack, stackRoot, shell, money: () => money };
-  }
-
-  it('refuses a part the budget cannot cover instead of going bankrupt', () => {
-    // The charge used to always succeed and drive the budget negative, which
-    // failed the whole mission rather than simply saying no.
-    const { built, stack, shell, money } = rig(100);
-    built.fit(PART_LIBRARY.find(p => p.id === 'core-booster')!); // $148M
-    expect(stack.parts).toHaveLength(0);
-    expect(money()).toBe(100);
-    expect(shell.querySelector('.rocket-palette')!.classList.contains('shake')).toBe(true);
-  });
-
-  it('drops a fitted part from above and lands it exactly on its seat', () => {
-    const { built, stackRoot } = rig(480);
-    built.fit(PART_LIBRARY.find(p => p.id === 'core-booster')!);
-    const mesh = stackRoot.getObjectByName('core-booster')!;
-    const start = performance.now();
-    expect(mesh.position.y).toBeGreaterThan(10);
-    built.tick(start + 200);
-    const midway = mesh.position.y;
-    expect(midway).toBeGreaterThan(0);
-    built.tick(start + 10_000);
-    expect(mesh.position.y).toBe(0);
-  });
-
-  it('floats the cost off the readout', () => {
-    const { built, shell } = rig(480);
-    built.fit(PART_LIBRARY.find(p => p.id === 'solid-booster')!);
-    const float = shell.querySelector('.cost-float.spend');
-    expect(float?.textContent).toMatch(/96/);
-  });
-
-  it('shows Mission Control\u2019s call and the par as the stack is built', () => {
-    const { built, shell } = rig(300);
-    const verdict = () => shell.querySelector<HTMLElement>('.mission-verdict')!;
-    expect(verdict().dataset.verdict).toBe('incomplete');
-    for (const id of ['solid-booster', 'kerolox-upper', 'comms-probe', 'fairing']) {
-      built.fit(PART_LIBRARY.find(p => p.id === id)!);
-    }
-    // 10 385 m/s on the cheapest relay build: comfortably GO.
-    expect(verdict().dataset.verdict).toBe('go');
-    expect(verdict().textContent).toMatch(/Par \$240M · spent \$236M/);
+  it('uses small markers while keeping the full snap target accessible', () => {
+    const sphere = root.getObjectByName('attachment-root') as THREE.Mesh<THREE.SphereGeometry>;
+    expect(sphere.geometry.parameters.radius).toBe(ATTACHMENT_RADIUS);
+    expect(ATTACHMENT_RADIUS).toBeLessThan(.5);
+    expect(node('root').b.getAttribute('aria-label')).toContain('Attach selected part');
   });
 });

@@ -114,7 +114,7 @@ const GradeShader = {
 export interface Pipeline {
   readonly composer: EffectComposer;
   /** Render one frame through the pipeline. */
-  render(): void;
+  render(camera?: THREE.PerspectiveCamera | THREE.OrthographicCamera): void;
   setSize(width: number, height: number): void;
   /** Swap effect budget. Returns the quality actually in force. */
   setQuality(quality: Quality): Quality;
@@ -136,6 +136,7 @@ export function createPipeline(
 ): Pipeline | null {
   let composer: EffectComposer;
   let gtao: GTAOPass;
+  let scenePass: RenderPass;
   let bloom: UnrealBloomPass;
   let grade: ShaderPass;
 
@@ -145,7 +146,8 @@ export function createPipeline(
     const height = Math.max(1, size.y);
 
     composer = new EffectComposer(renderer);
-    composer.addPass(new RenderPass(scene, camera));
+    scenePass = new RenderPass(scene, camera);
+    composer.addPass(scenePass);
 
     // Ground-truth ambient occlusion. The radius is in world metres, and at
     // DISPLAY_SCALE the vehicle is a ~24 m object in a 60 m room, so a half-
@@ -192,7 +194,15 @@ export function createPipeline(
 
   return {
     composer,
-    render: () => composer.render(),
+    render: (activeCamera = camera) => {
+      if (scenePass.camera !== activeCamera) {
+        scenePass.camera = activeCamera;
+        gtao.camera = activeCamera;
+        gtao.gtaoMaterial.defines.PERSPECTIVE_CAMERA = activeCamera instanceof THREE.PerspectiveCamera ? 1 : 0;
+        gtao.gtaoMaterial.needsUpdate = true;
+      }
+      composer.render();
+    },
     setSize: (width, height) => {
       // Clamp to 1: a minimised window reports zero, and a zero-sized render
       // target is invalid. EffectComposer.setSize already forwards to every

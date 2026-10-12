@@ -1,3 +1,4 @@
+import { LEO_DELTA_V_REQUIRED } from './launchRequirements';
 import { CONTRACT_FIRST_ORBIT, type Contract } from './contract';
 
 /**
@@ -48,17 +49,17 @@ export const CAMPAIGN: readonly CampaignContract[] = [
     id: 'relay',
     customer: 'TeleNet Communications',
     title: 'Relay Run',
-    tagline: 'Any satellite, any vehicle. Do not overspend.',
+    tagline: 'A light satellite. Room to experiment.',
     brief: 'Put a communications relay in orbit above 200 kilometres. TeleNet pays on '
       + 'insertion and has no interest in how you get there.',
     briefing: 'TeleNet wants a relay in orbit and they are paying 180 million. Cheap and '
       + 'cheerful will do. Just make sure it gets there.',
     difficulty: 1,
-    budget: 300,
-    par: 240,
+    budget: 420,
+    par: 340,
     minScience: 40,
     targetAltitude: 200_000,
-    deltaVRequired: 9_400,
+    deltaVRequired: LEO_DELTA_V_REQUIRED,
     payment: 180,
     marginBonus: { threshold: 800, payment: 20 },
   },
@@ -86,7 +87,7 @@ export const CAMPAIGN: readonly CampaignContract[] = [
     minScience: 150,
     requiredPayload: 'crew-capsule',
     targetAltitude: 200_000,
-    deltaVRequired: 9_400,
+    deltaVRequired: LEO_DELTA_V_REQUIRED,
     payment: 420,
     marginBonus: { threshold: 800, payment: 40 },
   },
@@ -105,7 +106,7 @@ export const CAMPAIGN: readonly CampaignContract[] = [
     minScience: 180,
     requiredPayload: 'science-lab',
     targetAltitude: 200_000,
-    deltaVRequired: 9_400,
+    deltaVRequired: LEO_DELTA_V_REQUIRED,
     payment: 520,
     marginBonus: { threshold: 400, payment: 60 },
   },

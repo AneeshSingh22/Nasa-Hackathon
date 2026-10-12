@@ -21,7 +21,7 @@
  * through the advice button.
  */
 export const INTRO = [
-  'Morning, engineer. Explore the bay, then enter the workshop at the cyan marker to build.',
+  'Morning, engineer. Your rocket is in the VAB. Select Build rocket on the platform to enter the workshop.',
   'Build from the bottom up: first stage, second stage, payload, then the fairing. Every part spends the budget, and the payload you pick decides whether you have the delta-v to reach orbit. Press T if you need help.',
 ];
 

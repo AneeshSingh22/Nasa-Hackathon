@@ -14,17 +14,36 @@ it by hand and find out whether your napkin maths was right.
 
 The game has two mechanical modes. Do not blend them.
 
-1. **Explore** — first-person walk around an open facility (space centre
-   campus). Look around, find stations, enter the workshop. Later: launch pad
-   and other buildings as places to visit, not as mini-games of their own.
-2. **Workshop** — third-person builder (Kerbal-style). Orbit, pan and zoom the
-   vehicle. Drag parts from a palette onto the stack. Each part has a cost. A
-   mission / contract panel stays visible. Leave when the stack is ready to
-   hand off to launch.
+1. **VAB hub** — after accepting a mission, show a fixed orthographic isometric
+   view of the current rocket and facility. Keep the cursor visible. Select the
+   platform's **Build rocket** button (or E) to enter Workshop. No FPS walking,
+   pointer lock, cyan-circle commute, elevators or part pickups in this flow.
+2. **Workshop** — third-person builder. Orbit, pan and zoom the vehicle,
+   choose parts against the contract and budget, then launch. Esc returns to
+   the isometric hub and preserves the paid-for craft.
+
+The internal `explore` mode name is retained for compatibility and now means
+hub. PlayerController remains legacy plumbing for Workshop's perspective camera;
+its movement and canvas listeners are disabled in the playable flow.
 
 **Assembly happens only in the workshop.** The campus does not carry-and-place
 parts, climb elevators to fit payloads, or gate attachment on work-zone height.
 Those mechanics were a prototype path; they are not the direction.
+
+### Hub presentation and build clock
+
+Centre the isometric hub on the assembly itself. Extend scenery to cover the
+viewport and keep foreground supports from obscuring the craft. Use **Program
+Status** in American English; no mission-number badge. The contract is a recessed
+monitor; Elena's supplied portrait sits beside her dialogue. The lower-right
+triangular launch switch turns green only when the completed craft meets the
+contract and a GO/MARGINAL flight-readiness verdict.
+
+The build schedule is a continuous clock: **one day = 20 active game seconds**,
+so the default 24-day window lasts eight minutes. It runs in hub and Workshop,
+pauses on the mission board, in hidden tabs, after failure/completion, and in
+flight. Part actions spend money/confidence but do not instantly consume days.
+Retries and new contracts reset the timer.
 
 ### What the workshop must force the player to decide
 
@@ -50,18 +69,20 @@ free-form placement in empty air.
 **Green / red feedback while dragging:**
 
 - **Green** — nearest node pair is compatible; release will attach
-- **Red** — near a node but incompatible (wrong kind, occupied, or illegal
-  order); release does nothing
+- **Red** — near a node but incompatible (duplicate singleton, deferred part, or stack limit); release does nothing
 - Dim or hidden — nodes that are not candidates for the part in hand
 
 Compatibility is a function of rules, not vibes. The same logic that decides
 green/red must be what the workshop assembly graph uses to accept or reject
 the attach — no separate "display legality."
 
-**Command pod is the session root.** Every build session spawns a Command Pod
-(or probe core) fixed at the hangar centre. It is the vessel hierarchy root,
-the default camera focus, and the origin for mass / physics roll-up. The player
-does not place it from the palette; they build *onto* it.
+**Start with any available part.** The suspended green root node accepts a tank,
+engine, payload, fairing or control unit. Build above or below it; selecting an
+installed part also exposes its interfaces for inserting a replacement in the
+middle. The first installed part anchors the assembly hierarchy, regardless of
+kind. A command capsule or unmanned unit is required for launch, not for starting
+a design. Every part contributes its own cost/mass. This supersedes the automatic
+placeholder pod from Phase 1–2.
 
 **v1 scope: axial stack only.** Ship a linear chain before a full attach graph.
 Typical bottom → top order once the modular catalog is live:
@@ -71,7 +92,7 @@ Typical bottom → top order once the modular catalog is live:
 | Ground lock | Launch clamp (holds the stack until first stage fire) |
 | Propulsion | Liquid engine under fuel tank(s) |
 | Staging break | Stack / radial decoupler between stages |
-| Command | Command pod (already present as root; may sit above tanks) |
+| Command | Command capsule or unmanned unit (required for launch) |
 | Aero / control | Fins low on the stack; reaction wheel (often in the pod) |
 | Mission | Environment sensor, antenna (science & utility) |
 
@@ -80,8 +101,8 @@ Do not block the workshop on full KSP generality.
 
 The legacy `PartKind` slots (`booster` → `upper` → `payload` → `fairing` in
 `vab/parts.ts`) remain the prototype library until the catalog below replaces
-them. New workshop work targets the five palette categories, not more
-carry-and-place slots.
+them. The live workshop uses `modularParts.ts`; the legacy library is retained for
+physics regression tests and developer flight fixtures.
 
 **Palette and progressive disclosure.** Categories + part thumbnails on one
 side; deep stats (thrust, Isp, mass, cost, blurb) on hover or select — a
@@ -90,17 +111,77 @@ craft name, funds / budget, and a short live stack summary derived from the
 simulation. Mission / contract requirements stay available without drowning
 the 3D view.
 
+### Current Workshop MVP (supersedes historical catalog and implementation notes below)
+
+- **Layout:** exit/Workshop title at upper left; recessed steel strip with Contract
+  button, budget drums and shared build timer; compact category rail and two-column
+  image palette at left. Use the home screen’s dark neutral charcoal/steel palette.
+  Rocket specs live in a recessed TV monitor attached to the right edge, with a
+  pull tab to collapse/expand it. Keep labels and status messages short.
+- **Progressive disclosure:** image tiles only. Hover or keyboard focus reveals
+  name, full price, dry mass, fuel, thrust/Isp, science and briefing in a tooltip.
+  Click an installed part to inspect its stats and full-price Sell action without
+  lifting it; dragging starts only after deliberate pointer movement.
+  Contract opens a scrollable monitor, closed on entry. Reuse the real HUD
+  contract and restore it on exit, rather than maintaining another copy.
+- **Four categories:** Command; Propulsion & stages (five tanks and five engines);
+  Payloads (all existing payloads); Structure & aero (fairing and a visibly
+  deferred decoupler). Reaction control is integrated into command units.
+  Explicit decoupler logic, radial boosters, fins and clamps remain later work.
+- **Placement:** pointer drag previews at the cursor; release on a compatible
+  small green sphere commits immediately. Invalid nodes turn red. Any available
+  part can seed the build by dropping anywhere in the clear empty bay; no
+  precision hit on the root sphere is required. Later drops still snap to
+  attachment nodes; upper/lower and selected-part interfaces share the same
+  compatibility rules. Missing control or fuel is a launch-readiness concern. No falling
+  animation or free placement on the floor. Keyboard pick + activate a node is
+  also supported. Esc cancels the preview before exiting; blur/pointer cancel
+  and leaving the session cancel cleanly with no purchase.
+- **Money:** charge only accepted drops. Return installed parts for **100% of
+  their purchase price**. Use the installed-part Sell action, drag to Return, or
+  use the Return button / Q / Delete. Sell only the selected part, preserve the
+  rest and reconnect the stack; if the seed is sold, choose a surviving anchor.
+  Explicit programmatic subtree removal remains available for legacy callers.
+  No half-refund or swap penalty in the live builder.
+- **Assembly/physics:** unique instance IDs allow repeated tanks. Command is the
+  control requirement at launch, not a mandatory starting/root part. Store parts
+  in physical top-to-bottom order independent of purchase order. Each tank group
+  followed by an engine forms a stage; up to two inferred stages for this MVP.
+  `modularVehicle.ts` reverses physical stage order for bottom-first flight and
+  derives both the readout and vehicle from shared physics functions. Tanks alone
+  supply no thrust/delta-v; unfed engines and dangling tanks prevent completion.
+  Keep legacy combined-stage definitions for regression
+  tests; do not use them as the live palette.
+- **Starter balance:** Relay Run grants **$420M**, with **$340M** as its par cost.
+  Keep the 9,400 m/s delta-v, 200 km orbit and science requirements grounded in
+  the existing flight simulation. Regression tests must demonstrate several
+  affordable two-stage combinations reach orbit with either control choice,
+  including multiple designs under par; later mission tuning is independent.
+  Live modular engine Isp is deliberately more forgiving (Swift 300 s, Core
+  335 s, Extended 345 s, vacuum kerolox 360 s, vacuum hydrolox 390 s). Keep the
+  legacy stage calibration unchanged. The starter spec monitor offers a collapsed
+  **Build guide** with a proven $240M two-stage relay and values calculated from
+  the actual parts. Display available/required delta-v; do not make a 7,400 m/s
+  analysis claim flight-ready while the contract and launch still need 9,400.
+- **Ownership:** Assembly owns installed geometry; RocketBuilder owns disposable
+  ghost geometry/materials, attachment nodes and pointer listeners. Orbit receives
+  input only when a part is not being dragged. Framing uses installed meshes alone.
+- **Verification:** tests cover legal/illegal drops, cancellation, insufficient
+  budget, arbitrary seed/order, middle-part insertion, single-part sale/refund,
+  repeat parts, camera height/framing, monitor collapse/restoration, starter
+  design viability, and a full modular mission through orbit/reward persistence.
+
 ### Workshop part catalog (build-screen palette)
 
-Five categories on the build screen. Counts are the *types* the palette must
+Historical target catalog (the four-category MVP above is current). Counts are the *types* the palette may
 expose for a playable vessel; variants (tank sizes, engine thrusts) live inside
 a type, not as extra categories.
 
-#### 1. Command (1 type) — session root
+#### 1. Command (1 type) — flight control
 
 | Part | Role |
 | --- | --- |
-| Command Pod / Probe Core | Brain of the vessel. Handles player input in flight, provides the camera focus, houses crew or computer, and is the origin for vessel mass and physics aggregation. **Spawns centred in every build session;** not dragged from the palette. |
+| Command Pod / Probe Core | Brain of the vessel. Handles player input in flight, provides the camera focus, houses crew or computer, and is the origin for vessel mass and physics aggregation. **Can be added at any point during building; required for launch.** |
 
 #### 2. Propulsion (2 types)
 
@@ -132,7 +213,7 @@ a type, not as extra categories.
 
 #### Build-screen checklist (what the palette shows)
 
-1. **Command** — Command Pod (default centre spawn; palette may show it as equipped / locked)
+1. **Command** — Command capsule or unmanned unit (required before launch)
 2. **Propulsion** — Fuel Tank (variants by size/weight), Liquid Engine
 3. **Structural & Coupling** — Decoupler, Launch Clamp
 4. **Control & Aero** — Reaction Wheel, Fin
@@ -379,7 +460,7 @@ product.
   deliberately allowed outside the 46 m-deep bay, because the standoff a launch
   vehicle needs does not fit indoors. Any change to part heights needs checking
   against `maxDistance` as well as `VAB_HEIGHT`.
-- **A choice you cannot reverse is not a comparison.** Clicking a part committed
+- **Historical combined-stage swap behavior (superseded by full refunds).** Clicking a part committed
   it, so comparing three boosters meant tearing the stack down. `Assembly.swapPart`
   already existed and rebuilds everything above the swapped slot; the palette now
   keeps a fitted slot's buttons live and a click swaps in place, charging only the
@@ -493,10 +574,9 @@ product.
   only entry was a button on the roll-out screen, and roll-out was reached by
   `F`, which is gated behind `LEGACY_ASSEMBLY_ENABLED = false`. Every test
   passed because they all construct `FlightPhase` directly; none of them asked
-  whether a player could get there. The Workshop now carries the Launch button,
-  and `rocketBuilder.test.ts` asserts it exists, that it stays disabled until
-  the stack is complete, that it names the missing part, and that clicking it
-  calls through. When a feature is finished, test the route to it, not only the
+  whether a player could get there. The shared triangular Launch button is available in Workshop and the hub.
+  `game-loop.test.ts` checks its readiness gate and follows a modular craft
+  through launch, orbit and mission rewards. When a feature is finished, test the route to it, not only the
   feature.
 
 - **In a cockpit view the cockpit does not move — the world does.** The first

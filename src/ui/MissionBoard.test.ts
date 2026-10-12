@@ -19,6 +19,7 @@ const card = (id: string) => container.querySelector<HTMLButtonElement>(`[data-c
 describe('the mission board', () => {
   it('lists every contract with its customer, pay, budget and par', () => {
     new MissionBoard(container, { onSelect: () => {} }, {}, CAMPAIGN[0]!.id);
+    expect(container.textContent).not.toContain('Ad Astra Program');
     for (const contract of CAMPAIGN) {
       const text = card(contract.id).textContent!;
       expect(text).toContain(contract.title);

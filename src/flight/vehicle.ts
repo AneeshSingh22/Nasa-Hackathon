@@ -1,3 +1,4 @@
+import { modularVehicle } from '../workshop/modularVehicle';
 import type { PartDefinition } from '../vab/parts';
 import type { Stage, Vehicle } from '../physics/rocket';
 
@@ -72,6 +73,7 @@ function dragArea(radius: number): number {
  * than producing a vehicle that would behave strangely in the simulation.
  */
 export function vehicleFromParts(parts: readonly PartDefinition[]): Vehicle | null {
+  if (parts.some(p => p.kind === 'command')) return modularVehicle(parts);
   const booster = parts.find(part => part.kind === 'booster');
   const upper = parts.find(part => part.kind === 'upper');
   const payload = parts.find(part => part.kind === 'payload');

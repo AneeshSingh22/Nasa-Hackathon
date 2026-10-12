@@ -3,12 +3,8 @@ import type { GameMode } from '../game/mode';
 import { OrbitCamera } from '../render/OrbitCamera';
 import { PlayerController } from '../vab/PlayerController';
 import { RocketBuilder, type BuilderHooks } from './rocketBuilder';
+import { BUILD_ANCHOR_Y } from './attachments';
 import type { Assembly } from '../vab/Assembly';
-
-// Metres above assemblyRoot: 11.6 m world height in the VAB. Suspension
-// makes this a design bay and leaves room to build below the root later.
-export const WORKSHOP_POD_HOVER_Y = 10;
-
 
 export class WorkshopSession {
   private currentMode: GameMode = 'explore';
@@ -19,6 +15,14 @@ export class WorkshopSession {
   private readonly savedRotation = new THREE.Quaternion();
   private readonly exitButton: HTMLButtonElement;
   private readonly onExit = () => this.exit();
+  private contractHome: HTMLElement | null = null;
+  private contractNext: Node | null = null;
+  private readonly toggleContract = () => {
+    const monitor = this.chrome.querySelector<HTMLElement>('#workshop-contract-monitor');
+    const toggle = this.chrome.querySelector<HTMLButtonElement>('#workshop-contract-toggle');
+    if (!monitor || !toggle) return;
+    monitor.hidden = !monitor.hidden; toggle.setAttribute('aria-expanded', String(!monitor.hidden));
+  };
 
   constructor(
     private readonly player: PlayerController,
@@ -31,10 +35,11 @@ export class WorkshopSession {
     private readonly beforeEnter: () => void = () => {},
   ) {
     this.orbit = new OrbitCamera(player.camera);
-    const button = chrome.querySelector<HTMLButtonElement>('button');
+    const button = chrome.querySelector<HTMLButtonElement>('[data-workshop-exit]') ?? chrome.querySelector<HTMLButtonElement>('button');
     if (!button) throw new Error('Workshop chrome needs an exit button');
     this.exitButton = button;
     this.exitButton.addEventListener('click', this.onExit);
+    chrome.querySelector('#workshop-contract-toggle')?.addEventListener('click', this.toggleContract);
   }
 
   get mode(): GameMode { return this.currentMode; }
@@ -59,11 +64,15 @@ export class WorkshopSession {
       this.hiddenObjects.set(mesh, true);
       mesh.visible = true;
     }
-    this.orbit.reset(this.root.getWorldPosition(new THREE.Vector3()));
-    this.builder = new RocketBuilder(this.assembly, this.root, this.player.camera, this.orbit, this.chrome, this.hooks);
-    // No placement ghost any more: parts are chosen from the palette and the
-    // stack decides where they go, so orbit is always available.
-    this.orbit.attach(this.canvas);
+    this.orbit.reset(this.root.localToWorld(new THREE.Vector3(0, BUILD_ANCHOR_Y, 0)));
+    const contract = this.hud.querySelector<HTMLElement>('#contract');
+    const monitor = this.chrome.querySelector<HTMLElement>('#workshop-contract-monitor');
+    if (contract && monitor) {
+      this.contractHome = contract.parentElement; this.contractNext = contract.nextSibling;
+      monitor.append(contract); monitor.hidden = true;
+    }
+    this.builder = new RocketBuilder(this.assembly, this.root, this.player.camera, this.orbit, this.chrome, this.hooks, this.canvas);
+    this.orbit.attach(this.canvas, () => !this.builder?.isDragging);
     this.hud.classList.add('hidden');
     this.chrome.classList.remove('hidden');
     this.exitButton.focus({ preventScroll: true });
@@ -75,8 +84,8 @@ export class WorkshopSession {
     if (event.repeat) return true;
     if (event.code === 'Escape') {
       event.preventDefault();
-      this.exit();
-    } else if (event.code === 'KeyQ' || event.code === 'Backspace') {
+      if (!this.builder?.cancelDrag()) this.exit();
+    } else if (event.code === 'KeyQ' || event.code === 'Backspace' || event.code === 'Delete') {
       event.preventDefault();
       if (!event.repeat) this.builder?.removeLast();
     }
@@ -90,6 +99,12 @@ export class WorkshopSession {
 
   exit(): void {
     if (this.currentMode === 'explore') return;
+    const monitor = this.chrome.querySelector<HTMLElement>('#workshop-contract-monitor');
+    const contract = monitor?.querySelector<HTMLElement>('#contract');
+    if (contract && this.contractHome) this.contractHome.insertBefore(contract, this.contractNext);
+    this.contractHome = null; this.contractNext = null;
+    if (monitor) monitor.hidden = true;
+    this.chrome.querySelector('#workshop-contract-toggle')?.setAttribute('aria-expanded', 'false');
     this.orbit.detach();
     this.builder?.dispose();
     this.builder = null;
@@ -104,17 +119,19 @@ export class WorkshopSession {
     this.player.camera.position.copy(this.savedPosition);
     this.player.camera.quaternion.copy(this.savedRotation);
     this.player.camera.updateMatrixWorld();
-    this.player.setEnabled(true);
+    this.player.setEnabled(false);
     this.currentMode = 'explore';
     this.chrome.classList.add('hidden');
     this.hud.classList.remove('hidden');
     this.exitButton.blur();
-    // Pointer lock is reacquired only by the next canvas click/user gesture.
+    this.hud.querySelector<HTMLButtonElement>('#hub-build-button')?.focus({ preventScroll: true });
+    // The hub keeps a visible cursor; pointer lock stays disabled.
   }
 
   dispose(): void {
     this.exit();
     this.exitButton.removeEventListener('click', this.onExit);
+    this.chrome.querySelector('#workshop-contract-toggle')?.removeEventListener('click', this.toggleContract);
     // The vehicle's meshes belong to Assembly, which owns their lifetime.
   }
 }

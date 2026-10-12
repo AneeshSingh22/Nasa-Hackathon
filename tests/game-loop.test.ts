@@ -77,6 +77,7 @@ it('plays a contract from the board to stars and back to the next contract', asy
     closePath() {}, fill() {}, fillText() {},
   } as unknown as CanvasRenderingContext2D);
   vi.spyOn(THREE.Clock.prototype, 'getDelta').mockReturnValue(1 / 60);
+  vi.spyOn(document, 'hidden', 'get').mockReturnValue(false);
   vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
     state.nextFrame = callback;
     return 1;
@@ -92,30 +93,31 @@ it('plays a contract from the board to stars and back to the next contract', asy
   $<HTMLButtonElement>('#start-button').click();
   expect(hidden('hud')).toBe(false);
   // The contract sets the budget.
-  expect($('#res-budget').textContent).toBe('$300M');
+  expect($('#res-budget').getAttribute('aria-label')).toBe('420 million dollars available');
 
   // ---- the workshop ----
   const player = state.player!;
-  player.position.set(0, 1.72, 14);
-  window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyW' }));
-  frames(35);
-  window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyW' }));
-  frames();
-  key('KeyE');
+  $<HTMLButtonElement>('#hub-build-button').click();
   frames();
   expect(hidden('workshop')).toBe(false);
 
-  for (const id of ['solid-booster', 'kerolox-upper', 'comms-probe', 'fairing']) {
+  for (const id of ['probe-core', 'kerolox-tank', 'kerolox-engine', 'compact-tank', 'swift-engine', 'comms-probe', 'fairing']) {
     $<HTMLButtonElement>(`[data-part="${id}"]`).click();
-    frames(40); // Let each part fall onto the stack.
+    const port = id === 'probe-core' ? 'root' : id === 'comms-probe' ? 'upper' : id === 'fairing' ? 'upper' : 'lower';
+    $<HTMLButtonElement>(`[data-port="${port}"]`).click();
+    frames(2);
   }
   expect($<HTMLElement>('.mission-verdict').dataset.verdict).toBe('go');
-  expect($('.mission-verdict').textContent).toContain('Par $240M · spent $236M');
+  expect($('.mission-verdict').textContent).toContain('Par $340M');
 
   // ---- the flight ----
-  $<HTMLButtonElement>('.palette-launch').click();
+  expect($<HTMLButtonElement>('#hub-launch-button').disabled).toBe(false);
+  expect($<HTMLElement>('#hub-launch-button').dataset.ready).toBe('true');
+  const buildTime = $('#res-time').textContent;
+  $<HTMLButtonElement>('#hub-launch-button').click();
   frames();
   expect(hidden('flight')).toBe(false);
+  expect(hidden('hub-launch-button')).toBe(true);
   key('KeyG'); // autopilot, which also lights the engines
   for (let i = 0; i < 3; i++) key('Period'); // warp x8 once flying
   for (let i = 0; i < 20_000 && hidden('success'); i++) {
@@ -124,6 +126,7 @@ it('plays a contract from the board to stars and back to the next contract', asy
     if (i === 200) for (let k = 0; k < 3; k++) key('Period');
   }
   expect(hidden('success')).toBe(false);
+  expect($('#res-time').textContent).toBe(buildTime);
   expect($('#success h1').textContent).toBe('Orbit achieved');
 
   // Two stars: orbit and under par. Not three, because the autopilot flew it.
@@ -143,13 +146,16 @@ it('plays a contract from the board to stars and back to the next contract', asy
 
   $<HTMLButtonElement>('#start-button').click();
   expect(hidden('hud')).toBe(false);
-  expect($('#res-budget').textContent).toBe('$480M');
+  expect($('#res-budget').getAttribute('aria-label')).toBe('480 million dollars available');
 
-  // The bug this test exists for: after a flight the player must be able to
-  // walk again.
+  // Returning from a flight restores the usable hub and platform action.
   const before = player.position.clone();
   window.dispatchEvent(new KeyboardEvent('keydown', { code: 'KeyS' }));
   frames(20);
   window.dispatchEvent(new KeyboardEvent('keyup', { code: 'KeyS' }));
-  expect(player.position.distanceTo(before)).toBeGreaterThan(0.5);
+  expect(player.position.distanceTo(before)).toBe(0);
+  expect((state.render.mock.calls.at(-1)![1] as THREE.OrthographicCamera).isOrthographicCamera).toBe(true);
+  $<HTMLButtonElement>('#hub-build-button').click();
+  frames();
+  expect(hidden('workshop')).toBe(false);
 }, 120_000);

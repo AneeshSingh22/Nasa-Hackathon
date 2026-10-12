@@ -19,6 +19,7 @@ export const BUILD_ORDER: readonly PartKind[] = ['booster', 'upper', 'payload', 
 
 /** Human heading for each slot, shown on the palette. */
 export const SLOT_LABELS: Readonly<Record<PartKind, string>> = {
+  command: 'Command', tank: 'Fuel tanks', engine: 'Engines', decoupler: 'Coupling',
   booster: 'First stage',
   upper: 'Second stage',
   payload: 'Payload',

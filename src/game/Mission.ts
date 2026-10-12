@@ -4,11 +4,11 @@
  *
  * Three resources, all of which can run out:
  *
- *  - **Budget.** Every part costs money to fit. Removing a part refunds only
- *    part of it, because you have already spent the crane time and the crew
- *    hours. Careless building runs the programme out of money.
- *  - **Days to the launch window.** Fitting and removing parts both consume
- *    days. Orbital mechanics does not reschedule for you: miss the window and
+ *  - **Budget.** Every part costs money to fit. Workshop returns refund the full
+ *    purchase price, allowing players to experiment within a timed budget.
+ *    Legacy removal penalties remain only for prototype paths.
+ *  - **Days to the launch window.** One day is twenty seconds of active build
+ *    time. Miss the window and
  *    the mission is scrubbed.
  *  - **Director confidence.** Starts at a workable level and falls when you
  *    waste money or time. Lose it and the programme is cancelled.
@@ -47,14 +47,11 @@ export const MISSION_2_START: MissionConstraints = {
   confidence: 80,
 };
 
-/** What each action costs. Removals are deliberately punishing. */
+/** Seconds of active hub/Workshop play per build-schedule day. */
+export const BUILD_SECONDS_PER_DAY = 20;
+
+/** Legacy carry-and-place penalties. Workshop uses returnHardware instead. */
 export const COSTS = {
-  /** Days consumed fitting a part. */
-  fitDays: 2,
-  /** Days consumed removing a part — undoing work takes almost as long. */
-  removeDays: 3,
-  /** Days consumed clearing the whole stand. */
-  clearDays: 5,
   /** Confidence lost each time a fitted part is removed. */
   removeConfidence: 13,
   /** Confidence lost when the stand is cleared entirely. */
@@ -149,7 +146,7 @@ export class Mission {
     if (this.state.budget < 0) {
       this.fail(
         'budget',
-        'The programme is out of money. You spent 480 million dollars fitting and refitting parts without committing to a design, and the finance office has stopped the work. Every removal refunds less than half of what the part cost — rebuilding is never free.',
+        'The programme is out of money. You spent 480 million dollars fitting and refitting parts without committing to a design, and the finance office has stopped the work. Choose hardware within the available grant. Workshop returns refund the full purchase price.',
       );
     } else if (this.state.daysRemaining <= 0) {
       this.fail(
@@ -183,14 +180,33 @@ export class Mission {
     this.fail(reason, text);
   }
 
+  /** Advance only during active build play. The caller pauses for the mission
+   *  board, flight, completed/failed missions, and hidden browser tabs. */
+  advanceBuildTime(seconds: number): void {
+    if (this.hasFailed || !Number.isFinite(seconds) || seconds <= 0) return;
+    const remaining = this.state.daysRemaining - seconds / BUILD_SECONDS_PER_DAY;
+    this.state.daysRemaining = remaining < 1e-9 ? 0 : remaining;
+    this.onChange?.(this.status);
+    this.checkWarnings();
+    this.checkFailure();
+  }
+
   /** Charge for fitting a part. Returns false if the mission has already ended. */
   fitPart(costMillions: number): boolean {
     if (this.hasFailed) return false;
     this.state.budget -= costMillions;
-    this.state.daysRemaining -= COSTS.fitDays;
     this.onChange?.(this.status);
     this.checkWarnings();
     this.checkFailure();
+    return true;
+  }
+
+  /** Return unlaunched Workshop hardware at its full paid price. No schedule
+   *  or confidence penalty: previews and design revisions are reversible. */
+  returnHardware(costMillions: number): boolean {
+    if (this.hasFailed || !Number.isFinite(costMillions) || costMillions < 0) return false;
+    this.state.budget += costMillions;
+    this.onChange?.(this.status);
     return true;
   }
 
@@ -198,7 +214,6 @@ export class Mission {
   removePart(costMillions: number): boolean {
     if (this.hasFailed) return false;
     this.state.budget += costMillions * COSTS.refundFraction;
-    this.state.daysRemaining -= COSTS.removeDays;
     this.state.confidence = Math.max(
       0,
       this.state.confidence - COSTS.removeConfidence,
@@ -228,7 +243,6 @@ export class Mission {
   clearStand(refundMillions: number): boolean {
     if (this.hasFailed) return false;
     this.state.budget += refundMillions * COSTS.refundFraction;
-    this.state.daysRemaining -= COSTS.clearDays;
     this.state.confidence = Math.max(
       0,
       this.state.confidence - COSTS.clearConfidence,

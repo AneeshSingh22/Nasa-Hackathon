@@ -111,3 +111,22 @@ describe('post-processing pipeline', () => {
     expect(spy).toHaveBeenCalledWith(1, 1);
   });
 });
+
+it('switches scene and AO projection together when the hub hands off to Workshop', () => {
+  const perspective = new THREE.PerspectiveCamera();
+  const orthographic = new THREE.OrthographicCamera();
+  const pipeline = createPipeline(fakeRenderer(), new THREE.Scene(), perspective)!;
+  // Suppress actual GPU calls; inspect the camera contract of both real passes.
+  vi.spyOn(pipeline.composer, 'render').mockImplementation(() => {});
+  const scenePass = pipeline.composer.passes[0] as import('three/examples/jsm/postprocessing/RenderPass.js').RenderPass;
+  const aoPass = pipeline.composer.passes[1] as import('three/examples/jsm/postprocessing/GTAOPass.js').GTAOPass;
+  pipeline.render(orthographic);
+  expect(scenePass.camera).toBe(orthographic);
+  expect(aoPass.camera).toBe(orthographic);
+  expect(aoPass.gtaoMaterial.defines.PERSPECTIVE_CAMERA).toBe(0);
+  pipeline.render(perspective);
+  expect(scenePass.camera).toBe(perspective);
+  expect(aoPass.camera).toBe(perspective);
+  expect(aoPass.gtaoMaterial.defines.PERSPECTIVE_CAMERA).toBe(1);
+  pipeline.dispose();
+});

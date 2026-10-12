@@ -1,239 +1,216 @@
 import type { PartDefinition } from '../vab/parts';
 import type { StackAnalysis } from '../vab/Assembly';
+import { LEO_DELTA_V_REQUIRED } from '../game/launchRequirements';
+import { STARTER_DESIGN, STARTER_ANALYSIS, STARTER_COST } from './starterDesign';
 import type { Readiness } from '../game/readiness';
-import { SLOT_LABELS, optionsFor, BUILD_ORDER } from './catalog';
-
-/**
- * The parts palette, built from the real library.
- *
- * Every slot shows all of its options at once with the numbers that
- * distinguish them, because the decision the phase exists to create is only a
- * decision if the alternatives are visible. The previous palette listed one
- * tank and one engine, so there was nothing to choose and nothing to get
- * wrong.
- *
- * The palette renders state; it never decides legality. `Assembly.nextSlot`
- * does that, and the palette asks.
- */
+import { MODULAR_PARTS, WORKSHOP_CATEGORIES, type WorkshopCategory } from './modularParts';
+import { partIcon, partThumbnails } from './thumbnails';
 
 export interface PaletteCallbacks {
-  readonly select: (part: PartDefinition) => void;
+  readonly select: (part: PartDefinition, event?: PointerEvent) => void;
   readonly removeLast: () => void;
-  /** Hand the finished vehicle to the launch phase. */
   readonly launch: () => void;
+  readonly sell: (instanceId: string) => void;
 }
 
-const millions = (value: number) => `$${value}M`;
+/** Shared inspection values, taken from the purchased part rather than another catalog copy. */
+function facts(part: PartDefinition): HTMLElement {
+  const list = document.createElement('dl'); list.className = 'part-facts';
+  const entries = [['Dry mass', `${(part.dryMass / 1000).toFixed(1)} t`]];
+  if (part.propellantMass) entries.push(['Fuel', `${(part.propellantMass / 1000).toFixed(0)} t`]);
+  if (part.thrust) entries.push([part.vacuumOptimized ? 'Vacuum thrust' : 'Thrust', `${(part.thrust / 1000000).toFixed(2)} MN`]);
+  if (part.isp) entries.push(['Isp', `${part.isp} s`]);
+  if (part.science) entries.push(['Science', String(part.science)]);
+  for (const [name, value] of entries) {
+    const dt = document.createElement('dt'), dd = document.createElement('dd');
+    dt.textContent = name!; dd.textContent = value!; list.append(dt, dd);
+  }
+  return list;
+}
 
 export class RocketPalette {
   readonly element = document.createElement('aside');
   readonly readout = document.createElement('output');
   readonly status = document.createElement('p');
-  private readonly buttons = new Map<string, HTMLButtonElement>();
-  private readonly slotSections = new Map<string, HTMLElement>();
-  private readonly undo = document.createElement('button');
-  /** Mission Control's call, the thing every part choice moves. */
   readonly verdict = document.createElement('section');
-  private readonly verdictHeadline = document.createElement('strong');
-  private readonly verdictDetail = document.createElement('span');
-  private readonly verdictGauge = document.createElement('i');
-  private readonly parLine = document.createElement('span');
+  readonly returnTray = document.createElement('button');
+  private readonly grid = document.createElement('div');
+  private readonly tooltip = document.createElement('section');
+  private readonly inspection = document.createElement('section');
+  private readonly specs = document.createElement('aside');
+  private readonly specsScreen = document.createElement('div');
+  private readonly specsToggle = document.createElement('button');
+  private readonly heading = document.createElement('h3');
+  private readonly rail = document.createElement('nav');
+  private readonly buttons = new Map<string, HTMLButtonElement>();
+  private active: WorkshopCategory | null = 'propulsion';
+  private picking = false;
   private lastVerdict: Readiness['verdict'] | null = null;
-  private readonly chromeElement: HTMLElement;
-  private readonly launch = document.createElement('button');
-  private selectedId: string | null = null;
 
-  constructor(chrome: HTMLElement, private readonly callbacks: PaletteCallbacks) {
+  constructor(private readonly chrome: HTMLElement, private readonly callbacks: PaletteCallbacks, showStarterGuide = false) {
     this.element.className = 'rocket-palette';
     this.element.setAttribute('aria-label', 'Rocket parts');
-
-    for (const kind of BUILD_ORDER) {
-      const section = document.createElement('section');
-      section.className = 'palette-slot';
-      section.dataset.slot = kind;
-
-      const heading = document.createElement('h3');
-      heading.textContent = SLOT_LABELS[kind];
-      section.append(heading);
-
-      for (const part of optionsFor(kind)) {
-        const button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'palette-part';
-        button.dataset.part = part.id;
-        button.setAttribute('aria-pressed', 'false');
-
-        const name = document.createElement('b');
-        name.textContent = part.name;
-        const fact = document.createElement('small');
-        // keyFact is the one number that makes the part interesting, and it is
-        // already written for every part in the library.
-        fact.textContent = part.keyFact;
-        const cost = document.createElement('span');
-        cost.className = 'palette-cost';
-        cost.textContent = millions(part.cost);
-
-        button.append(name, fact, cost);
-        button.addEventListener('click', () => this.callbacks.select(part));
-        this.buttons.set(part.id, button);
-        section.append(button);
-      }
-
-      this.slotSections.set(kind, section);
-      this.element.append(section);
+    this.rail.className = 'category-rail'; this.rail.setAttribute('aria-label', 'Part categories');
+    for (const category of WORKSHOP_CATEGORIES) {
+      const button = document.createElement('button'); button.type = 'button';
+      button.dataset.category = category.id; button.setAttribute('aria-label', category.name);
+      button.title = category.name; button.innerHTML = partIcon(category.icon);
+      button.addEventListener('click', () => {
+        this.active = this.active === category.id ? null : category.id; this.showCategory();
+      });
+      this.rail.append(button);
+    }
+    const drawer = document.createElement('section'); drawer.className = 'parts-drawer';
+    this.grid.className = 'parts-grid'; drawer.append(this.heading, this.grid);
+    this.element.append(this.rail, drawer);
+    const thumbnails = partThumbnails(MODULAR_PARTS);
+    this.tooltip.className = 'part-tooltip'; this.tooltip.id = 'workshop-part-tooltip';
+    this.tooltip.setAttribute('role', 'tooltip'); this.tooltip.hidden = true;
+    for (const part of MODULAR_PARTS) {
+      const button = document.createElement('button'); button.type = 'button'; button.className = 'palette-part';
+      button.dataset.part = part.id; button.dataset.kind = part.kind;
+      button.setAttribute('aria-label', part.name); button.setAttribute('aria-describedby', this.tooltip.id);
+      button.setAttribute('aria-disabled', String(!!part.deferred));
+      const image = thumbnails.get(part.id);
+      if (image) {
+        const img = document.createElement('img'); img.src = image; img.alt = ''; img.draggable = false; button.append(img);
+      } else button.innerHTML = partIcon(part.kind);
+      if (part.deferred) button.classList.add('planned');
+      button.addEventListener('pointerdown', event => {
+        if (event.button !== 0) return;
+        event.preventDefault(); this.tooltip.hidden = true;
+        if (!part.deferred) this.callbacks.select(part, event);
+      });
+      button.addEventListener('click', event => {
+        if (event.detail === 0 && !part.deferred) this.callbacks.select(part);
+      });
+      const show = () => this.showTooltip(part, button);
+      button.addEventListener('pointerenter', show); button.addEventListener('focus', show);
+      button.addEventListener('pointerleave', () => { this.tooltip.hidden = true; });
+      button.addEventListener('blur', () => { this.tooltip.hidden = true; });
+      this.buttons.set(part.id, button); this.grid.append(button);
     }
 
-    this.undo.type = 'button';
-    this.undo.className = 'palette-undo';
-    this.undo.textContent = 'Remove top part · Q';
-    this.undo.addEventListener('click', () => this.callbacks.removeLast());
-    this.element.append(this.undo);
-
-    // The launch button lives here because this is where the build finishes.
-    // It was previously only on a roll-out screen reachable by a key that the
-    // Workshop disabled, so the flight phase could not be started at all.
-    this.launch.type = 'button';
-    this.launch.className = 'palette-launch';
-    this.launch.textContent = 'Launch →';
-    this.launch.addEventListener('click', () => this.callbacks.launch());
-    this.element.append(this.launch);
-
-    const note = document.createElement('small');
-    note.className = 'palette-note';
-    note.textContent = 'Click a fitted slot’s other options to compare and swap.';
-    this.element.append(note);
-
-    this.readout.className = 'rocket-readout';
-    this.readout.setAttribute('aria-label', 'Vehicle analysis');
-    this.status.className = 'workshop-status';
-    this.status.setAttribute('role', 'status');
-    // The verdict sits top-centre, where the eye goes after placing a part.
-    this.verdict.className = 'mission-verdict';
-    this.verdict.setAttribute('role', 'status');
-    this.verdict.setAttribute('aria-label', 'Mission Control verdict');
-    const label = document.createElement('small');
-    label.textContent = 'MISSION CONTROL';
-    const gauge = document.createElement('div');
-    gauge.className = 'verdict-gauge';
-    gauge.append(this.verdictGauge);
-    this.parLine.className = 'verdict-par';
-    this.verdict.append(label, this.verdictHeadline, this.verdictDetail, gauge, this.parLine);
-
-    this.chromeElement = chrome;
-    chrome.append(this.element, this.readout, this.status, this.verdict);
+    this.specs.className = 'workshop-specs'; this.specs.setAttribute('aria-label', 'Rocket specs monitor');
+    this.specsScreen.className = 'specs-screen'; this.specsScreen.id = 'workshop-specs-screen';
+    const title = document.createElement('h3'); title.textContent = 'Rocket specs';
+    this.readout.className = 'rocket-readout'; this.readout.setAttribute('aria-label', 'Vehicle analysis');
+    this.verdict.className = 'mission-verdict'; this.verdict.setAttribute('role', 'status');
+    this.specsScreen.append(title, this.readout, this.verdict);
+    if (showStarterGuide) {
+      const guide = document.createElement('details'); guide.className = 'workshop-build-guide';
+      const summary = document.createElement('summary'); summary.textContent = 'Build guide';
+      const intro = document.createElement('p'); intro.textContent = 'An easy two-stage relay. Build from bottom to top; tanks go above their engines.';
+      const order = document.createElement('ol');
+      for (const part of [...STARTER_DESIGN].reverse()) {
+        const item = document.createElement('li'); item.textContent = part.name; order.append(item);
+      }
+      const result = document.createElement('p'); result.className = 'starter-result';
+      result.textContent = `$${STARTER_COST}M · ${Math.round(STARTER_ANALYSIS.totalDeltaV).toLocaleString('en-US')} m/s`;
+      guide.append(summary, intro, order, result); this.specsScreen.append(guide);
+    }
+    this.specsToggle.type = 'button'; this.specsToggle.className = 'specs-toggle';
+    this.specsToggle.setAttribute('aria-controls', this.specsScreen.id);
+    this.specsToggle.setAttribute('aria-expanded', 'true');
+    this.specsToggle.setAttribute('aria-label', 'Collapse rocket specs'); this.specsToggle.textContent = '›';
+    this.specsToggle.addEventListener('click', () => {
+      const open = this.specsScreen.hidden;
+      this.specsScreen.hidden = !open; this.specs.classList.toggle('specs-collapsed', !open);
+      this.specsToggle.setAttribute('aria-expanded', String(open));
+      this.specsToggle.setAttribute('aria-label', open ? 'Collapse rocket specs' : 'Expand rocket specs');
+      this.specsToggle.textContent = open ? '›' : '‹';
+    });
+    this.specs.append(this.specsToggle, this.specsScreen);
+    this.inspection.className = 'installed-part-info'; this.inspection.hidden = true;
+    this.inspection.setAttribute('role', 'dialog'); this.inspection.setAttribute('aria-label', 'Selected rocket part');
+    this.inspection.tabIndex = -1;
+    this.status.className = 'workshop-status'; this.status.setAttribute('role', 'status');
+    this.returnTray.className = 'workshop-return'; this.returnTray.type = 'button'; this.returnTray.textContent = '↩ Return';
+    this.returnTray.title = 'Drag a part here for a full refund';
+    this.returnTray.setAttribute('aria-label', 'Sell selected part or last installed part, full refund');
+    this.returnTray.addEventListener('click', () => this.callbacks.removeLast());
+    chrome.append(this.element, this.specs, this.status, this.returnTray, this.tooltip, this.inspection);
+    this.showCategory(); this.message('Drag any part into the bay');
   }
 
-  /** Reflect what may be fitted now. */
-  refresh(nextKind: PartDefinition['kind'] | null, fitted: readonly PartDefinition[]): void {
-    const fittedIds = new Set(fitted.map(part => part.id));
-    for (const [kind, section] of this.slotSections) {
-      // The active slot is the one the stack is ready for; the rest dim.
-      section.classList.toggle('active', kind === nextKind);
-      section.classList.toggle('done', fitted.some(part => part.kind === kind));
-    }
-    for (const [id, button] of this.buttons) {
-      button.classList.toggle('fitted', fittedIds.has(id));
-      button.setAttribute('aria-pressed', String(this.selectedId === id));
-    }
-    const fittedKinds = new Set(fitted.map(part => part.kind));
-    for (const kind of BUILD_ORDER) {
-      // A slot stays clickable once it is filled, so the player can compare the
-      // alternatives and swap. Only slots the stack is not ready for are
-      // disabled.
-      const usable = kind === nextKind || fittedKinds.has(kind);
-      for (const option of optionsFor(kind)) {
-        const button = this.buttons.get(option.id);
-        if (button) button.disabled = !usable;
-      }
-    }
-    this.undo.disabled = fitted.length === 0;
-
-    // A vehicle can only fly once every slot is filled. Saying *why* it is
-    // disabled is the difference between a dead button and an instruction.
-    const complete = nextKind === null;
-    this.launch.disabled = !complete;
-    this.launch.textContent = complete
-      ? 'Launch →'
-      : `Fit the ${nextKind === 'upper' ? 'second stage' : nextKind} to launch`;
+  inspect(part: PartDefinition, x: number, y: number): void {
+    if (!part.instanceId) return;
+    this.tooltip.hidden = true; this.inspection.replaceChildren();
+    const header = document.createElement('header');
+    const name = document.createElement('h3'); name.textContent = part.name;
+    const close = document.createElement('button'); close.type = 'button'; close.textContent = '×';
+    close.className = 'part-info-close'; close.setAttribute('aria-label', 'Close part details');
+    close.addEventListener('click', () => this.hideInspection()); header.append(name, close);
+    const description = document.createElement('p'); description.className = 'part-description';
+    description.textContent = part.keyFact || part.briefing.split('. ')[0]!;
+    const sell = document.createElement('button'); sell.type = 'button'; sell.className = 'sell-part';
+    sell.textContent = `Sell · $${part.cost}M`;
+    sell.setAttribute('aria-label', `Sell ${part.name} for a full $${part.cost} million refund`);
+    sell.addEventListener('click', () => { sell.disabled = true; this.callbacks.sell(part.instanceId!); });
+    this.inspection.append(header, facts(part), description, sell);
+    this.inspection.hidden = false;
+    this.inspection.style.left = `${Math.max(10, Math.min(x + 20, window.innerWidth - 278))}px`;
+    this.inspection.style.top = `${Math.max(70, Math.min(y - 30, window.innerHeight - 310))}px`;
+    this.inspection.focus({ preventScroll: true });
   }
+  hideInspection(): void { this.inspection.hidden = true; }
 
+  private showCategory(): void {
+    const category = WORKSHOP_CATEGORIES.find(c => c.id === this.active);
+    this.element.classList.toggle('collapsed', !category); this.tooltip.hidden = true;
+    this.heading.textContent = category?.name ?? '';
+    for (const part of MODULAR_PARTS) this.buttons.get(part.id)!.hidden = !category?.kinds.some(k => k === part.kind);
+    for (const button of this.rail.querySelectorAll('button')) button.setAttribute('aria-pressed', String(button.dataset.category === this.active));
+  }
+  private showTooltip(part: PartDefinition, tile: HTMLElement): void {
+    if (this.picking) return;
+    this.tooltip.replaceChildren();
+    const title = document.createElement('h3'); title.textContent = part.name;
+    const cost = document.createElement('strong'); cost.textContent = part.deferred ? 'Planned' : `$${part.cost}M`;
+    const description = document.createElement('p'); description.textContent = part.briefing;
+    this.tooltip.append(title, cost, facts(part), description); this.tooltip.hidden = false;
+    const rect = tile.getBoundingClientRect();
+    this.tooltip.style.left = `${Math.min(rect.right + 12, Math.max(8, window.innerWidth - 288))}px`;
+    this.tooltip.style.top = `${Math.max(70, Math.min(rect.top, window.innerHeight - 360))}px`;
+  }
+  refresh(_next: PartDefinition['kind'] | null, fitted: readonly PartDefinition[]): void {
+    for (const [id, button] of this.buttons) button.classList.toggle('fitted', fitted.some(p => p.id === id));
+    this.returnTray.disabled = !fitted.length;
+  }
   select(id: string | null): void {
-    this.selectedId = id;
-    for (const [partId, button] of this.buttons) {
-      button.setAttribute('aria-pressed', String(partId === id));
-    }
+    this.picking = id !== null; if (this.picking) this.tooltip.hidden = true;
+    for (const [key, button] of this.buttons) button.setAttribute('aria-pressed', String(id === key));
   }
-
-  message(text: string): void {
-    if (this.status.textContent !== text) this.status.textContent = text;
-  }
-
-  /** The engineering line: what this vehicle can actually do. */
-  update(
-    analysis: StackAnalysis, spent: number, readiness?: Readiness, par?: number | null,
-  ): void {
-    if (readiness) this.showVerdict(readiness, spent, par ?? null);
-    const fields = [
-      `Spent ${millions(spent)}`,
-      `Mass ${(analysis.liftoffMass / 1000).toFixed(1)} t`,
-      `\u0394v ${Math.round(analysis.totalDeltaV).toLocaleString('en-US')} m/s`,
-      `TWR ${analysis.liftoffTWR.toFixed(2)}`,
-    ];
-    this.readout.textContent = fields.join(' \u00b7 ');
-    this.readout.classList.toggle('bad', analysis.verdictLevel === 'bad');
-    this.readout.classList.toggle('good', analysis.verdictLevel === 'good');
-  }
-
-  private showVerdict(readiness: Readiness, spent: number, par: number | null): void {
-    this.verdict.dataset.verdict = readiness.verdict;
-    this.verdictHeadline.textContent = readiness.headline;
-    this.verdictDetail.textContent = readiness.detail;
-    this.verdictGauge.style.width = `${(readiness.gauge * 100).toFixed(1)}%`;
-    if (par !== null) {
-      const under = spent <= par;
-      this.parLine.textContent = `Par $${par}M · spent $${Math.round(spent)}M`;
-      this.parLine.classList.toggle('over', !under);
-    } else {
-      this.parLine.textContent = '';
+  message(text: string): void { this.status.textContent = text; }
+  update(analysis: StackAnalysis, _spent: number, readiness?: Readiness, par?: number | null): void {
+    this.readout.replaceChildren();
+    for (const [label, value] of [['Mass', `${(analysis.liftoffMass / 1000).toFixed(1)} t`],
+      ['Delta-v (m/s)', `${Math.round(analysis.totalDeltaV).toLocaleString('en-US')} / ${LEO_DELTA_V_REQUIRED.toLocaleString('en-US')}`],
+      ['TWR', analysis.liftoffTWR.toFixed(2)], ['Stages', String(analysis.stageCount)]]) {
+      const row = document.createElement('div'), name = document.createElement('span'), metric = document.createElement('b');
+      name.textContent = label!; metric.textContent = value!; row.append(name, metric); this.readout.append(row);
     }
-    // Pulse when the call changes, so a part that flips NO-GO to GO is felt.
-    if (this.lastVerdict !== null && this.lastVerdict !== readiness.verdict) {
-      this.verdict.classList.remove('changed');
-      void this.verdict.offsetWidth;
-      this.verdict.classList.add('changed');
-    }
+    if (!readiness) return;
+    this.verdict.dataset.verdict = readiness.verdict; this.verdict.replaceChildren();
+    const headline = document.createElement('strong'); headline.textContent = readiness.headline;
+    const detail = document.createElement('p');
+    detail.textContent = readiness.verdict === 'incomplete' ? analysis.verdict
+      : readiness.verdict === 'go' || readiness.verdict === 'marginal' ? `${Math.round(analysis.totalDeltaV - LEO_DELTA_V_REQUIRED)} m/s margin`
+      : analysis.stageCount === 1 && analysis.totalDeltaV < LEO_DELTA_V_REQUIRED
+        ? 'Add a tank + vacuum engine above the booster'
+        : readiness.detail;
+    this.verdict.append(headline, detail);
+    if (par != null) { const line = document.createElement('small'); line.textContent = `Par $${par}M`; this.verdict.append(line); }
     this.lastVerdict = readiness.verdict;
   }
-
-  /** The verdict that was last shown, for sound cues. */
-  get currentVerdict(): Readiness['verdict'] | null {
-    return this.lastVerdict;
-  }
-
-  /**
-   * Float a cost up off the readout: "-$148M" in red, or a refund in green.
-   * The budget figure changing is easy to miss; money leaving is not.
-   */
+  get currentVerdict(): Readiness['verdict'] | null { return this.lastVerdict; }
   flashCost(amount: number): void {
-    if (amount === 0) return;
-    const tag = document.createElement('span');
-    tag.className = `cost-float ${amount < 0 ? 'spend' : 'refund'}`;
-    tag.textContent = `${amount < 0 ? '−' : '+'}$${Math.abs(Math.round(amount))}M`;
-    this.chromeElement.append(tag);
-    window.setTimeout(() => tag.remove(), 1_500);
+    const tag = document.createElement('span'); tag.className = `cost-float ${amount < 0 ? 'spend' : 'refund'}`;
+    tag.textContent = `${amount < 0 ? '−' : '+'}$${Math.abs(amount)}M`;
+    this.chrome.append(tag); window.setTimeout(() => tag.remove(), 1500);
   }
-
-  /** Jolt the panel, for a refusal. */
-  shake(): void {
-    this.element.classList.remove('shake');
-    void this.element.offsetWidth;
-    this.element.classList.add('shake');
-  }
-
+  shake(): void { this.element.classList.remove('shake'); void this.element.offsetWidth; this.element.classList.add('shake'); }
   dispose(): void {
-    this.element.remove();
-    this.readout.remove();
-    this.status.remove();
-    this.verdict.remove();
+    for (const node of [this.element, this.specs, this.status, this.returnTray, this.tooltip, this.inspection]) node.remove();
   }
 }

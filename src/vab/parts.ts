@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { buildModularMesh } from '../workshop/modularMeshes';
 import { hullPlating } from '../render/textures';
 import {
   buildSolidBooster,
@@ -17,10 +18,16 @@ import {
  * to spend its last week fighting glTF imports.
  */
 
-export type PartKind = 'booster' | 'upper' | 'payload' | 'fairing';
+export type PartKind = 'booster' | 'upper' | 'payload' | 'fairing' | 'command' | 'tank' | 'engine' | 'decoupler';
 
 export interface PartDefinition {
   id: string;
+  /** Stable installed instance, so repeated tanks are distinct graph nodes. */
+  instanceId?: string;
+  parentId?: string;
+  mount?: 'root' | 'lower' | 'payload' | 'fairing';
+  vacuumOptimized?: boolean;
+  deferred?: boolean;
   kind: PartKind;
   name: string;
   /** Height of the part in metres, used for stacking. */
@@ -306,6 +313,8 @@ export type Materials = ReturnType<typeof createMaterials>;
  * base, so stacking is a matter of summing heights.
  */
 export function buildPartMesh(part: PartDefinition, mats: Materials): THREE.Group {
+  if (['command', 'tank', 'engine', 'decoupler'].includes(part.kind)) return buildModularMesh(part, mats);
+
   const group = new THREE.Group();
   group.name = part.id;
 
